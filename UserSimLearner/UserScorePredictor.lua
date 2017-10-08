@@ -109,38 +109,7 @@ function CIUserScorePredictor:_init(CIUserSimulator, opt)
             local lstm
             if opt.uSimGru == 0 then
                 lstm = nn.FastLSTM(self.inputFeatureNum, opt.lstmHd, opt.uSimLstmBackLen, nil, nil, nil, opt.dropoutUSim) -- the 3rd param, [rho], the maximum amount of backpropagation steps to take back in time, default value is 9999
-                -- Oct 6, 2017. I updated the ElementResearch.rnn lib
-                -- They've made changes, which makes this lstm forget gate bias init code not working
-                -- I checked the code. The nninit has not been changed. It is solely the changes from lstm
-                -- implementation makes the problem. The current FastLSTM implementation included a "soft dropout"
-                -- module, which implements Gal's Bayesian RNN. So, FastLSTM.i2g right now has multiple tables in it.
-                -- So the following way demonstates how to get access to the forget gate, and then do initialization
-                -- And also here's the structure of FastLSTM.i2g
-                --nn.Sequential {
-                --    [input -> (1) -> (2) -> (3) -> output]
-                --    (1): nn.ConcatTable {
-                --        input
-                --        |`-> (1): nn.Dropout(0.2, lazy)
-                --        |`-> (2): nn.Dropout(0.2, lazy)
-                --        |`-> (3): nn.Dropout(0.2, lazy)
-                --        `-> (4): nn.Dropout(0.2, lazy)
-                --        ... -> output
-                --    }
-                --    (2): nn.ParallelTable {
-                --        input
-                --        |`-> (1): nn.Linear(21 -> 32)
-                --        |`-> (2): nn.Linear(21 -> 32)
-                --        |`-> (3): nn.Linear(21 -> 32)
-                --        `-> (4): nn.Linear(21 -> 32)
-                --        ... -> output
-                --    }
-                --    (3): nn.JoinTable
-                --}
-                -- This is true when p>0 (dropout rate)
-                -- When p==0, the structure is the same as before
-                --print(lstm.i2g, lstm.i2g.modules[2].modules[3])
-                --lstm.i2g.modules[2].modules[3]:init('bias', nninit.constant, 1)   -- Fixed a bug here. Here we want initially set forget gate biases to 1.
-                lstm.i2g:init({'bias', {{2*opt.lstmHd+1, 3*opt.lstmHd}}}, nninit.constant, 1)   -- Fixed a bug here. Here we want initially set forget gate biases to 1.
+                TableSet.fastLSTMForgetGateInit(lstm, opt.dropoutUSim, opt.lstmHd, nninit)
             else
                 lstm = nn.GRU(self.inputFeatureNum, opt.lstmHd, opt.uSimLstmBackLen, opt.dropoutUSim)
             end
@@ -152,7 +121,7 @@ function CIUserScorePredictor:_init(CIUserSimulator, opt)
                 local lstmL2
                 if opt.uSimGru == 0 then
                     lstmL2 = nn.FastLSTM(opt.lstmHd, opt.lstmHdL2, opt.uSimLstmBackLen, nil, nil, nil, opt.dropoutUSim) -- the 3rd param, [rho], the maximum amount of backpropagation steps to take back in time, default value is 9999
-                    lstmL2.i2g:init({'bias', {{2*opt.lstmHdL2+1, 3*opt.lstmHdL2}}}, nninit.constant, 1) -- Fixed a bug here. Here we want initially set forget gate biases to 1.
+                    TableSet.fastLSTMForgetGateInit(lstmL2, opt.dropoutUSim, opt.lstmHdL2, nninit)  -- The current implementation is not very flexible
                 else
                     lstmL2 = nn.GRU(opt.lstmHd, opt.lstmHdL2, opt.uSimLstmBackLen, opt.dropoutUSim)
                 end
