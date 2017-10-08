@@ -42,14 +42,14 @@ function CIUserSimEnv:_init(opt)
         -- separate models for action and outcome (score) prediction
         self.CIUap = CIUserActsPredictor(self.CIUSim, opt)
         self.CIUsp = CIUserScorePredictor(self.CIUSim, opt)
-        self.userActsPred = torch.load(paths.concat(opt.ubgDir , opt.uapFile))
-        self.userScorePred = torch.load(paths.concat(opt.ubgDir , opt.uspFile))
+        self.userActsPred = self.CIUap.model    -- set the reference of CIUserActsPredictor to the pre-loaded
+        self.userScorePred = self.CIUsp.model
         self.userActsPred:evaluate()
         self.userScorePred:evaluate()
     else
         -- shared model for action and outcome (score) prediction
         self.CIUasp = CIUserActScorePredictor(self.CIUSim, opt)
-        self.userActScorePred = torch.load(paths.concat(opt.ubgDir , opt.uapFile))
+        self.userActScorePred = self.CIUasp.model   -- set the reference of CIUserActScorePredictor to the pre-loaded
         self.userActScorePred:evaluate()
     end
 
