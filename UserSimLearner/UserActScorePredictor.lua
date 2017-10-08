@@ -152,7 +152,7 @@ function CIUserActScorePredictor:_init(CIUserSimulator, opt)
             local lstm
             if opt.uSimGru == 0 then
                 lstm = nn.FastLSTM(self.inputFeatureNum, opt.lstmHd, opt.uSimLstmBackLen, nil, nil, nil, opt.dropoutUSim) -- the 3rd param, [rho], the maximum amount of backpropagation steps to take back in time, default value is 9999
-                lstm.i2g:init({'bias', {{2*opt.lstmHd+1, 3*opt.lstmHd}}}, nninit.constant, 1)   -- Fixed a bug here. Here we want initially set forget gate biases to 1.
+                TableSet.fastLSTMForgetGateInit(lstm, opt.dropoutUSim, opt.lstmHd, nninit)
                 -- has not applied batch normalization for fastLSTM before, should try it.
             else
                 lstm = nn.GRU(self.inputFeatureNum, opt.lstmHd, opt.uSimLstmBackLen, opt.dropoutUSim)   -- did not apply dropout or batchNormalization for GRU before
@@ -165,7 +165,7 @@ function CIUserActScorePredictor:_init(CIUserSimulator, opt)
                 local lstmL2
                 if opt.uSimGru == 0 then
                     lstmL2 = nn.FastLSTM(opt.lstmHd, opt.lstmHdL2, opt.uSimLstmBackLen, nil, nil, nil, opt.dropoutUSim) -- the 3rd param, [rho], the maximum amount of backpropagation steps to take back in time, default value is 9999
-                    lstmL2.i2g:init({'bias', {{2*opt.lstmHdL2+1, 3*opt.lstmHdL2}}}, nninit.constant, 1)     -- Fixed a bug here. Here we want initially set forget gate biases to 1.
+                    TableSet.fastLSTMForgetGateInit(lstmL2, opt.dropoutUSim, opt.lstmHdL2, nninit)
                     -- has not applied batch normalization for fastLSTM before, should try it.
                 else
                     lstmL2 = nn.GRU(opt.lstmHd, opt.lstmHdL2, opt.uSimLstmBackLen, opt.dropoutUSim)     -- did not apply dropout or batchNormalization for GRU before

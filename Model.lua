@@ -6,6 +6,7 @@ local hasCudnn, cudnn = pcall(require, 'cudnn') -- Use cuDNN if available
 local nninit = require 'nninit'
 local image = require 'image'
 local DuelAggregator = require 'modules/DuelAggregator'
+local TableSet = require 'MyMisc.TableSetMisc'
 require 'classic.torch' -- Enables serialisation
 require 'rnn'
 require 'dpnn' -- Adds gradParamClip method
@@ -37,6 +38,7 @@ function Model:_init(opt)
   self.async = opt.async  -- string. e.g., 'A3C' or 'NStepQ'
   self.a3c = opt.async == 'A3C'
   self.stateSpec = opt.stateSpec
+  self.opt = opt
 
   self.m = opt.actionSpec[3][2] - opt.actionSpec[3][1] + 1 -- Number of discrete actions
   -- Set up resizing
@@ -118,7 +120,7 @@ function Model:create()
     local valStream = nn.Sequential()
     if self.recurrent and self.async then
       local lstm = nn.FastLSTM(bodyOutputSize, self.hiddenSize, self.histLen) -- the 3rd param, [rho], the maximum amount of backpropagation steps to take back in time, default value is 9999
-      lstm.i2g:init({'bias', {{3*self.hiddenSize+1, 4*self.hiddenSize}}}, nninit.constant, 1)
+      TableSet.fastLSTMForgetGateInit(lstm, self.opt.rlLstmDropout, self.hiddenSize, nninit)
       lstm:remember('both')
       valStream:add(lstm)
     elseif self.recurrent then
@@ -136,7 +138,7 @@ function Model:create()
     local advStream = nn.Sequential()
     if self.recurrent and self.async then
       local lstm = nn.FastLSTM(bodyOutputSize, self.hiddenSize, self.histLen)
-      lstm.i2g:init({'bias', {{3*self.hiddenSize+1, 4*self.hiddenSize}}}, nninit.constant, 1) -- Extra: high forget gate bias (Gers et al., 2000)
+      TableSet.fastLSTMForgetGateInit(lstm, self.opt.rlLstmDropout, self.hiddenSize, nninit)
       lstm:remember('both')
       advStream:add(lstm)
     elseif self.recurrent then
@@ -168,7 +170,7 @@ function Model:create()
   else
     if self.recurrent and self.async then
       local lstm = nn.FastLSTM(bodyOutputSize, self.hiddenSize, self.histLen)
-      lstm.i2g:init({'bias', {{3*self.hiddenSize+1, 4*self.hiddenSize}}}, nninit.constant, 1) -- Extra: high forget gate bias (Gers et al., 2000)
+      TableSet.fastLSTMForgetGateInit(lstm, self.opt.rlLstmDropout, self.hiddenSize, nninit)
       lstm:remember('both')
       head:add(lstm)
     elseif self.recurrent then

@@ -126,6 +126,7 @@ function Setup:parseOptions(arg)
   cmd:option('-steps', 5e7, 'Training iterations (steps)') -- Frame := step in ALE; Time step := consecutive frames treated atomically by the agent
   cmd:option('-learnStart', 50000, 'Number of steps after which learning starts')
   cmd:option('-gradClip', 10, 'Clips L2 norm of gradients at gradClip (0 to disable)')
+  cmd:option('-rlLstmDropout', 0.3, 'Dropout value for Recurrent Q-net')
   -- Evaluation options
   cmd:option('-progFreq', 10000, 'Interval of steps between reporting progress')
   cmd:option('-reportWeights', 'false', 'Report weight and weight gradient statistics')
