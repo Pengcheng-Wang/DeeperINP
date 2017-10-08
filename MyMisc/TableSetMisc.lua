@@ -36,4 +36,13 @@ function TableSetMisc.static.tableContainsValue(tab, element)
     return false
 end
 
+function TableSetMisc.static.fastLSTMForgetGateInit(fLstmM, dropoutRate, fLstmSize, nninit)
+    assert(type(fLstmM.i2g) == 'table')
+    if dropoutRate > 0 then
+        fLstmM.i2g.modules[2].modules[3]:init('bias', nninit.constant, 1)
+    else
+        fLstmM.i2g:init({'bias', {{2*fLstmSize+1, 3*fLstmSize}}}, nninit.constant, 1)
+    end
+end
+
 return TableSetMisc
