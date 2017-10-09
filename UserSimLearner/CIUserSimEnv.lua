@@ -128,7 +128,7 @@ function CIUserSimEnv:_calcUserAct()
         -- bipartite action, outcome (score) prediction models
         if self.opt.uppModel == 'lstm' then
             self.userActsPred:forget()
-            print(self.userActsPred:forward(self.tabRnnStatePrep))
+            print(self.userActsPred)
             os.exit()
             nll_acts = self.userActsPred:forward(self.tabRnnStatePrep)[self.opt.lstmHist]:squeeze() -- get act choice output for last time step
         else
