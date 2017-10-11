@@ -676,6 +676,30 @@ function CIUserScorePredictor:testScorePredOnTestDetOneEpoch()
         --
         --return crcRewCnt/#self.rnnRealUserDataEndsTest
         -- Need to modify form here!!! :todo @pwang8 Oct11, 2017
+
+        local tabState = {}
+        for j=1, self.opt.lstmHist do
+            local prepUserState = torch.Tensor(#self.rnnRealUserDataEndsTest, self.ciUserSimulator.userStateFeatureCnt)
+            for k=1, #self.rnnRealUserDataEndsTest do
+                prepUserState[k] = self.ciUserSimulator:preprocessUserStateData(self.rnnRealUserDataStatesTest[self.rnnRealUserDataEndsTest[k]][j], self.opt.prepro)
+            end
+            tabState[j] = prepUserState
+        end
+        if self.opt.gpu > 0 then
+            nn.utils.recursiveType(tabState, 'torch.CudaTensor')
+        end
+        local nll_rewards = self.model:forward(tabState)
+
+        self.uspConfusion:zero()
+        nn.utils.recursiveType(nll_rewards, 'torch.Tensor')
+        for i=1, #self.rnnRealUserDataEndsTest do
+            self.uspConfusion:add(nll_rewards[self.opt.lstmHist][i], self.rnnRealUserDataRewardsTest[i][self.opt.lstmHist])
+        end
+        self.uspConfusion:updateValids()
+        local tvalid = self.uspConfusion.totalValid
+        self.uspConfusion:zero()
+        return tvalid
+
     else
         -- uSimShLayer == 0 and not lstm models
         self.model:evaluate()
