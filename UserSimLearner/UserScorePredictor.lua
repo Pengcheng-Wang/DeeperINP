@@ -710,6 +710,11 @@ function CIUserScorePredictor:testScorePredOnTestDetOneEpoch()
         local nll_rewards = self.model:forward(prepUserState)
 
         print('###', nll_rewards)
+        self.uspConfusion:zero()
+        for i=1, #self.ciUserSimulator.realUserDataEndLinesTest do
+            self.uspConfusion:add(nll_rewards[i], self.ciUserSimulator.realUserDataRewardsTest[i])
+        end
+        print('Conf!!!!!', self.uspConfusion.totalValid)
 
         --return crcRewCnt/#self.ciUserSimulator.realUserDataEndLinesTest
     end
