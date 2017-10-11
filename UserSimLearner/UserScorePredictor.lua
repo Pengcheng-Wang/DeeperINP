@@ -454,14 +454,9 @@ function CIUserScorePredictor:trainOneEpoch()
             end
 
             if self.opt.gpu > 0 then
-                for _,v in pairs(inputs) do
-                    v = v:cuda()
-                end
-                for _,v in pairs(targets) do
-                    v = v:cuda()
-                end
-                closeToEnd = closeToEnd:cuda()
-                print (inputs)
+                nn.utils.recursiveType(inputs, 'torch.CudaTensor')
+                nn.utils.recursiveType(targets, 'torch.CudaTensor')
+                closeToEnd = closeToEnd:cuda()    
             end
 
         end
@@ -480,7 +475,6 @@ function CIUserScorePredictor:trainOneEpoch()
             self.uspDParam:zero()
 
             -- evaluate function for complete mini batch
-            print(inputs)
             local outputs = self.model:forward(inputs)
             -- Zero error values (change output to target) for score prediction cases far away from ending state (I don't hope these cases influence training)
             for cl=1, closeToEnd:size(1) do
