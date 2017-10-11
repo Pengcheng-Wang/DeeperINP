@@ -691,7 +691,7 @@ function CIUserScorePredictor:testScorePredOnTestDetOneEpoch()
         local nll_rewards = self.model:forward(tabState)
 
         self.uspConfusion:zero()
-        nn.utils.recursiveType(nll_rewards, 'torch.Tensor')
+        nn.utils.recursiveType(nll_rewards, 'torch.FloatTensor')
         for i=1, #self.rnnRealUserDataEndsTest do
             self.uspConfusion:add(nll_rewards[self.opt.lstmHist][i], self.rnnRealUserDataRewardsTest[i][self.opt.lstmHist])
         end
