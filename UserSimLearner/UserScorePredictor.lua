@@ -461,6 +461,7 @@ function CIUserScorePredictor:trainOneEpoch()
                     v = v:cuda()
                 end
                 closeToEnd = closeToEnd:cuda()
+                print (inputs)
             end
 
         end
