@@ -236,8 +236,8 @@ function CIUserActScorePredictor:_init(CIUserSimulator, opt)
     self.uspConfusion = optim.ConfusionMatrix(classesScores)
 
     -- log results to files
-    self.uaspTrainLogger = optim.Logger(paths.concat(opt.save, 'uaspTrain.log'))
-    self.uaspTestLogger = optim.Logger(paths.concat(opt.save, 'uaspTest.log'))
+    self.uaspTrainLogger = optim.Logger(paths.concat('userModelTrained', opt.save, 'uaspTrain.log'))
+    self.uaspTestLogger = optim.Logger(paths.concat('userModelTrained', opt.save, 'uaspTest.log'))
     self.uaspTestLogger:setNames{'Epoch', 'Act Test acc.', 'Score Test acc.'}
 
     ----------------------------------------------------------------------
@@ -753,7 +753,7 @@ function CIUserActScorePredictor:trainOneEpoch()
 
 
     -- save/log current net
-    local filename = paths.concat(self.opt.save, 'uasp.t7')
+    local filename = paths.concat('userModelTrained', self.opt.save, 'uasp.t7')
     os.execute('mkdir -p ' .. sys.dirname(filename))
     --    if paths.filep(filename) then
     --        os.execute('mv ' .. filename .. ' ' .. filename .. '.old')
@@ -762,7 +762,7 @@ function CIUserActScorePredictor:trainOneEpoch()
     torch.save(filename, self.model)
 
     if self.trainEpoch % 10 == 0 and self.opt.ciuTType == 'train' then
-        filename = paths.concat(self.opt.save, string.format('%d', self.trainEpoch)..'_'..
+        filename = paths.concat('userModelTrained', self.opt.save, string.format('%d', self.trainEpoch)..'_'..
                 string.format('%.2f', self.uapConfusion.totalValid*100)..'_'..string.format('%.2f', self.uspConfusion.totalValid*100)..'uasp.t7')
         os.execute('mkdir -p ' .. sys.dirname(filename))
         print('<trainer> saving periodly trained ciunet to '..filename)
