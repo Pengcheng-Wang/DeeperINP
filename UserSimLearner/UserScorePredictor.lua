@@ -711,6 +711,7 @@ function CIUserScorePredictor:testScorePredOnTestDetOneEpoch()
 
         print('###', nll_rewards)
         self.uspConfusion:zero()
+        nll_rewards:float()
         for i=1, #self.ciUserSimulator.realUserDataEndLinesTest do
             self.uspConfusion:add(nll_rewards[i], self.ciUserSimulator.realUserDataRewardsTest[i])
         end
