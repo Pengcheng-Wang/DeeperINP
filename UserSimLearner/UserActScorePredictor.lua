@@ -52,6 +52,7 @@ function CIUserActScorePredictor:_init(CIUserSimulator, opt)
             local numOfExp = 4
             for i = 1, numOfExp do
                 local expert = nn.Sequential()
+                expert:add(nn.Reshape(self.inputFeatureNum))
                 expert:add(nn.Linear(self.inputFeatureNum, 32))
                 expert:add(nn.ReLU())
                 if opt.dropoutUSim > 0 then expert:add(nn.Dropout(opt.dropoutUSim)) end -- apply dropout, if any
@@ -77,6 +78,7 @@ function CIUserActScorePredictor:_init(CIUserSimulator, opt)
             end
 
             gater = nn.Sequential()
+            gater:add(nn.Reshape(self.inputFeatureNum))
             gater:add(nn.Linear(self.inputFeatureNum, 24))
             gater:add(nn.Tanh())
             if opt.dropoutUSim > 0 then gater:add(nn.Dropout(opt.dropoutUSim)) end -- apply dropout, if any
