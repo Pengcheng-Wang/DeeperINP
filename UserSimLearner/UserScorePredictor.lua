@@ -715,6 +715,7 @@ function CIUserScorePredictor:testScorePredOnTestDetOneEpoch()
         for i=1, #self.ciUserSimulator.realUserDataEndLinesTest do
             self.uspConfusion:add(nll_rewards[i], self.ciUserSimulator.realUserDataRewardsTest[i])
         end
+        self.uspConfusion:updateValids()
         print('Conf!!!!!', self.uspConfusion.totalValid)
 
         --return crcRewCnt/#self.ciUserSimulator.realUserDataEndLinesTest
