@@ -44,19 +44,24 @@ function CIUserSimEnv:_init(opt)
         self.CIUsp = CIUserScorePredictor(self.CIUSim, opt)
         self.userActsPred = self.CIUap.model    -- set the reference of CIUserActsPredictor to the pre-loaded
         self.userScorePred = self.CIUsp.model
-        if self.opt.gpu > 0 then
-            cudnn.convert(self.userActsPred, nn)
-            cudnn.convert(self.userScorePred, nn)
-        end
+
+        -- Loading user simulation model from disks, and transfer them into cpu-based models
+        self.userActsPred = cudnn.convert(self.userActsPred, nn)
+        self.userActsPred = self.userActsPred:float()
+        self.userScorePred = cudnn.convert(self.userScorePred, nn)
+        self.userScorePred = self.userScorePred:float()
+
         self.userActsPred:evaluate()
         self.userScorePred:evaluate()
     else
         -- shared model for action and outcome (score) prediction
         self.CIUasp = CIUserActScorePredictor(self.CIUSim, opt)
         self.userActScorePred = self.CIUasp.model   -- set the reference of CIUserActScorePredictor to the pre-loaded
-        if self.opt.gpu > 0 then
-            cudnn.convert(self.userActScorePred, nn)
-        end
+
+        -- Loading user simulation model from disks, and transfer them into cpu-based models
+        self.userActScorePred = cudnn.convert(self.userActScorePred, nn)
+        self.userActScorePred = self.userActScorePred:float()
+
         self.userActScorePred:evaluate()
     end
 
@@ -137,7 +142,6 @@ function CIUserSimEnv:_calcUserAct()
             self.userActsPred:forget()
             --print(self.userActsPred)
             --os.exit()
-            print(self.userActsPred, self.tabRnnStatePrep)
             nll_acts = self.userActsPred:forward(self.tabRnnStatePrep)[self.opt.lstmHist]:squeeze() -- get act choice output for last time step
         else
             -- non-lstm models
