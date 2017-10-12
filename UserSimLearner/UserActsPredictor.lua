@@ -601,32 +601,6 @@ function CIUserActsPredictor:testActPredOnTestDetOneEpoch()
         self.model:evaluate()
         self.model:forget()
 
---        for i=1, #self.rnnRealUserDataStatesTest do
---            local userState = self.rnnRealUserDataStatesTest[i]
---            local userAct = self.rnnRealUserDataActsTest[i]
---
---            local tabState = {}
---            for j=1, self.opt.lstmHist do
---                local prepUserState = torch.Tensor(1, self.ciUserSimulator.userStateFeatureCnt)
---                prepUserState[1] = self.ciUserSimulator:preprocessUserStateData(userState[j], self.opt.prepro)
---                tabState[j] = prepUserState:clone()
---            end
---
---            local nll_acts = self.model:forward(tabState)   -- Here can be a problem for calling forward without considering GPU models. Not sure yet
---            local lp, ain = torch.max(nll_acts[self.opt.lstmHist]:squeeze(), 1)
---
---            -- update action prediction confusion matrix
---            if ain[1] == userAct[self.opt.lstmHist] then
---                crcActCnt = crcActCnt + 1
-----                actPredTP[ain[1]] = actPredTP[ain[1]] + 1
-----            else
-----                actPredFP[ain[1]] = actPredFP[ain[1]] + 1
-----                actPredFN[userAct[self.opt.lstmHist]] = actPredFN[userAct[self.opt.lstmHist]] + 1
---            end
---
---            tltCnt = tltCnt + 1
---            self.model:forget()
---        end
         local tabState = {}
         for j=1, self.opt.lstmHist do
             local prepUserState = torch.Tensor(#self.rnnRealUserDataStatesTest, self.ciUserSimulator.userStateFeatureCnt)
@@ -653,27 +627,7 @@ function CIUserActsPredictor:testActPredOnTestDetOneEpoch()
     else
         -- uSimShLayer == 0 and not lstm models
         self.model:evaluate()
---        for i=1, #self.ciUserSimulator.realUserDataStatesTest do
---            local userState = self.ciUserSimulator:preprocessUserStateData(self.ciUserSimulator.realUserDataStatesTest[i], self.opt.prepro)
---            local userAct = self.ciUserSimulator.realUserDataActsTest[i]
---
---            local prepUserState = torch.Tensor(1, self.ciUserSimulator.userStateFeatureCnt)
---            prepUserState[1] = userState:clone()
---
---            local nll_acts = self.model:forward(prepUserState)      -- Here can be a problem for calling forward without considering GPU models. Not sure yet
---            local lp, ain = torch.max(nll_acts[1]:squeeze(), 1)
---
---            -- update action prediction confusion matrix
---            if ain[1] == userAct then
---                crcActCnt = crcActCnt + 1
-----                actPredTP[ain[1]] = actPredTP[ain[1]] + 1
-----            else
-----                actPredFP[ain[1]] = actPredFP[ain[1]] + 1
-----                actPredFN[userAct] = actPredFN[userAct] + 1
---            end
---
---            tltCnt = tltCnt + 1
---        end
+
         local prepUserState = torch.Tensor(#self.ciUserSimulator.realUserDataStatesTest, self.ciUserSimulator.userStateFeatureCnt)
         for i=1, #self.ciUserSimulator.realUserDataStatesTest do
             prepUserState[i] = self.ciUserSimulator:preprocessUserStateData(self.ciUserSimulator.realUserDataStatesTest[i], self.opt.prepro)
