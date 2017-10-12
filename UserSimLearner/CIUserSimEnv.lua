@@ -130,6 +130,7 @@ function CIUserSimEnv:_calcUserAct()
             self.userActsPred:forget()
             --print(self.userActsPred)
             --os.exit()
+            print(self.userActsPred, self.tabRnnStatePrep)
             nll_acts = self.userActsPred:forward(self.tabRnnStatePrep)[self.opt.lstmHist]:squeeze() -- get act choice output for last time step
         else
             -- non-lstm models
@@ -543,4 +544,3 @@ function CIUserSimEnv:getDisplaySpec()
 end
 
 return CIUserSimEnv
-
