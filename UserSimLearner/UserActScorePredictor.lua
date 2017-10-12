@@ -785,43 +785,7 @@ function CIUserActScorePredictor:testActScorePredOnTestDetOneEpoch()
 
         self.model:forget()
         self.model:evaluate()
-
-        --for i=1, #self.rnnRealUserDataStatesTest do
-        --    local userState = self.rnnRealUserDataStatesTest[i]
-        --    local userAct = self.rnnRealUserDataActsTest[i]
-        --    local userRew = self.rnnRealUserDataRewardsTest[i]
-        --
-        --    local tabState = {}
-        --    for j=1, self.opt.lstmHist do
-        --        local prepUserState = torch.Tensor(1, self.ciUserSimulator.userStateFeatureCnt)
-        --        prepUserState[1] = self.ciUserSimulator:preprocessUserStateData(userState[j], self.opt.prepro)
-        --        tabState[j] = prepUserState:clone()
-        --    end
-        --
-        --    local nll_acts = self.model:forward(tabState)   -- Here can be a problem for calling forward without considering GPU models. Not sure yet
-        --    local lp, ain = torch.max(nll_acts[self.opt.lstmHist][1]:squeeze(), 1)     -- then 2nd [1] index is for action prediction from the shared act/score prediction outcome
-        --
-        --    -- update action prediction confusion matrix
-        --    if ain[1] == userAct[self.opt.lstmHist] then
-        --        crcActCnt = crcActCnt + 1
-        --    end
-        --
-        --    if userAct[self.opt.lstmHist] == self.ciUserSimulator.CIFr.usrActInd_end then
-        --        -- The predicted reward is the 2nd output of nll_acts in 2nd dim
-        --        local lp, rin = torch.max(nll_acts[self.opt.lstmHist][2]:squeeze(), 1)
-        --        if rin[1] == userRew[self.opt.lstmHist] then
-        --            crcRewCnt = crcRewCnt + 1
-        --        end
-        --    end
-        --
-        --    tltCnt = tltCnt + 1
-        --    self.model:forget()
-        --end
-        --
-        ---- return a table, with [1] being action pred accuracy, [2] being reward pred accuracy
-        --return {crcActCnt/tltCnt, crcRewCnt/#self.rnnRealUserDataEndsTest}
-
-        --- Action prediction evaluation
+        
         local tabState = {}
         for j=1, self.opt.lstmHist do
             local prepUserState = torch.Tensor(#self.rnnRealUserDataStatesTest, self.ciUserSimulator.userStateFeatureCnt)
@@ -834,9 +798,10 @@ function CIUserActScorePredictor:testActScorePredOnTestDetOneEpoch()
             nn.utils.recursiveType(tabState, 'torch.CudaTensor')
         end
         local nll_acts = self.model:forward(tabState)
-
-        self.uapConfusion:zero()
         nn.utils.recursiveType(nll_acts, 'torch.FloatTensor')
+
+        --- Action prediction evaluation
+        self.uapConfusion:zero()
         for i=1, #self.rnnRealUserDataStatesTest do
             self.uapConfusion:add(nll_acts[self.opt.lstmHist][1][i], self.rnnRealUserDataActsTest[i][self.opt.lstmHist])
         end
@@ -845,24 +810,9 @@ function CIUserActScorePredictor:testActScorePredOnTestDetOneEpoch()
         self.uapConfusion:zero()
 
         --- Score prediction evaluation
-        self.model:forget()
-        tabState = {}   -- reuse this table, empty it first
-        for j=1, self.opt.lstmHist do
-            local prepUserState = torch.Tensor(#self.rnnRealUserDataEndsTest, self.ciUserSimulator.userStateFeatureCnt)
-            for k=1, #self.rnnRealUserDataEndsTest do
-                prepUserState[k] = self.ciUserSimulator:preprocessUserStateData(self.rnnRealUserDataStatesTest[self.rnnRealUserDataEndsTest[k]][j], self.opt.prepro)
-            end
-            tabState[j] = prepUserState
-        end
-        if self.opt.gpu > 0 then
-            nn.utils.recursiveType(tabState, 'torch.CudaTensor')
-        end
-        local nll_rewards = self.model:forward(tabState)
-
         self.uspConfusion:zero()
-        nn.utils.recursiveType(nll_rewards, 'torch.FloatTensor')
         for i=1, #self.rnnRealUserDataEndsTest do
-            self.uspConfusion:add(nll_rewards[self.opt.lstmHist][2][i], self.rnnRealUserDataRewardsTest[i][self.opt.lstmHist])
+            self.uspConfusion:add(nll_acts[self.opt.lstmHist][2][self.rnnRealUserDataEndsTest[i]], self.rnnRealUserDataRewardsTest[i][self.opt.lstmHist])
         end
         self.uspConfusion:updateValids()
         local tvalidScore = self.uspConfusion.totalValid
@@ -916,5 +866,3 @@ function CIUserActScorePredictor:testActScorePredOnTestDetOneEpoch()
 end
 
 return CIUserActScorePredictor
-
-
