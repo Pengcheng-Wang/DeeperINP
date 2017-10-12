@@ -593,8 +593,6 @@ function CIUserActsPredictor:testActPredOnTestDetOneEpoch()
 --    local actPredTP = torch.Tensor(self.ciUserSimulator.CIFr.usrActInd_end):fill(1e-3)
 --    local actPredFP = torch.Tensor(self.ciUserSimulator.CIFr.usrActInd_end):fill(1e-3)
 --    local actPredFN = torch.Tensor(self.ciUserSimulator.CIFr.usrActInd_end):fill(1e-3)
-    local tltCnt = 0
-    local crcActCnt = 0
 
     if self.opt.uppModel == 'lstm' then
         -- uSimShLayer == 0 and lstm model
