@@ -259,6 +259,7 @@ function CIUserActScorePredictor:_init(CIUserSimulator, opt)
             self.uapCriterion = self.uapCriterion:cuda()
             self.uspCriterion = self.uspCriterion:cuda()
             self.uaspPrlCriterion = self.uaspPrlCriterion:cuda()
+            print(self.uaspPrlCriterion)
             self.uaspPrlCriterion:add(self.uapCriterion)   -- action prediction loss function
             self.uaspPrlCriterion:add(self.uspCriterion)   -- score (outcome) prediction loss function
         else
