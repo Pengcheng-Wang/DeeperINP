@@ -9,6 +9,7 @@
 
 require 'torch'
 require 'nn'
+require 'nngraph'
 local _ = require 'moses'
 local class = require 'classic'
 require 'classic.torch' -- Enables serialisation
