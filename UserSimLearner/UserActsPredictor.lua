@@ -413,12 +413,8 @@ function CIUserActsPredictor:trainOneEpoch()
             end
 
             if self.opt.gpu > 0 then
-                for _,v in pairs(inputs) do
-                    v = v:cuda()
-                end
-                for _,v in pairs(targets) do
-                    v = v:cuda()
-                end
+                nn.utils.recursiveType(inputs, 'torch.CudaTensor')
+                nn.utils.recursiveType(targets, 'torch.CudaTensor')
             end
 
         end
@@ -570,8 +566,8 @@ function CIUserActsPredictor:trainOneEpoch()
 --    if paths.filep(filename) then
 --        os.execute('mv ' .. filename .. ' ' .. filename .. '.old')
 --    end
-    print('<trainer> saving ciunet to '..filename)
-    torch.save(filename, self.model)
+--    print('<trainer> saving ciunet to '..filename)
+--    torch.save(filename, self.model)
 
     if self.trainEpoch % 10 == 0 and self.opt.ciuTType == 'train' then
         filename = paths.concat('userModelTrained', self.opt.save, string.format('%d', self.trainEpoch)..'_'..string.format('%.2f', self.uapConfusion.totalValid*100)..'uap.t7')
@@ -602,36 +598,58 @@ function CIUserActsPredictor:testActPredOnTestDetOneEpoch()
 
     if self.opt.uppModel == 'lstm' then
         -- uSimShLayer == 0 and lstm model
-
         self.model:evaluate()
         self.model:forget()
 
-        for i=1, #self.rnnRealUserDataStatesTest do
-            local userState = self.rnnRealUserDataStatesTest[i]
-            local userAct = self.rnnRealUserDataActsTest[i]
-
-            local tabState = {}
-            for j=1, self.opt.lstmHist do
-                local prepUserState = torch.Tensor(1, self.ciUserSimulator.userStateFeatureCnt)
-                prepUserState[1] = self.ciUserSimulator:preprocessUserStateData(userState[j], self.opt.prepro)
-                tabState[j] = prepUserState:clone()
+--        for i=1, #self.rnnRealUserDataStatesTest do
+--            local userState = self.rnnRealUserDataStatesTest[i]
+--            local userAct = self.rnnRealUserDataActsTest[i]
+--
+--            local tabState = {}
+--            for j=1, self.opt.lstmHist do
+--                local prepUserState = torch.Tensor(1, self.ciUserSimulator.userStateFeatureCnt)
+--                prepUserState[1] = self.ciUserSimulator:preprocessUserStateData(userState[j], self.opt.prepro)
+--                tabState[j] = prepUserState:clone()
+--            end
+--
+--            local nll_acts = self.model:forward(tabState)   -- Here can be a problem for calling forward without considering GPU models. Not sure yet
+--            local lp, ain = torch.max(nll_acts[self.opt.lstmHist]:squeeze(), 1)
+--
+--            -- update action prediction confusion matrix
+--            if ain[1] == userAct[self.opt.lstmHist] then
+--                crcActCnt = crcActCnt + 1
+----                actPredTP[ain[1]] = actPredTP[ain[1]] + 1
+----            else
+----                actPredFP[ain[1]] = actPredFP[ain[1]] + 1
+----                actPredFN[userAct[self.opt.lstmHist]] = actPredFN[userAct[self.opt.lstmHist]] + 1
+--            end
+--
+--            tltCnt = tltCnt + 1
+--            self.model:forget()
+--        end
+        local tabState = {}
+        for j=1, self.opt.lstmHist do
+            local prepUserState = torch.Tensor(#self.rnnRealUserDataStatesTest, self.ciUserSimulator.userStateFeatureCnt)
+            for k=1, #self.rnnRealUserDataStatesTest do
+                prepUserState[k] = self.ciUserSimulator:preprocessUserStateData(self.rnnRealUserDataStatesTest[k][j], self.opt.prepro)
             end
-
-            local nll_acts = self.model:forward(tabState)   -- Here can be a problem for calling forward without considering GPU models. Not sure yet
-            local lp, ain = torch.max(nll_acts[self.opt.lstmHist]:squeeze(), 1)
-
-            -- update action prediction confusion matrix
-            if ain[1] == userAct[self.opt.lstmHist] then
-                crcActCnt = crcActCnt + 1
---                actPredTP[ain[1]] = actPredTP[ain[1]] + 1
---            else
---                actPredFP[ain[1]] = actPredFP[ain[1]] + 1
---                actPredFN[userAct[self.opt.lstmHist]] = actPredFN[userAct[self.opt.lstmHist]] + 1
-            end
-
-            tltCnt = tltCnt + 1
-            self.model:forget()
+            tabState[j] = prepUserState
         end
+        if self.opt.gpu > 0 then
+            nn.utils.recursiveType(tabState, 'torch.CudaTensor')
+        end
+        local nll_acts = self.model:forward(tabState)
+
+        self.uapConfusion:zero()
+        nn.utils.recursiveType(nll_acts, 'torch.FloatTensor')
+        for i=1, #self.rnnRealUserDataStatesTest do
+            self.uapConfusion:add(nll_acts[self.opt.lstmHist][i], self.rnnRealUserDataActsTest[i][self.opt.lstmHist])
+        end
+        self.uapConfusion:updateValids()
+        local tvalid = self.uapConfusion.totalValid
+        self.uapConfusion:zero()
+        return tvalid
+
     else
         -- uSimShLayer == 0 and not lstm models
         self.model:evaluate()
@@ -657,7 +675,7 @@ function CIUserActsPredictor:testActPredOnTestDetOneEpoch()
             tltCnt = tltCnt + 1
         end
     end
-    return crcActCnt/tltCnt
+
 end
 
 return CIUserActsPredictor

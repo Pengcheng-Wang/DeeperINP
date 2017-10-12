@@ -648,34 +648,11 @@ end
 
 -- evaluation function on test/train_validation set
 function CIUserScorePredictor:testScorePredOnTestDetOneEpoch()
-    local crcRewCnt = 0
 
     if opt.uppModel == 'lstm' then
         -- uSimShLayer == 0 and lstm model
         self.model:evaluate()
         self.model:forget()
-        --for i=1, #self.rnnRealUserDataStatesTest do
-        --    local userState = self.rnnRealUserDataStatesTest[i]
-        --    local userRew = self.rnnRealUserDataRewardsTest[i]
-        --
-        --    local tabState = {}
-        --    for j=1, self.opt.lstmHist do
-        --        local prepUserState = torch.Tensor(1, self.ciUserSimulator.userStateFeatureCnt)
-        --        prepUserState[1] = self.ciUserSimulator:preprocessUserStateData(userState[j], self.opt.prepro)
-        --        tabState[j] = prepUserState:clone()
-        --    end
-        --    if TableSet.tableContainsValue(self.rnnRealUserDataEndsTest, i) then
-        --        local nll_rewards = self.model:forward(tabState)    -- Haven't considered GPU model here, so might be a problem
-        --        local lp, rin = torch.max(nll_rewards[self.opt.lstmHist]:squeeze(), 1)
-        --        if rin[1] == userRew[self.opt.lstmHist] then
-        --            crcRewCnt = crcRewCnt + 1
-        --        end
-        --    end
-        --    self.model:forget()
-        --end
-        --
-        --return crcRewCnt/#self.rnnRealUserDataEndsTest
-        -- Need to modify form here!!! :todo @pwang8 Oct11, 2017
 
         local tabState = {}
         for j=1, self.opt.lstmHist do
@@ -703,22 +680,6 @@ function CIUserScorePredictor:testScorePredOnTestDetOneEpoch()
     else
         -- uSimShLayer == 0 and not lstm models
         self.model:evaluate()
-        --for i=1, #self.ciUserSimulator.realUserDataStatesTest do
-        --    local userState = self.ciUserSimulator:preprocessUserStateData(self.ciUserSimulator.realUserDataStatesTest[i], self.opt.prepro)
-        --    local userAct = self.ciUserSimulator.realUserDataActsTest[i]
-        --    local userRew = self.ciUserSimulator.realUserDataRewardsTest[i]
-        --
-        --    local prepUserState = torch.Tensor(1, self.ciUserSimulator.userStateFeatureCnt)
-        --    prepUserState[1] = userState:clone()
-        --
-        --    if userAct == self.ciUserSimulator.CIFr.usrActInd_end then
-        --        local nll_rewards = self.model:forward(prepUserState)   -- Haven't consider GPU model, might be a problem
-        --        local lp, rin = torch.max(nll_rewards[1]:squeeze(), 1)
-        --        if rin[1] == userRew then
-        --            crcRewCnt = crcRewCnt + 1
-        --        end
-        --    end
-        --end
 
         local prepUserState = torch.Tensor(#self.ciUserSimulator.realUserDataEndLinesTest, self.ciUserSimulator.userStateFeatureCnt)
         for i=1, #self.ciUserSimulator.realUserDataEndLinesTest do
