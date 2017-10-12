@@ -785,7 +785,7 @@ function CIUserActScorePredictor:testActScorePredOnTestDetOneEpoch()
 
         self.model:forget()
         self.model:evaluate()
-        
+
         local tabState = {}
         for j=1, self.opt.lstmHist do
             local prepUserState = torch.Tensor(#self.rnnRealUserDataStatesTest, self.ciUserSimulator.userStateFeatureCnt)
@@ -874,18 +874,27 @@ function CIUserActScorePredictor:testActScorePredOnTestDetOneEpoch()
             nll_acts = nll_acts:split(self.ciUserSimulator.CIFr.usrActInd_end, 2)  -- We assume 1st dim is batch index. Act pred is the 1st set of output, having dim of 15. Score dim 2.
         end
 
-        print(size(nll_acts))
-
+        --- Action prediction evaluation
         self.uapConfusion:zero()
         for i=1, #self.ciUserSimulator.realUserDataStatesTest do
-            self.uapConfusion:add(nll_acts[i], self.ciUserSimulator.realUserDataActsTest[i])
+            self.uapConfusion:add(nll_acts[1][i], self.ciUserSimulator.realUserDataActsTest[i])
         end
         self.uapConfusion:updateValids()
-        local tvalid = self.uapConfusion.totalValid
+        local tvalidAct = self.uapConfusion.totalValid
         self.uapConfusion:zero()
 
+        --- Score prediction evaluation
+        self.uspConfusion:zero()
+        for i=1, #self.ciUserSimulator.realUserDataEndLinesTest do
+            self.uspConfusion:add(nll_acts[2][self.ciUserSimulator.realUserDataEndLinesTest[i]],
+                                  self.ciUserSimulator.realUserDataRewardsTest[self.ciUserSimulator.realUserDataEndLinesTest[i]])
+        end
+        self.uspConfusion:updateValids()
+        local tvalidScore = self.uspConfusion.totalValid
+        self.uspConfusion:zero()
+
         -- return a table, with [1] being action pred accuracy, [2] being reward pred accuracy
-        return {crcActCnt/tltCnt, crcRewCnt/#self.ciUserSimulator.realUserDataEndLinesTest}
+        return {tvalidAct, tvalidScore}
     end
 end
 
