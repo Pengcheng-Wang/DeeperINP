@@ -256,12 +256,7 @@ function CIUserActScorePredictor:_init(CIUserSimulator, opt)
             --            cutorch.manualSeed(opt.seed)
             --- set up cuda nn
             self.model = self.model:cuda()
-            self.uapCriterion = self.uapCriterion:cuda()
-            self.uspCriterion = self.uspCriterion:cuda()
             self.uaspPrlCriterion = self.uaspPrlCriterion:cuda()
-            print(self.uaspPrlCriterion)
-            self.uaspPrlCriterion:add(self.uapCriterion)   -- action prediction loss function
-            self.uaspPrlCriterion:add(self.uspCriterion)   -- score (outcome) prediction loss function
         else
             print('If cutorch and cunn are installed, your CUDA toolkit may be improperly configured.')
             print('Check your CUDA toolkit installation, rebuild cutorch and cunn, and try again.')
