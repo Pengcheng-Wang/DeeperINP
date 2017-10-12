@@ -44,12 +44,19 @@ function CIUserSimEnv:_init(opt)
         self.CIUsp = CIUserScorePredictor(self.CIUSim, opt)
         self.userActsPred = self.CIUap.model    -- set the reference of CIUserActsPredictor to the pre-loaded
         self.userScorePred = self.CIUsp.model
+        if self.opt.gpu > 0 then
+            cudnn.convert(self.userActsPred, nn)
+            cudnn.convert(self.userScorePred, nn)
+        end
         self.userActsPred:evaluate()
         self.userScorePred:evaluate()
     else
         -- shared model for action and outcome (score) prediction
         self.CIUasp = CIUserActScorePredictor(self.CIUSim, opt)
         self.userActScorePred = self.CIUasp.model   -- set the reference of CIUserActScorePredictor to the pre-loaded
+        if self.opt.gpu > 0 then
+            cudnn.convert(self.userActScorePred, nn)
+        end
         self.userActScorePred:evaluate()
     end
 
@@ -180,11 +187,11 @@ function CIUserSimEnv:_calcUserAct()
         end
     end
 
----- The following code controls happening of ending user action
---     if user action sequence is too long, we can manually add this end
---     action to terminate the sequence, at the same time influence the
---     action distribution a little. This can be a safe design, but does
---     not have to be necessary.
+    ---- The following code controls happening of ending user action
+    --     if user action sequence is too long, we can manually add this end
+    --     action to terminate the sequence, at the same time influence the
+    --     action distribution a little. This can be a safe design, but does
+    --     not have to be necessary.
     if self.timeStepCnt >= self.opt.termActSmgLen then
         if torch.uniform() < self.opt.termActSmgEps then
             self.curRnnUserAct = self.CIUSim.CIFr.usrActInd_end
@@ -348,13 +355,13 @@ function CIUserSimEnv:start()
             -- Should get action choice from the RL agent here
 
             valid = true    -- not necessary
---            return self.rlStatePrep, self.adpType
+            --            return self.rlStatePrep, self.adpType
             self:_updateRLStatePrepTypeInd()
 
             return self.rlStatePrepTypeInd, self.adpType
 
         else    -- self.curRnnUserAct == self.CIUSim.CIFr.usrActInd_end
-        --            print('Regenerate user behavior trajectory from start!')
+            --            print('Regenerate user behavior trajectory from start!')
             valid = false   -- not necessary
         end
 
@@ -502,7 +509,7 @@ function CIUserSimEnv:step(adpAct)
         lpy = torch.exp(lpy)
         lpy = torch.cumsum(lpy)
         local rwdSampleLen = 2  -- two types of rewards assumption in CI
---        lpy = torch.div(lpy, lpy[rwdSampleLen])
+        --        lpy = torch.div(lpy, lpy[rwdSampleLen])
         local greedySmpThres = self.opt.rwdSmpEps
 
         local scoreType = lps[1]  -- the action result given by the action predictor
