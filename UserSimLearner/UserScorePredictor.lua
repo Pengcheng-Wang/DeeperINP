@@ -670,7 +670,7 @@ function CIUserScorePredictor:testScorePredOnTestDetOneEpoch()
         self.uspConfusion:zero()
         nn.utils.recursiveType(nll_rewards, 'torch.FloatTensor')
         for i=1, #self.rnnRealUserDataEndsTest do
-            self.uspConfusion:add(nll_rewards[self.opt.lstmHist][i], self.rnnRealUserDataRewardsTest[i][self.opt.lstmHist])
+            self.uspConfusion:add(nll_rewards[self.opt.lstmHist][i], self.rnnRealUserDataRewardsTest[self.rnnRealUserDataEndsTest[i]][self.opt.lstmHist])
         end
         self.uspConfusion:updateValids()
         local tvalid = self.uspConfusion.totalValid
@@ -693,7 +693,7 @@ function CIUserScorePredictor:testScorePredOnTestDetOneEpoch()
         self.uspConfusion:zero()
         nll_rewards:float()     -- set nll_rewards back to cpu mode (in main memory)
         for i=1, #self.ciUserSimulator.realUserDataEndLinesTest do
-            self.uspConfusion:add(nll_rewards[i], self.ciUserSimulator.realUserDataRewardsTest[i])
+            self.uspConfusion:add(nll_rewards[i], self.ciUserSimulator.realUserDataRewardsTest[self.ciUserSimulator.realUserDataEndLinesTest[i]])
         end
         self.uspConfusion:updateValids()
         local tvalid = self.uspConfusion.totalValid

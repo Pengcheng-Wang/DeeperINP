@@ -812,7 +812,8 @@ function CIUserActScorePredictor:testActScorePredOnTestDetOneEpoch()
         --- Score prediction evaluation
         self.uspConfusion:zero()
         for i=1, #self.rnnRealUserDataEndsTest do
-            self.uspConfusion:add(nll_acts[self.opt.lstmHist][2][self.rnnRealUserDataEndsTest[i]], self.rnnRealUserDataRewardsTest[i][self.opt.lstmHist])
+            self.uspConfusion:add(nll_acts[self.opt.lstmHist][2][self.rnnRealUserDataEndsTest[i]],
+                                self.rnnRealUserDataRewardsTest[self.rnnRealUserDataEndsTest[i]][self.opt.lstmHist])
         end
         self.uspConfusion:updateValids()
         local tvalidScore = self.uspConfusion.totalValid
@@ -823,42 +824,6 @@ function CIUserActScorePredictor:testActScorePredOnTestDetOneEpoch()
     else
         -- SharedLayer == 1, and not lstm models
         self.model:evaluate()
-        --for i=1, #self.ciUserSimulator.realUserDataStatesTest do
-        --    local userState = self.ciUserSimulator:preprocessUserStateData(self.ciUserSimulator.realUserDataStatesTest[i], self.opt.prepro)
-        --    local userAct = self.ciUserSimulator.realUserDataActsTest[i]
-        --    local userRew = self.ciUserSimulator.realUserDataRewardsTest[i]
-        --
-        --    local prepUserState = torch.Tensor(1, self.ciUserSimulator.userStateFeatureCnt)
-        --    prepUserState[1] = userState:clone()
-        --
-        --    local nll_acts = self.model:forward(prepUserState)  -- Here can be a problem for calling forward without considering GPU models. Not sure yet
-        --
-        --    -- Here, if moe is used with shared lower layers, it is the problem that,
-        --    -- due to limitation of MixtureTable module, we have to join tables together as
-        --    -- a single tensor as output of the whole user action and score prediction model.
-        --    -- So, to guarantee the compatability, we need split the tensor into two tables here,
-        --    -- for act prediction and score prediction respectively.
-        --    if self.opt.uppModel == 'moe' then
-        --        nll_acts = nll_acts:split(self.ciUserSimulator.CIFr.usrActInd_end, 2)  -- We assume 1st dim is batch index. Act pred is the 1st set of output, having dim of 15. Score dim 2.
-        --    end
-        --
-        --    local lp, ain = torch.max(nll_acts[1][1]:squeeze(), 1)    -- The 1st [1] index means action prediction output from a table, 2nd [1] is batch index, which is not necessary
-        --
-        --    -- update action prediction confusion matrix
-        --    if ain[1] == userAct then
-        --        crcActCnt = crcActCnt + 1
-        --    end
-        --
-        --    if userAct == self.ciUserSimulator.CIFr.usrActInd_end then
-        --        -- The predicted reward is the 2nd output of nll_acts in 2nd dim
-        --        local lp, rin = torch.max(nll_acts[2][1]:squeeze(), 1)
-        --        if rin[1] == userRew then
-        --            crcRewCnt = crcRewCnt + 1
-        --        end
-        --    end
-        --
-        --    tltCnt = tltCnt + 1
-        --end
 
         local prepUserState = torch.Tensor(#self.ciUserSimulator.realUserDataStatesTest, self.ciUserSimulator.userStateFeatureCnt)
         for i=1, #self.ciUserSimulator.realUserDataStatesTest do
