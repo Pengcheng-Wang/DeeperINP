@@ -610,6 +610,9 @@ function CIUserActScorePredictor:trainOneEpoch()
             -- If moe with shared lower layers, we merge the df_do before backprop
             if self.opt.uppModel == 'moe' then
                 df_do = nn.JoinTable(-1):forward(df_do)  -- We assume 1st dim is batch index. Act pred is the 1st set of output, having dim of 15. Score dim 2.
+                if self.opt.gpu > 0 then
+                    df_do = df_do:cuda()  -- seems like after calling the forward function of nn.JoinTable, that output(df_do) becomes main memory object again
+                end
             end
 
             self.model:backward(inputs, df_do)
