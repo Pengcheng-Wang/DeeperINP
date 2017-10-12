@@ -868,6 +868,7 @@ function CIUserActScorePredictor:testActScorePredOnTestDetOneEpoch()
             prepUserState = prepUserState:cuda()
         end
         local nll_acts = self.model:forward(prepUserState)
+        print(nll_acts)
         nll_acts:float()     -- set nll_rewards back to cpu mode (in main memory)
 
         if self.opt.uppModel == 'moe' then
