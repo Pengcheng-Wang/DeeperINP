@@ -868,8 +868,7 @@ function CIUserActScorePredictor:testActScorePredOnTestDetOneEpoch()
             prepUserState = prepUserState:cuda()
         end
         local nll_acts = self.model:forward(prepUserState)
-        print(nll_acts)
-        nll_acts:float()     -- set nll_rewards back to cpu mode (in main memory)
+        nn.utils.recursiveType(nll_acts, 'torch.FloatTensor')
 
         if self.opt.uppModel == 'moe' then
             nll_acts = nll_acts:split(self.ciUserSimulator.CIFr.usrActInd_end, 2)  -- We assume 1st dim is batch index. Act pred is the 1st set of output, having dim of 15. Score dim 2.
