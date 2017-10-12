@@ -653,27 +653,45 @@ function CIUserActsPredictor:testActPredOnTestDetOneEpoch()
     else
         -- uSimShLayer == 0 and not lstm models
         self.model:evaluate()
+--        for i=1, #self.ciUserSimulator.realUserDataStatesTest do
+--            local userState = self.ciUserSimulator:preprocessUserStateData(self.ciUserSimulator.realUserDataStatesTest[i], self.opt.prepro)
+--            local userAct = self.ciUserSimulator.realUserDataActsTest[i]
+--
+--            local prepUserState = torch.Tensor(1, self.ciUserSimulator.userStateFeatureCnt)
+--            prepUserState[1] = userState:clone()
+--
+--            local nll_acts = self.model:forward(prepUserState)      -- Here can be a problem for calling forward without considering GPU models. Not sure yet
+--            local lp, ain = torch.max(nll_acts[1]:squeeze(), 1)
+--
+--            -- update action prediction confusion matrix
+--            if ain[1] == userAct then
+--                crcActCnt = crcActCnt + 1
+----                actPredTP[ain[1]] = actPredTP[ain[1]] + 1
+----            else
+----                actPredFP[ain[1]] = actPredFP[ain[1]] + 1
+----                actPredFN[userAct] = actPredFN[userAct] + 1
+--            end
+--
+--            tltCnt = tltCnt + 1
+--        end
+        local prepUserState = torch.Tensor(#self.ciUserSimulator.realUserDataStatesTest, self.ciUserSimulator.userStateFeatureCnt)
         for i=1, #self.ciUserSimulator.realUserDataStatesTest do
-            local userState = self.ciUserSimulator:preprocessUserStateData(self.ciUserSimulator.realUserDataStatesTest[i], self.opt.prepro)
-            local userAct = self.ciUserSimulator.realUserDataActsTest[i]
-
-            local prepUserState = torch.Tensor(1, self.ciUserSimulator.userStateFeatureCnt)
-            prepUserState[1] = userState:clone()
-
-            local nll_acts = self.model:forward(prepUserState)      -- Here can be a problem for calling forward without considering GPU models. Not sure yet
-            local lp, ain = torch.max(nll_acts[1]:squeeze(), 1)
-
-            -- update action prediction confusion matrix
-            if ain[1] == userAct then
-                crcActCnt = crcActCnt + 1
---                actPredTP[ain[1]] = actPredTP[ain[1]] + 1
---            else
---                actPredFP[ain[1]] = actPredFP[ain[1]] + 1
---                actPredFN[userAct] = actPredFN[userAct] + 1
-            end
-
-            tltCnt = tltCnt + 1
+            prepUserState[i] = self.ciUserSimulator:preprocessUserStateData(self.ciUserSimulator.realUserDataStatesTest[i], self.opt.prepro)
         end
+        if self.opt.gpu > 0 then
+            prepUserState = prepUserState:cuda()
+        end
+        local nll_acts = self.model:forward(prepUserState)
+
+        self.uapConfusion:zero()
+        nll_acts:float()     -- set nll_rewards back to cpu mode (in main memory)
+        for i=1, #self.ciUserSimulator.realUserDataStatesTest do
+            self.uapConfusion:add(nll_acts[i], self.ciUserSimulator.realUserDataActsTest[i])
+        end
+        self.uapConfusion:updateValids()
+        local tvalid = self.uapConfusion.totalValid
+        self.uapConfusion:zero()
+        return tvalid
     end
 
 end
