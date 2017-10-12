@@ -845,6 +845,7 @@ function CIUserActScorePredictor:testActScorePredOnTestDetOneEpoch()
         self.uapConfusion:zero()
 
         --- Score prediction evaluation
+        self.model:forget()
         tabState = {}   -- reuse this table, empty it first
         for j=1, self.opt.lstmHist do
             local prepUserState = torch.Tensor(#self.rnnRealUserDataEndsTest, self.ciUserSimulator.userStateFeatureCnt)
