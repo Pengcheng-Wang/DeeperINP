@@ -399,6 +399,10 @@ function CIUserSimulator:_init(CIFileReader, opt)
 --        if i==3 then break end
 --    end
 
+    --- The following tensors are used to calculated pearson's correlations between state features
+    self.featSqre = torch.Tensor(self.userStateFeatureCnt):fill(0)
+    self.featCrossSqre = torch.Tensor(self.userStateFeatureCnt, self.userStateFeatureCnt):fill(0)
+
 end
 
 
@@ -563,6 +567,54 @@ function CIUserSimulator:applyAdpActOnState(curState, adpType, adpAct)
     end
 
     return curState
+end
+
+-- Description: Pearson correlation coefficient
+function CIUserSimulator:PearsonCorr()
+    ---- compute the mean
+    --local x1, y1 = 0, 0
+    --for _, v in pairs(a) do
+    --    x1, y1 = x1 + v[1], y1 + v[2]
+    --end
+    ---- compute the coefficient
+    --x1, y1 = x1 / #a, y1 / #a
+    --local x2, y2, xy = 0, 0, 0
+    --for _, v in pairs(a) do
+    --    local tx, ty = v[1] - x1, v[2] - y1
+    --    xy, x2, y2 = xy + tx * ty, x2 + tx * tx, y2 + ty * ty
+    --end
+    --return xy / math.sqrt(x2) / math.sqrt(y2)
+
+    -- The input should be ciUserSimulator.realUserDataStates
+    -- So, here we have all input feature values in all data points
+    local stateDim = self.realUserDataStates[1]:size()[1]
+    local stateMean = torch.Tensor(stateDim):zero()
+    for i=1, #self.realUserDataStates do
+        stateMean = stateMean + self.realUserDataStates[i]
+    end
+    stateMean:div(#self.realUserDataStates)
+
+    local diffWithMean = torch.Tensor(#self.realUserDataStates, stateDim):zero()
+    for i=1, #self.realUserDataStates do
+        diffWithMean[i] = self.realUserDataStates[i] - stateMean
+    end
+
+    local allEleSqr
+    for j=1, stateDim do
+        -- get squared values of all features in all standardized data points
+        allEleSqr = torch.pow(diffWithMean, 2)
+    end
+
+    -- Get sum over all data points, for each feature
+    self.featSqre = torch.sum(allEleSqr, 1)
+
+    -- Time to calculate the a*b. Consider to use tensor:sub, or narrow, or select functions.
+    --for j=1, stateDim do
+    --    for k=j, stateDim do
+    --
+    --    end
+    --end
+
 end
 
 return CIUserSimulator
