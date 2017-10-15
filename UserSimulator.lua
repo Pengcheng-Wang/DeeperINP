@@ -400,7 +400,7 @@ function CIUserSimulator:_init(CIFileReader, opt)
     --- The following tensors are used to calculated Pearson's correlations between state features
     --- in self.realUserDataStates
     self.featSqre = torch.Tensor(self.userStateFeatureCnt):zero()
-    self.featCrossSqre = torch.Tensor(self.userStateFeatureCnt, self.userStateFeatureCnt):zero(1)
+    self.featCrossSqre = torch.Tensor(self.userStateFeatureCnt, self.userStateFeatureCnt):zero()
     self.featMean = torch.Tensor(self.userStateFeatureCnt):zero()   -- feature mean in realUserDataStates
     self.featStdDev = torch.Tensor(self.userStateFeatureCnt):zero() -- standard deviation of each feature in realUserDataStates
     self:_PearsonCorrCalc() -- Calculate a-squared, b-squared and a*b, that are all required in Pearson's correlation calculation
