@@ -603,7 +603,7 @@ function CIUserSimulator:_PearsonCorrCalc()
     local allEleSqr = torch.pow(diffWithMean, 2)
 
     -- Get sum over all data points, for each feature
-    self.featSqre = torch.sum(allEleSqr, 1)
+    self.featSqre = torch.sum(allEleSqr, 1):squeeze() -- squeeze() is needed to make it 1-D tensor
 
     -- a*b for each two features in the state representation. self.featCrossSqre has been constructed in _init()
     -- Time to calculate the a*b. Consider to use tensor:sub, or narrow, or select functions.
