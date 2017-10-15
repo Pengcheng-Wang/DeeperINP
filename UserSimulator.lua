@@ -400,7 +400,7 @@ function CIUserSimulator:_init(CIFileReader, opt)
     --- The following tensors are used to calculated Pearson's correlations between state features
     --- in self.realUserDataStates
     self.featSqre = torch.Tensor(self.userStateFeatureCnt):zero()
-    self.featCrossSqre = torch.Tensor(self.userStateFeatureCnt, self.userStateFeatureCnt):fill(1)
+    self.featCrossSqre = torch.Tensor(self.userStateFeatureCnt, self.userStateFeatureCnt):zero(1)
     self.featMean = torch.Tensor(self.userStateFeatureCnt):zero()   -- feature mean in realUserDataStates
     self.featStdDev = torch.Tensor(self.userStateFeatureCnt):zero() -- standard deviation of each feature in realUserDataStates
     self:_PearsonCorrCalc() -- Calculate a-squared, b-squared and a*b, that are all required in Pearson's correlation calculation
@@ -623,7 +623,7 @@ function CIUserSimulator:_PearsonCorrCalc()
     -- a*b for each two features in the state representation. self.featCrossSqre has been constructed in _init()
     -- Time to calculate the a*b. Consider to use tensor:sub, or narrow, or select functions.
     for j=1, stateDim do
-        for k=j+1, stateDim do
+        for k=j, stateDim do
             self.featCrossSqre[j][k] = diffWithMean:select(2, j) * diffWithMean:select(2, k)    -- dot product of two standardized columns
             self.featCrossSqre[k][j] = self.featCrossSqre[j][k]
         end
