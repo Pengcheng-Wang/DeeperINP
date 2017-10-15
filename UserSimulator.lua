@@ -641,6 +641,16 @@ function CIUserSimulator:PearsonCorrelation(feat1, feat2)
     return self.featCrossSqre[feat1][feat2] / math.sqrt(self.featSqre[feat1]) / math.sqrt(self.featSqre[feat2])
 end
 
+-- Return the Pearson's correlation between feat1 and all other features
+function CIUserSimulator:PearsonCorrelationOfOneFeat(feat1)
+    assert(feat1>=1 and feat1 <=self.userStateFeatureCnt)
+    local correWithFeats = torch.Tensor(self.userStateFeatureCnt)
+    for i=1, self.userStateFeatureCnt do
+        correWithFeats[i] = self.featCrossSqre[feat1][i] / math.sqrt(self.featSqre[feat1]) / math.sqrt(self.featSqre[i])
+    end
+    return correWithFeats
+end
+
 -- Do statistics of action frequency
 function CIUserSimulator:_actionFreqCalc()
     for i=1, #self.realUserDataActs do
@@ -693,7 +703,12 @@ function CIUserSimulator:UserSimDataAugment(input, output, isRNNForm)
             input[self.opt.batchSize+i] = input[i]
             output[self.opt.batchSize+i] = output[i]
 
-            -- perturb feature values according to correlation
+            if output[i] ~= self.CIFr.usrActInd_end then
+                -- perturb feature values according to correlation
+                local actCorreWithAct = self:PearsonCorrelationOfOneFeat(output[i])[{{1, self.CIFr.usrActInd_end-1}}]
+                print (actCorreWithAct)
+                exit()
+            end
 
         end
 

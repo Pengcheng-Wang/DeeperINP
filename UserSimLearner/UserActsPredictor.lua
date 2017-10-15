@@ -332,7 +332,7 @@ function CIUserActsPredictor:_init(CIUserSimulator, opt)
     ----- testing the prior action appearance freq calculation
     --print(self.ciUserSimulator.actRankPriorStep)
     -- print(self.ciUserSimulator.featStdDev)
-    print(self.ciUserSimulator:PearsonCorrelation(1,2), self.ciUserSimulator:PearsonCorrelation(1,1))
+    --print(self.ciUserSimulator:PearsonCorrelation(1,2), self.ciUserSimulator:PearsonCorrelation(1,1))
 
 end
 
@@ -382,6 +382,7 @@ function CIUserActsPredictor:trainOneEpoch()
                 epochDone = true
             end
 
+            self.ciUserSimulator:UserSimDataAugment()
             if self.opt.gpu > 0 then
                 inputs = inputs:cuda()
                 targets = targets:cuda()
