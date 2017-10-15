@@ -398,9 +398,17 @@ function CIUserSimulator:_init(CIFileReader, opt)
 --    end
 
     --- The following tensors are used to calculated Pearson's correlations between state features
-    self.featSqre = torch.Tensor(self.userStateFeatureCnt):fill(0)
-    self.featCrossSqre = torch.Tensor(self.userStateFeatureCnt, self.userStateFeatureCnt):fill(0)
+    --- in self.realUserDataStates
+    self.featSqre = torch.Tensor(self.userStateFeatureCnt):zero()
+    self.featCrossSqre = torch.Tensor(self.userStateFeatureCnt, self.userStateFeatureCnt):zero()
+    self.featMean = torch.Tensor(self.userStateFeatureCnt):zero()   -- feature mean in realUserDataStates
+    self.featStdDev = torch.Tensor(self.userStateFeatureCnt):zero() -- standard deviation of each feature in realUserDataStates
     self:_PearsonCorrCalc() -- Calculate a-squared, b-squared and a*b, that are all required in Pearson's correlation calculation
+
+    --- The following tensors are used to record statistics of actions observed in training set
+    self.actFreqTotal = torch.Tensor(self.CIFr.usrActInd_end):fill(1e-5)
+    self.priorActStatThres = 20
+    self.actFreqPriorStep = torch.Tensor(self.CIFr.usrActInd_end, self.priorActStatThres):fill(1e-5)
 
     collectgarbage()
 end
@@ -594,6 +602,9 @@ function CIUserSimulator:_PearsonCorrCalc()
     end
     stateMean:div(#self.realUserDataStates)
 
+    -- Record mean for each feature in self.realUserDataStates. This is not relavent to Pearson's correlation calculation
+    self.featMean = stateMean
+
     local diffWithMean = torch.Tensor(#self.realUserDataStates, stateDim):zero()
     for i=1, #self.realUserDataStates do
         diffWithMean[i] = self.realUserDataStates[i] - stateMean
@@ -613,6 +624,10 @@ function CIUserSimulator:_PearsonCorrCalc()
             self.featCrossSqre[k][j] = self.featCrossSqre[j][k]
         end
     end
+
+    -- Calculate the standard deviation of each feature in self.realUserDataStates. This is not used in Pearson's correlation calculation
+    -- So, by-product
+    self.featStdDev = torch.sqrt(self.featSqre / (#self.realUserDataStates-1))
 end
 
 -- Return the Pearson's correlation between two features in self.realUserDataStates
@@ -620,6 +635,14 @@ function CIUserSimulator:PearsonCorrelation(feat1, feat2)
     assert(feat1>=1 and feat1 <=self.userStateFeatureCnt)
     assert(feat2>=1 and feat2 <=self.userStateFeatureCnt)
     return self.featCrossSqre[feat1][feat2] / math.sqrt(self.featSqre[feat1]) / math.sqrt(self.featSqre[feat2])
+end
+
+-- Do statistics of action frequency
+function CIUserSimulator:_actionFreqCalc()
+    for i=1, #self.realUserDataActs do
+       self.actFreqTotal[self.realUserDataActs[i]] = self.actFreqTotal[self.realUserDataActs[i]] + 1
+    end
+    self.actFreqTotal:div(#self.realUserDataActs)
 end
 
 return CIUserSimulator
