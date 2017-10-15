@@ -330,7 +330,7 @@ function CIUserActsPredictor:_init(CIUserSimulator, opt)
         end
     end
     --- testing the prior action appearance freq calculation
-    print(self.ciUserSimulator.actFreqPriorStep)
+    print(self.ciUserSimulator.actRankPriorStep)
 
 end
 

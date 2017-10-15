@@ -411,6 +411,7 @@ function CIUserSimulator:_init(CIFileReader, opt)
     self.priorActStatThres = 20
     self.actCntPriorStep = torch.Tensor(self.CIFr.usrActInd_end, self.priorActStatThres, self.CIFr.usrActInd_end):fill(1e-5)
     self.actFreqPriorStep = torch.Tensor(self.CIFr.usrActInd_end, self.priorActStatThres, self.CIFr.usrActInd_end):fill(1e-5)
+    self.actRankPriorStep = torch.Tensor(self.CIFr.usrActInd_end, self.priorActStatThres, self.CIFr.usrActInd_end):fill(1)
     self:_actionFreqCalc()  -- Calculate prior action appearance frequency
 
     collectgarbage()
@@ -669,6 +670,8 @@ function CIUserSimulator:_actionFreqCalc()
         end
     end
     self.actFreqPriorStep = torch.cdiv(self.actCntPriorStep, priorActSum)
+
+    _, self.actRankPriorStep = torch.sort(self.actFreqPriorStep, 3, true)   -- ascending order
 
 end
 
