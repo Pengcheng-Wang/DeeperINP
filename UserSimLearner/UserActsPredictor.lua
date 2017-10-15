@@ -322,15 +322,15 @@ function CIUserActsPredictor:_init(CIUserSimulator, opt)
     self.uapParam, self.uapDParam = self.model:getParameters()
 
 
-    --- :testing the Pearson's correlation calc function
-    for i=1, self.ciUserSimulator.realUserDataStates[1]:size()[1] do
-        for j=i+1, self.ciUserSimulator.realUserDataStates[1]:size()[1] do
-            local pcv = self.ciUserSimulator:PearsonCorrelation(i, j)
-            print('Pearson\'s correlation between feature',i, 'and',j,'is:',pcv)
-        end
-    end
-    --- testing the prior action appearance freq calculation
-    print(self.ciUserSimulator.actRankPriorStep)
+    ----- :testing the Pearson's correlation calc function
+    --for i=1, self.ciUserSimulator.realUserDataStates[1]:size()[1] do
+    --    for j=i+1, self.ciUserSimulator.realUserDataStates[1]:size()[1] do
+    --        local pcv = self.ciUserSimulator:PearsonCorrelation(i, j)
+    --        print('Pearson\'s correlation between feature',i, 'and',j,'is:',pcv)
+    --    end
+    --end
+    ----- testing the prior action appearance freq calculation
+    --print(self.ciUserSimulator.actRankPriorStep)
 
 end
 

@@ -675,4 +675,29 @@ function CIUserSimulator:_actionFreqCalc()
 
 end
 
+--- Augment data in training corpus using the proteties we extract here
+function CIUserSimulator:UserSimDataAugment(input, output, isRNNForm)
+    if isRNNForm then
+        -- If the model is in RNN form, which means the model is a sequencer, and requires input
+        -- to be a table of tensors in which the 1st dim (of the table) is time step
+    else
+        -- If the model is not in RNN form, which means each input just contains feature values
+        -- at the current time step. Right now, the strategy is using original data points and
+        -- augmented data points in ratio of 1:1
+        input:resize(self.opt.batchSize * 2, self.inputFeatureNum)
+        output:resize(self.opt.batchSize * 2)
+
+        -- Okay, try to utilize correlation in perturbing feature values
+        for i=1, self.opt.batchSize do
+            -- clone from original
+            input[self.opt.batchSize+i] = input[i]
+            output[self.opt.batchSize+i] = output[i]
+
+            -- perturb feature values according to correlation
+            
+        end
+
+    end
+end
+
 return CIUserSimulator
