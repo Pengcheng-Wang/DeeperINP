@@ -158,8 +158,8 @@ function CIUserActsPredictor:_init(CIUserSimulator, opt)
         self.model = torch.load(opt.ciunet)
     end
 
---    -- verbose
---    print(self.model)
+    --    -- verbose
+    --    print(self.model)
 
     ----------------------------------------------------------------------
     -- loss function: negative log-likelihood
@@ -189,7 +189,7 @@ function CIUserActsPredictor:_init(CIUserSimulator, opt)
         if ok and ok2 then
             print('using CUDA on GPU ' .. opt.gpu .. '...')
             cutorch.setDevice(opt.gpu)
---            cutorch.manualSeed(opt.seed)
+            --            cutorch.manualSeed(opt.seed)
             --- set up cuda nn
             self.model = self.model:cuda()
             self.uapCriterion = self.uapCriterion:cuda()
@@ -320,6 +320,16 @@ function CIUserActsPredictor:_init(CIUserSimulator, opt)
     -- retrieve parameters and gradients
     -- have to put these lines here below the gpu setting
     self.uapParam, self.uapDParam = self.model:getParameters()
+
+
+    --- :testing the Pearson's correlation calc function
+    for i=1, self.ciUserSimulator.realUserDataStates[1]:size()[1] do
+        for j=i+1, self.ciUserSimulator.realUserDataStates[1]:size()[1] do
+            local pcv = self.ciUserSimulator:PearsonCorrelation(i, j)
+            print('Pearson\'s correlation between feature',i, 'and',j,'is:',pcv)
+        end
+    end
+
 end
 
 
@@ -547,15 +557,15 @@ function CIUserActsPredictor:trainOneEpoch()
 
     -- time taken
     time = sys.clock() - time
---    time = time / #self.ciUserSimulator.realUserDataStates
+    --    time = time / #self.ciUserSimulator.realUserDataStates
     print("<trainer> time to learn 1 epoch = " .. (time*1000) .. 'ms')
 
     -- print self.uapConfusion matrix
---    print(self.uapConfusion)
+    --    print(self.uapConfusion)
     self.uapConfusion:updateValids()
     local confMtxStr = 'average row correct: ' .. (self.uapConfusion.averageValid*100) .. '% \n' ..
-            'average rowUcol correct (VOC measure): ' .. (self.uapConfusion.averageUnionValid*100) .. '% \n' ..
-            ' + global correct: ' .. (self.uapConfusion.totalValid*100) .. '%'
+    'average rowUcol correct (VOC measure): ' .. (self.uapConfusion.averageUnionValid*100) .. '% \n' ..
+    ' + global correct: ' .. (self.uapConfusion.totalValid*100) .. '%'
     print(confMtxStr)
     self.uapTrainLogger:add{['% mean class accuracy (train set)'] = self.uapConfusion.totalValid * 100}
 
@@ -563,11 +573,11 @@ function CIUserActsPredictor:trainOneEpoch()
     -- save/log current net
     local filename = paths.concat('userModelTrained', self.opt.save, 'uap.t7')
     os.execute('mkdir -p ' .. sys.dirname(filename))
---    if paths.filep(filename) then
---        os.execute('mv ' .. filename .. ' ' .. filename .. '.old')
---    end
---    print('<trainer> saving ciunet to '..filename)
---    torch.save(filename, self.model)
+    --    if paths.filep(filename) then
+    --        os.execute('mv ' .. filename .. ' ' .. filename .. '.old')
+    --    end
+    --    print('<trainer> saving ciunet to '..filename)
+    --    torch.save(filename, self.model)
 
     if self.trainEpoch % 10 == 0 and self.opt.ciuTType == 'train' then
         filename = paths.concat('userModelTrained', self.opt.save, string.format('%d', self.trainEpoch)..'_'..string.format('%.2f', self.uapConfusion.totalValid*100)..'uap.t7')
@@ -590,9 +600,9 @@ end
 -- evaluation function on test/train_validation set
 function CIUserActsPredictor:testActPredOnTestDetOneEpoch()
     -- Confusion matrix for action prediction (15 class)
---    local actPredTP = torch.Tensor(self.ciUserSimulator.CIFr.usrActInd_end):fill(1e-3)
---    local actPredFP = torch.Tensor(self.ciUserSimulator.CIFr.usrActInd_end):fill(1e-3)
---    local actPredFN = torch.Tensor(self.ciUserSimulator.CIFr.usrActInd_end):fill(1e-3)
+    --    local actPredTP = torch.Tensor(self.ciUserSimulator.CIFr.usrActInd_end):fill(1e-3)
+    --    local actPredFP = torch.Tensor(self.ciUserSimulator.CIFr.usrActInd_end):fill(1e-3)
+    --    local actPredFN = torch.Tensor(self.ciUserSimulator.CIFr.usrActInd_end):fill(1e-3)
 
     if self.opt.uppModel == 'lstm' then
         -- uSimShLayer == 0 and lstm model

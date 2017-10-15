@@ -363,8 +363,6 @@ function CIUserSimulator:_init(CIFileReader, opt)
         end
     end
 
-    collectgarbage()
-
     -- The shortest length record has a user actoin sequence length of 2. User id is 100-0466
 --    -- calc min length
 --    local minlen = 9999
@@ -399,10 +397,12 @@ function CIUserSimulator:_init(CIFileReader, opt)
 --        if i==3 then break end
 --    end
 
-    --- The following tensors are used to calculated pearson's correlations between state features
+    --- The following tensors are used to calculated Pearson's correlations between state features
     self.featSqre = torch.Tensor(self.userStateFeatureCnt):fill(0)
     self.featCrossSqre = torch.Tensor(self.userStateFeatureCnt, self.userStateFeatureCnt):fill(0)
+    self:_PearsonCorrCalc() -- Calculate a-squared, b-squared and a*b, that are all required in Pearson's correlation calculation
 
+    collectgarbage()
 end
 
 
@@ -570,7 +570,7 @@ function CIUserSimulator:applyAdpActOnState(curState, adpType, adpAct)
 end
 
 -- Description: Pearson correlation coefficient
-function CIUserSimulator:PearsonCorr()
+function CIUserSimulator:_PearsonCorrCalc()
     ---- compute the mean
     --local x1, y1 = 0, 0
     --for _, v in pairs(a) do
@@ -599,22 +599,27 @@ function CIUserSimulator:PearsonCorr()
         diffWithMean[i] = self.realUserDataStates[i] - stateMean
     end
 
-    local allEleSqr
-    for j=1, stateDim do
-        -- get squared values of all features in all standardized data points
-        allEleSqr = torch.pow(diffWithMean, 2)
-    end
+    -- get squared values of all features in all standardized data points
+    local allEleSqr = torch.pow(diffWithMean, 2)
 
     -- Get sum over all data points, for each feature
     self.featSqre = torch.sum(allEleSqr, 1)
 
+    -- a*b for each two features in the state representation. self.featCrossSqre has been constructed in _init()
     -- Time to calculate the a*b. Consider to use tensor:sub, or narrow, or select functions.
-    --for j=1, stateDim do
-    --    for k=j, stateDim do
-    --
-    --    end
-    --end
+    for j=1, stateDim do
+        for k=j+1, stateDim do
+            self.featCrossSqre[j][k] = diffWithMean:select(2, j) * diffWithMean:select(2, k)    -- dot product of two standardized columns
+            self.featCrossSqre[k][j] = self.featCrossSqre[j][k]
+        end
+    end
+end
 
+-- Return the Pearson's correlation between two features in self.realUserDataStates
+function CIUserSimulator:PearsonCorrelation(feat1, feat2)
+    assert(feat1>=1 and feat1 <=self.userStateFeatureCnt)
+    assert(feat2>=1 and feat2 <=self.userStateFeatureCnt)
+    return self.featCrossSqre[feat1][feat2] / math.sqrt(self.featSqre[feat1]) / math.sqrt(self.featSqre[feat2])
 end
 
 return CIUserSimulator
