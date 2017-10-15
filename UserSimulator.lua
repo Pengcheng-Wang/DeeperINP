@@ -635,7 +635,7 @@ function CIUserSimulator:_PearsonCorrCalc()
 end
 
 -- Return the Pearson's correlation between two features in self.realUserDataStates
-function CIUserSimulator:PearsonCorrelation(feat1, feat2)
+function CIUserSimulator:PearsonCorrelationOfTwo(feat1, feat2)
     assert(feat1>=1 and feat1 <=self.userStateFeatureCnt)
     assert(feat2>=1 and feat2 <=self.userStateFeatureCnt)
     return self.featCrossSqre[feat1][feat2] / math.sqrt(self.featSqre[feat1]) / math.sqrt(self.featSqre[feat2])
@@ -694,7 +694,7 @@ function CIUserSimulator:UserSimDataAugment(input, output, isRNNForm)
         -- If the model is not in RNN form, which means each input just contains feature values
         -- at the current time step. Right now, the strategy is using original data points and
         -- augmented data points in ratio of 1:1
-        input:resize(self.opt.batchSize * 2, self.inputFeatureNum)
+        input:resize(self.opt.batchSize * 2, self.userStateFeatureCnt)
         output:resize(self.opt.batchSize * 2)
 
         -- Okay, try to utilize correlation in perturbing feature values
