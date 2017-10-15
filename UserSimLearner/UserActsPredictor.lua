@@ -329,6 +329,8 @@ function CIUserActsPredictor:_init(CIUserSimulator, opt)
             print('Pearson\'s correlation between feature',i, 'and',j,'is:',pcv)
         end
     end
+    --- testing the prior action appearance freq calculation
+    print(self.ciUserSimulator.actFreqPriorStep)
 
 end
 

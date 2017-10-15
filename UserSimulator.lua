@@ -406,9 +406,12 @@ function CIUserSimulator:_init(CIFileReader, opt)
     self:_PearsonCorrCalc() -- Calculate a-squared, b-squared and a*b, that are all required in Pearson's correlation calculation
 
     --- The following tensors are used to record statistics of actions observed in training set
+    self.actCntTotal = torch.Tensor(self.CIFr.usrActInd_end):fill(1e-5)
     self.actFreqTotal = torch.Tensor(self.CIFr.usrActInd_end):fill(1e-5)
     self.priorActStatThres = 20
-    self.actFreqPriorStep = torch.Tensor(self.CIFr.usrActInd_end, self.priorActStatThres):fill(1e-5)
+    self.actCntPriorStep = torch.Tensor(self.CIFr.usrActInd_end, self.priorActStatThres, self.CIFr.usrActInd_end):fill(1e-5)
+    self.actFreqPriorStep = torch.Tensor(self.CIFr.usrActInd_end, self.priorActStatThres, self.CIFr.usrActInd_end):fill(1e-5)
+    self:_actionFreqCalc()  -- Calculate prior action appearance frequency
 
     collectgarbage()
 end
@@ -640,9 +643,33 @@ end
 -- Do statistics of action frequency
 function CIUserSimulator:_actionFreqCalc()
     for i=1, #self.realUserDataActs do
-       self.actFreqTotal[self.realUserDataActs[i]] = self.actFreqTotal[self.realUserDataActs[i]] + 1
+        self.actCntTotal[self.realUserDataActs[i]] = self.actCntTotal[self.realUserDataActs[i]] + 1
     end
-    self.actFreqTotal:div(#self.realUserDataActs)
+    self.actFreqTotal = torch.div(self.actCntTotal, #self.realUserDataActs)
+
+    for i=1, #self.realUserDataActs-1 do
+        if self.realUserDataActs[i] ~= self.CIFr.usrActInd_end then
+            for j=1, self.priorActStatThres do
+                if self.realUserDataActs[i+j-1] ~= self.CIFr.usrActInd_end then   -- self.CIFr.usrActInd_end is the last action in the action set, also the ending action
+                    -- Count action appearance of current action at step i as a prior action j steps prior to the future step
+                    self.actCntPriorStep[self.realUserDataActs[i+j]][j][self.realUserDataActs[i]] = self.actCntPriorStep[self.realUserDataActs[i+j]][j][self.realUserDataActs[i]] + 1
+                else
+                    break   -- We need to guarantee the ending action is the last action in each interaction sequence
+                end
+            end
+        end
+    end
+
+    local priorActSum = torch.cumsum(self.actCntPriorStep, 3)
+    for i=1, self.CIFr.usrActInd_end do
+        for j=1, self.priorActStatThres do
+            for k=1, self.CIFr.usrActInd_end-1 do
+                priorActSum[i][j][k] = priorActSum[i][j][self.CIFr.usrActInd_end]
+            end
+        end
+    end
+    self.actFreqPriorStep = torch.cdiv(self.actCntPriorStep, priorActSum)
+
 end
 
 return CIUserSimulator
