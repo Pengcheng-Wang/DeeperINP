@@ -382,7 +382,7 @@ function CIUserActsPredictor:trainOneEpoch()
                 epochDone = true
             end
 
-            self.ciUserSimulator:UserSimDataAugment(inputs, outputs, false)
+            self.ciUserSimulator:UserSimDataAugment(inputs, targets, false)
             if self.opt.gpu > 0 then
                 inputs = inputs:cuda()
                 targets = targets:cuda()
