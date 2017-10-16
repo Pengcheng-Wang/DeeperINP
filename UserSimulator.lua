@@ -722,7 +722,7 @@ function CIUserSimulator:UserSimDataAugment(input, output, isRNNForm)
             if output[i] ~= self.CIFr.usrActInd_end then
                 -- perturb feature values according to correlation
                 -- Try some simple thing. Pick the 1st non-correlated act and perturb
-                local correActPertProb = {0.75, 0.5, 0.25}
+                local correActPertProb = {0.75, 0.25} --{0.75, 0.5, 0.25}
                 for k=1, #correActPertProb do
                     if torch.uniform() < correActPertProb[k] then
                         local p_act_ind = self.featOfActCorreTabRank[output[i]][k]
