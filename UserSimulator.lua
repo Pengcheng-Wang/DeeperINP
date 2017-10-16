@@ -403,6 +403,12 @@ function CIUserSimulator:_init(CIFileReader, opt)
     self.featCrossSqre = torch.Tensor(self.userStateFeatureCnt, self.userStateFeatureCnt):zero()
     self.featMean = torch.Tensor(self.userStateFeatureCnt):zero()   -- feature mean in realUserDataStates
     self.featStdDev = torch.Tensor(self.userStateFeatureCnt):zero() -- standard deviation of each feature in realUserDataStates
+    self.featCorreTable = torch.Tensor(self.userStateFeatureCnt, self.userStateFeatureCnt):zero()   -- one table stores features' correlation with each other
+    self.featCorreTabSortRes = nil  -- sorted feature absolute correlations (including all features, player acts, planner acts, player characteristics)
+    self.featCorreTabSortRank = nil -- rank of sorted feature absolute correlations (including all features, player acts, planner acts, player characteristics)
+    self.featOfActCorreTable = nil  -- a table only stores player action feature correlations
+    self.featOfActCorreTabSortRes = nil     -- sorted feature absolute correlations (including only player acts)
+    self.featOfActCorreTabRank = nil    -- rank of sorted feature absolute correlations (including only player acts)
     self:_PearsonCorrCalc() -- Calculate a-squared, b-squared and a*b, that are all required in Pearson's correlation calculation
 
     --- The following tensors are used to record statistics of actions observed in training set
@@ -632,23 +638,33 @@ function CIUserSimulator:_PearsonCorrCalc()
     -- Calculate the standard deviation of each feature in self.realUserDataStates. This is not used in Pearson's correlation calculation
     -- So, by-product
     self.featStdDev = torch.sqrt(self.featSqre / (#self.realUserDataStates-1))
+
+    -- Calculate Pearson's correlation coefficient of each pair of features in state representation
+    for i=1, self.userStateFeatureCnt do
+        for j=i, self.userStateFeatureCnt do
+            self.featCorreTable[i][j] = self.featCrossSqre[i][j] / math.sqrt(self.featSqre[i]) / math.sqrt(self.featSqre[j])
+            self.featCorreTable[j][i] = self.featCorreTable[i][j]
+        end
+    end
+
+    -- Sort the abs of Pearson's correlation along each line(feature)
+    -- Remember the sorted values are abs of Pearson's correlation here
+    self.featCorreTabSortRes, self.featCorreTabSortRank = torch.sort(torch.abs(self.featCorreTable), 2)
+
+    -- Get the correlation table for only player action features
+    -- This table is a one part of the self.featCorreTable
+    self.featOfActCorreTable = self.featCorreTable[{{1, self.CIFr.usrActInd_end-1}, {1, self.CIFr.usrActInd_end}}]:clone()
+    -- Sort the abs of Pearson's correlation along each line in between only player action features
+    self.featOfActCorreTabSortRes, self.featOfActCorreTabRank = torch.sort(torch.abs(self.featOfActCorreTable), 2)
+
 end
 
 -- Return the Pearson's correlation between two features in self.realUserDataStates
 function CIUserSimulator:PearsonCorrelationOfTwo(feat1, feat2)
     assert(feat1>=1 and feat1 <=self.userStateFeatureCnt)
     assert(feat2>=1 and feat2 <=self.userStateFeatureCnt)
-    return self.featCrossSqre[feat1][feat2] / math.sqrt(self.featSqre[feat1]) / math.sqrt(self.featSqre[feat2])
-end
-
--- Return the Pearson's correlation between feat1 and all other features
-function CIUserSimulator:PearsonCorrelationOfOneFeat(feat1)
-    assert(feat1>=1 and feat1 <=self.userStateFeatureCnt)
-    local correWithFeats = torch.Tensor(self.userStateFeatureCnt)
-    for i=1, self.userStateFeatureCnt do
-        correWithFeats[i] = self.featCrossSqre[feat1][i] / math.sqrt(self.featSqre[feat1]) / math.sqrt(self.featSqre[i])
-    end
-    return correWithFeats
+    --return self.featCrossSqre[feat1][feat2] / math.sqrt(self.featSqre[feat1]) / math.sqrt(self.featSqre[feat2])
+    return self.featCorreTable[feat1][feat2]
 end
 
 -- Do statistics of action frequency
@@ -705,9 +721,28 @@ function CIUserSimulator:UserSimDataAugment(input, output, isRNNForm)
 
             if output[i] ~= self.CIFr.usrActInd_end then
                 -- perturb feature values according to correlation
-                local actCorreWithAct = self:PearsonCorrelationOfOneFeat(output[i])[{{1, self.CIFr.usrActInd_end-1}}]
-                print (actCorreWithAct)
-                exit()
+                -- Try some simple thing. Pick the 1st non-correlated act and perturb
+                local correActPertProb = {0.75, 0.5, 0.25}
+                for k=1, #correActPertProb do
+                    if torch.uniform() < correActPertProb[k] then
+                        local p_act_ind = self.featOfActCorreTabRank[output[i]][k]
+                        local p_act_cnt = 1
+                        -- Half of the possibility to reduce counting
+                        if torch.random(1,2) == 2 then
+                            p_act_cnt = -1
+                        end
+                        -- If std is large, then make the case possible to change act count larger than 2
+                        if math.abs(self.featStdDev[p_act_ind]) > 2 and torch.uniform() < 0.3 then
+                            p_act_cnt = p_act_cnt * 2
+                        end
+                        -- perturb action counting
+                        input[self.opt.batchSize+i][p_act_ind] = input[self.opt.batchSize+i][p_act_ind] + p_act_cnt
+                        -- make sure the counting is non-negative
+                        if input[self.opt.batchSize+i][p_act_ind] < 0 then
+                            input[self.opt.batchSize+i][p_act_ind] = 0
+                        end
+                    end
+                end
             end
 
         end
