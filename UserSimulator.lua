@@ -722,10 +722,10 @@ function CIUserSimulator:UserSimDataAugment(input, output, isRNNForm)
             if output[i] ~= self.CIFr.usrActInd_end then
                 -- perturb feature values according to correlation
                 -- Try some simple thing. Pick the 1st non-correlated act and perturb
-                local correActPertProb = {0.75, 0.25} --{0.75, 0.5, 0.25}
+                local correActPertProb = {0.5, 0.4, 0.1} --{0.55, 0.35, 0.1} --{0.5, 0.3, 0.1} -- this set is good. MLP-bi act pred reaches to 33.5% high.  --{0.25, 0.15}
                 for k=1, #correActPertProb do
                     if torch.uniform() < correActPertProb[k] then
-                        local p_act_ind = self.featOfActCorreTabRank[output[i]][k]
+                        local p_act_ind = self.featOfActCorreTabRank[output[i]][15-k]
                         local p_act_cnt = 1
                         -- Half of the possibility to reduce counting
                         if torch.random(1,2) == 2 then
