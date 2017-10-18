@@ -414,8 +414,8 @@ function CIUserSimulator:_init(CIFileReader, opt)
     --- The following tensors are used to record statistics of actions observed in training set
     self.actCntTotal = torch.Tensor(self.CIFr.usrActInd_end):fill(1e-5)
     self.actFreqTotal = torch.Tensor(self.CIFr.usrActInd_end):fill(1e-5)
-    self.actFreqSortResCum = nil
-    self.actFreqSortRank = nil
+    self.actFreqSortResCum = nil    -- action frequency cumsum after descending sort
+    self.actFreqSortRank = nil  -- action frequency rank after descending sort
     self.priorActStatThres = 20
     self.actCntPriorStep = torch.Tensor(self.CIFr.usrActInd_end, self.priorActStatThres, self.CIFr.usrActInd_end):fill(1e-5)
     self.actFreqPriorStep = torch.Tensor(self.CIFr.usrActInd_end, self.priorActStatThres, self.CIFr.usrActInd_end):fill(1e-5)
@@ -675,7 +675,10 @@ function CIUserSimulator:_actionFreqCalc()
         self.actCntTotal[self.realUserDataActs[i]] = self.actCntTotal[self.realUserDataActs[i]] + 1
     end
     self.actFreqTotal = torch.div(self.actCntTotal, #self.realUserDataActs)
-    print(self.actFreqTotal) os.exit()
+    self.actFreqSortResCum, self.actFreqSortRank = torch.sort(self.actFreqTotal, true)  -- descending order
+    self.actFreqSortResCum = torch.cumsum(self.actFreqSortResCum)   -- Get the cumsum of player action frequency
+    print(self.actFreqSortResCum, self.actFreqSortRank) os.exit()
+
     for i=1, #self.realUserDataActs-1 do
         if self.realUserDataActs[i] ~= self.CIFr.usrActInd_end then
             for j=1, self.priorActStatThres do
@@ -699,7 +702,7 @@ function CIUserSimulator:_actionFreqCalc()
     end
     self.actFreqPriorStep = torch.cdiv(self.actCntPriorStep, priorActSum)
 
-    _, self.actRankPriorStep = torch.sort(self.actFreqPriorStep, 3, true)   -- ascending order
+    _, self.actRankPriorStep = torch.sort(self.actFreqPriorStep, 3, true)   -- descending order
 
 end
 
