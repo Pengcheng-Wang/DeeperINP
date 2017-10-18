@@ -722,7 +722,7 @@ function CIUserSimulator:UserSimDataAugment(input, output, isRNNForm)
             if output[i] ~= self.CIFr.usrActInd_end then
                 -- perturb feature values according to correlation
                 -- Try some simple thing. Pick the 1st non-correlated act and perturb
-                local correActPertProb = {0.5, 0.4, 0.1} --{0.55, 0.35, 0.1} --{0.5, 0.3, 0.1} -- this set is good. MLP-bi act pred reaches to 33.5% high.  --{0.25, 0.15}
+                local correActPertProb = {0.5, 0.3, 0.1} -- this set is good. MLP-bi act pred reaches to 33.5% high.
                 for k=1, #correActPertProb do
                     if torch.uniform() < correActPertProb[k] then
                         local p_act_ind = self.featOfActCorreTabRank[output[i]][15-k]
@@ -735,6 +735,15 @@ function CIUserSimulator:UserSimDataAugment(input, output, isRNNForm)
                         if math.abs(self.featStdDev[p_act_ind]) > 2 and torch.uniform() < 0.3 then
                             p_act_cnt = p_act_cnt * 2
                         end
+                        -- --- Do a test here. Try to not only change feature values in integer. Try directly to use std
+                        -- --- This is an interesting try. It seems that it does not generate better result than integer
+                        -- --- perturbed action countings. The result is similar. And training is slower.
+                        -- p_act_cnt = p_act_cnt * torch.normal(1, 0.22)
+                        -- if p_act_cnt > 2 then
+                        --     p_act_cnt = 2
+                        -- elseif p_act_cnt < -2 then
+                        --     p_act_cnt = -2
+                        -- end
                         -- perturb action counting
                         input[self.opt.batchSize+i][p_act_ind] = input[self.opt.batchSize+i][p_act_ind] + p_act_cnt
                         -- make sure the counting is non-negative
