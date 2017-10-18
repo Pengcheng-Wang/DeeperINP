@@ -677,6 +677,7 @@ function CIUserSimulator:_actionFreqCalc()
     self.actFreqTotal = torch.div(self.actCntTotal, #self.realUserDataActs)
     self.actFreqSortResCum, self.actFreqSortRank = torch.sort(self.actFreqTotal[{{1, self.CIFr.usrActInd_end-1}}], true)  -- descending order, only rank first 14 actions (not including game-ending action)
     self.actFreqSortResCum = torch.cumsum(self.actFreqSortResCum)   -- Get the cumsum of player action frequency
+    self.actFreqSortResCum:div(self.actFreqSortResCum[self.CIFr.usrActInd_end-1])   -- standardization
     print(self.actFreqSortResCum, self.actFreqSortRank) os.exit()
 
     for i=1, #self.realUserDataActs-1 do
