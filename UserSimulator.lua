@@ -794,6 +794,8 @@ function CIUserSimulator:UserSimDataAugment(input, output, isRNNForm)
                             if input[self.opt.batchSize+i][p_act_ind] < 0 then
                                 input[self.opt.batchSize+i][p_act_ind] = 0
                             end
+
+                            break
                         end
                     end
                 end
