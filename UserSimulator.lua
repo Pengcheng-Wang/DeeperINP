@@ -678,7 +678,6 @@ function CIUserSimulator:_actionFreqCalc()
     self.actFreqSortResCum, self.actFreqSortRank = torch.sort(self.actFreqTotal[{{1, self.CIFr.usrActInd_end-1}}], true)  -- descending order, only rank first 14 actions (not including game-ending action)
     self.actFreqSortResCum = torch.cumsum(self.actFreqSortResCum)   -- Get the cumsum of player action frequency
     self.actFreqSortResCum:div(self.actFreqSortResCum[self.CIFr.usrActInd_end-1])   -- standardization
-    print(self.actFreqSortResCum, self.actFreqSortRank) os.exit()
 
     for i=1, #self.realUserDataActs-1 do
         if self.realUserDataActs[i] ~= self.CIFr.usrActInd_end then
@@ -758,6 +757,10 @@ function CIUserSimulator:UserSimDataAugment(input, output, isRNNForm)
                         end
                     end
                 end
+            else
+                -- if output[i] == self.CIFr.usrActInd_end
+                -- then purterb all other action features according to action frequency (not considering action time)
+                -- todo: pwang8. Oct 18, 2017. Perturb action values when ending action observed
             end
 
         end
