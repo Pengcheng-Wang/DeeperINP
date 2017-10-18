@@ -727,9 +727,20 @@ function CIUserSimulator:UserSimDataAugment(input, output, isRNNForm)
             output[self.opt.batchSize+i] = output[i]
 
             if output[i] ~= self.CIFr.usrActInd_end then
-                -- perturb feature values according to correlation
-                -- Try some simple thing. Pick the 1st non-correlated act and perturb
+                -- perturb feature values (action counting) according to correlation
+                -- From the experiment we found that changing counting of highly correlated actions are helpful
                 local correActPertProb = {0.5, 0.3, 0.1} -- this set is good. MLP-bi act pred reaches to 33.5% high.
+                -- The average sequence length is around 40. So, we should set correActPertProb accordingly
+                local actStepCntTotal = torch.cumsum(input[self.opt.batchSize+i])[self.CIFr.usrActInd_end-1]    -- the counting of all actions the player took till now
+                if actStepCntTotal <= 3 then
+                    correActPertProb = {}
+                elseif actStepCntTotal <= 10 then
+                    correActPertProb = {0.4, 0.2}
+                elseif actStepCntTotal <= 30 then
+                    correActPertProb = {0.5, 0.3, 0.1}
+                else
+                    correActPertProb = {0.6, 0.35, 0.15}
+                end
                 for k=1, #correActPertProb do
                     if torch.uniform() < correActPertProb[k] then
                         local p_act_ind = self.featOfActCorreTabRank[output[i]][self.CIFr.usrActInd_end-k]
@@ -741,6 +752,9 @@ function CIUserSimulator:UserSimDataAugment(input, output, isRNNForm)
                         -- If std is large, then make the case possible to change act count larger than 2
                         if math.abs(self.featStdDev[p_act_ind]) > 2 and torch.uniform() < 0.3 then
                             p_act_cnt = p_act_cnt * 2
+                        elseif math.abs(self.featStdDev[p_act_ind]) < 0.5 and torch.uniform() < 0.5 then
+                            -- some actions are rarely adopted.
+                            p_act_cnt = 0
                         end
                         -- --- Do a test here. Try to not only change feature values in integer. Try directly to use std
                         -- --- This is an interesting try. It seems that it does not generate better result than integer
