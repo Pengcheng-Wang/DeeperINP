@@ -762,8 +762,13 @@ function CIUserSimulator:UserSimDataAugment(input, output, isRNNForm)
             else
                 -- if output[i] == self.CIFr.usrActInd_end
                 -- then purterb all other action features according to action frequency (not considering action time)
-                local actPtbCntForEnd = 2
-                for k=1, actPtbCntForEnd do
+                local actPtbCntForEnd = {1.0, 0.85}  -- This is the probability under which the action counting will be perturbed
+                for k=1, #actPtbCntForEnd do
+                    -- chance of not perturbing
+                    if torch.uniform() > actPtbCntForEnd[k] then
+                        break
+                    end
+                    -- otherwise, perturb action values
                     local endPtrSeed = torch.uniform()
                     for pai=1, self.actFreqSortResCum:size()[1] do
                         if endPtrSeed <= self.actFreqSortResCum[pai] then
