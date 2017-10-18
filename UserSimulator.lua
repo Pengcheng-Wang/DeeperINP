@@ -675,6 +675,8 @@ function CIUserSimulator:_actionFreqCalc()
         self.actCntTotal[self.realUserDataActs[i]] = self.actCntTotal[self.realUserDataActs[i]] + 1
     end
     self.actFreqTotal = torch.div(self.actCntTotal, #self.realUserDataActs)
+    -- In fact it is not necessary to sort act frequency for the sampling purpose. It just offers a convenient way to check to sorting result.
+    -- And the sort is only invoked once. So I can leave it here right now.
     self.actFreqSortResCum, self.actFreqSortRank = torch.sort(self.actFreqTotal[{{1, self.CIFr.usrActInd_end-1}}], true)  -- descending order, only rank first 14 actions (not including game-ending action)
     self.actFreqSortResCum = torch.cumsum(self.actFreqSortResCum)   -- Get the cumsum of player action frequency
     self.actFreqSortResCum:div(self.actFreqSortResCum[self.CIFr.usrActInd_end-1])   -- standardization
@@ -730,7 +732,7 @@ function CIUserSimulator:UserSimDataAugment(input, output, isRNNForm)
                 local correActPertProb = {0.5, 0.3, 0.1} -- this set is good. MLP-bi act pred reaches to 33.5% high.
                 for k=1, #correActPertProb do
                     if torch.uniform() < correActPertProb[k] then
-                        local p_act_ind = self.featOfActCorreTabRank[output[i]][15-k]
+                        local p_act_ind = self.featOfActCorreTabRank[output[i]][self.CIFr.usrActInd_end-k]
                         local p_act_cnt = 1
                         -- Half of the possibility to reduce counting
                         if torch.random(1,2) == 2 then
@@ -760,7 +762,41 @@ function CIUserSimulator:UserSimDataAugment(input, output, isRNNForm)
             else
                 -- if output[i] == self.CIFr.usrActInd_end
                 -- then purterb all other action features according to action frequency (not considering action time)
-                -- todo: pwang8. Oct 18, 2017. Perturb action values when ending action observed
+                local actPtbCntForEnd = 2
+                for k=1, actPtbCntForEnd do
+                    local endPtrSeed = torch.uniform()
+                    for pai=1, self.actFreqSortResCum:size()[1] do
+                        if endPtrSeed <= self.actFreqSortResCum[pai] then
+                            local p_act_ind = self.actFreqSortRank[pai]
+                            local p_act_cnt = 1
+                            -- When perturb features for synthetic data points at the end of a sequence, we set larger
+                            -- probability to see an increase of total action counting to reflect that the ending of
+                            -- the game is activated at a certain amount of time
+                            if torch.uniform() > 0.65 then
+                                p_act_cnt = -1
+                            end
+                            -- If std is large, then make the case possible to change act count larger than 2
+                            if math.abs(self.featStdDev[p_act_ind]) > 2 and torch.uniform() < 0.3 then
+                                p_act_cnt = p_act_cnt * 2
+                            end
+                            -- --- Do a test here. Try to not only change feature values in integer. Try directly to use std
+                            -- --- This is an interesting try. It seems that it does not generate better result than integer
+                            -- --- perturbed action countings. The result is similar. And training is slower.
+                            -- p_act_cnt = p_act_cnt * torch.normal(1, 0.22)
+                            -- if p_act_cnt > 2 then
+                            --     p_act_cnt = 2
+                            -- elseif p_act_cnt < -2 then
+                            --     p_act_cnt = -2
+                            -- end
+                            -- perturb action counting
+                            input[self.opt.batchSize+i][p_act_ind] = input[self.opt.batchSize+i][p_act_ind] + p_act_cnt
+                            -- make sure the counting is non-negative
+                            if input[self.opt.batchSize+i][p_act_ind] < 0 then
+                                input[self.opt.batchSize+i][p_act_ind] = 0
+                            end
+                        end
+                    end
+                end
             end
 
         end
