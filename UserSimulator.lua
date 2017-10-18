@@ -414,6 +414,8 @@ function CIUserSimulator:_init(CIFileReader, opt)
     --- The following tensors are used to record statistics of actions observed in training set
     self.actCntTotal = torch.Tensor(self.CIFr.usrActInd_end):fill(1e-5)
     self.actFreqTotal = torch.Tensor(self.CIFr.usrActInd_end):fill(1e-5)
+    self.actFreqSortResCum = nil
+    self.actFreqSortRank = nil
     self.priorActStatThres = 20
     self.actCntPriorStep = torch.Tensor(self.CIFr.usrActInd_end, self.priorActStatThres, self.CIFr.usrActInd_end):fill(1e-5)
     self.actFreqPriorStep = torch.Tensor(self.CIFr.usrActInd_end, self.priorActStatThres, self.CIFr.usrActInd_end):fill(1e-5)
@@ -673,7 +675,7 @@ function CIUserSimulator:_actionFreqCalc()
         self.actCntTotal[self.realUserDataActs[i]] = self.actCntTotal[self.realUserDataActs[i]] + 1
     end
     self.actFreqTotal = torch.div(self.actCntTotal, #self.realUserDataActs)
-
+    print(self.actFreqTotal) os.exit()
     for i=1, #self.realUserDataActs-1 do
         if self.realUserDataActs[i] ~= self.CIFr.usrActInd_end then
             for j=1, self.priorActStatThres do
