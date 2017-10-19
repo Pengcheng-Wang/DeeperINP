@@ -713,10 +713,17 @@ function CIUserSimulator:UserSimDataAugment(input, output, isRNNForm)
     if isRNNForm then
         -- If the model is in RNN form, which means the model is a sequencer, and requires input
         -- to be a table of tensors in which the 1st dim (of the table) is time step
+        for j = 1, self.opt.lstmHist do
+            input[j]:resize(self.opt.batchSize * 2, self.userStateFeatureCnt)
+            output[j]:resize(self.opt.batchSize * 2)
+        end
+        -- todo:pwang8. Finish this data aug code. Oct 19, 2017.
+
     else
         -- If the model is not in RNN form, which means each input just contains feature values
         -- at the current time step. Right now, the strategy is using original data points and
         -- augmented data points in ratio of 1:1
+        -- todo: pwang8. This is wrong. Bcz input has been pre-processed before passed into this function. I can change the invokation of preprocess in the other file. This can be easier. Oct 19, 2017.
         input:resize(self.opt.batchSize * 2, self.userStateFeatureCnt)
         output:resize(self.opt.batchSize * 2)
 
@@ -729,7 +736,7 @@ function CIUserSimulator:UserSimDataAugment(input, output, isRNNForm)
             if output[i] ~= self.CIFr.usrActInd_end then
                 -- perturb feature values (action counting) according to correlation
                 -- From the experiment we found that changing counting of highly correlated actions are helpful
-                local correActPertProb = nil  --{0.5, 0.3, 0.1} -- this set is good. MLP-bi act pred reaches to 33.5% high.
+                local correActPertProb  --{0.5, 0.3, 0.1} -- this set is good. MLP-bi act pred reaches to 33.5% high.
                 -- The average sequence length is around 40. So, we should set correActPertProb accordingly
                 local actStepCntTotal = torch.cumsum(input[self.opt.batchSize+i])[self.CIFr.usrActInd_end-1]    -- the counting of all actions the player took till now
                 if actStepCntTotal <= 3 then

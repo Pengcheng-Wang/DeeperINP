@@ -382,7 +382,6 @@ function CIUserActsPredictor:trainOneEpoch()
                 epochDone = true
             end
 
-            -- todo: pwang8. This is a test right now.
             self.ciUserSimulator:UserSimDataAugment(inputs, targets, false)
             if self.opt.gpu > 0 then
                 inputs = inputs:cuda()
@@ -428,6 +427,7 @@ function CIUserActsPredictor:trainOneEpoch()
                 epochDone = true
             end
 
+            self.ciUserSimulator:UserSimDataAugment(inputs, targets, true)
             if self.opt.gpu > 0 then
                 nn.utils.recursiveType(inputs, 'torch.CudaTensor')
                 nn.utils.recursiveType(targets, 'torch.CudaTensor')
