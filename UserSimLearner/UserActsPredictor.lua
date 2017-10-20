@@ -339,6 +339,17 @@ end
 
 -- training function
 function CIUserActsPredictor:trainOneEpoch()
+    -- -- todo: pwang8. Oct 20, 2017. This is some test to print out player actions into a file. I'd like to check them
+    -- file = io.open(paths.concat('userModelTrained', 'userActsTrain.csv'), 'w')
+    -- for i=1, #self.ciUserSimulator.realUserDataActs do
+    --     if self.ciUserSimulator.realUserDataActs[i] ~= self.ciUserSimulator.CIFr.usrActInd_end then
+    --         file:write(string.format("%d,", self.ciUserSimulator.realUserDataActs[i]))
+    --     else
+    --         file:write(string.format("%d\n", self.ciUserSimulator.realUserDataActs[i]))
+    --     end
+    -- end
+    -- file:close()
+
     -- local vars
     local time = sys.clock()
 

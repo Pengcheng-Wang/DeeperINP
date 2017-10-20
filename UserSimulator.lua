@@ -670,8 +670,8 @@ function CIUserSimulator:_PearsonCorrCalc()
 
     -- Get the correlation table for only player action features
     -- This table is a one part of the self.featCorreTable
-    self.featOfActCorreTable = self.featCorreTable[{{1, self.CIFr.usrActInd_end-1}, {1, self.CIFr.usrActInd_end}}]:clone()
-    -- Sort the abs of Pearson's correlation along each line in between only player action features
+    self.featOfActCorreTable = self.featCorreTable[{{1, self.CIFr.usrActInd_end-1}, {1, self.CIFr.usrActInd_end-1}}]:clone()
+    -- Sort the abs of Pearson's correlation along each line in between only player action features, ascending order
     self.featOfActCorreTabSortRes, self.featOfActCorreTabRank = torch.sort(torch.abs(self.featOfActCorreTable), 2)
 
 end
@@ -723,6 +723,36 @@ function CIUserSimulator:_actionFreqCalc()
 
 end
 
+function CIUserSimulator:_calcActPertCounting(p_act_cnt, p_act_ind, _dual_act_change_prob)
+  if self.actFreqTotal[p_act_ind] < self.actFreqTotal[self.CIFr.usrActInd_end] and torch.uniform() < 0.75 then -- as a ref, end-game has actFreqTotal of 0.0245
+      -- some actions are rarely adopted.
+      p_act_cnt = 0
+  elseif self.actFreqTotal[p_act_ind] <= self.actFreqTotal[self.CIFr.usrActInd_end] * 2 then
+      local _samSeed = torch.uniform()
+      if _samSeed < _dual_act_change_prob then
+          p_act_cnt = p_act_cnt * 2
+      elseif _samSeed > 0.75 then
+          p_act_cnt = 0
+      end
+  elseif self.actFreqTotal[p_act_ind] <= self.actFreqTotal[self.CIFr.usrActInd_end] * 4 then
+      if torch.uniform() < _dual_act_change_prob then
+          p_act_cnt = p_act_cnt * 2
+      end
+      if torch.uniform() < _dual_act_change_prob/4 then
+          p_act_cnt = p_act_cnt/math.abs(p_act_cnt) * 3
+      end
+  else
+      if torch.uniform() < _dual_act_change_prob then
+          p_act_cnt = p_act_cnt * 2
+      end
+      if torch.uniform() < _dual_act_change_prob/3 then
+          p_act_cnt = p_act_cnt/math.abs(p_act_cnt) * 3
+      end
+  end
+
+  return p_act_cnt
+end
+
 --- Augment data in training corpus using the proteties we extract here
 function CIUserSimulator:UserSimDataAugment(input, output, isRNNForm)
     if isRNNForm then
@@ -754,15 +784,17 @@ function CIUserSimulator:UserSimDataAugment(input, output, isRNNForm)
                 -- The average sequence length is around 40. So, we should set correActPertProb accordingly
                 local actStepCntTotal = torch.cumsum(input[self.opt.batchSize+i])[self.CIFr.usrActInd_end-1]    -- the counting of all actions the player took till now
                 if actStepCntTotal <= 3 then
+                    -- The standard deviations of the first 3 actions are small. So do not perturb data points here
                     correActPertProb = {}
-                elseif actStepCntTotal <= 10 then
-                    correActPertProb = {0.4, 0.25}
+                elseif actStepCntTotal <= 6 then
+                    -- For action 4-6, the standard deviations are not that large, so try to perturb slightly
+                    correActPertProb = {0.4, 0.3, 0.2}
                 elseif actStepCntTotal <= 20 then
-                    correActPertProb = {0.4, 0.3, 0.2, 0.1}
+                    correActPertProb = {0.5, 0.4, 0.3, 0.2}
                 elseif actStepCntTotal <= 35 then
-                    correActPertProb = {0.5, 0.35, 0.25, 0.15}
+                    correActPertProb = {0.6, 0.5, 0.4, 0.3, 0.2}
                 else
-                    correActPertProb = {0.15, 0.3, 0.15}
+                    correActPertProb = {0.7, 0.6, 0.5, 0.4, 0.3, 0.2}
                 end
                 for k=1, #correActPertProb do
                     if torch.uniform() < correActPertProb[k] then
@@ -773,12 +805,33 @@ function CIUserSimulator:UserSimDataAugment(input, output, isRNNForm)
                             p_act_cnt = -1
                         end
                         -- If std is large, then make the case possible to change act count larger than 2
-                        if math.abs(self.featStdDev[p_act_ind]) > 2 and torch.uniform() < 0.3 then
-                            p_act_cnt = p_act_cnt * 2
-                        elseif math.abs(self.actFreqTotal[p_act_ind]) < 0.02 and torch.uniform() < 0.5 then -- as a ref, end-game has actFreqTotal of 0.0245
-                            -- some actions are rarely adopted.
-                            p_act_cnt = 0
-                        end
+                        local _dual_act_change_prob = #correActPertProb * 0.07
+                        -- if self.actFreqTotal[p_act_ind] < self.actFreqTotal[self.CIFr.usrActInd_end] and torch.uniform() < 0.75 then -- as a ref, end-game has actFreqTotal of 0.0245
+                        --     -- some actions are rarely adopted.
+                        --     p_act_cnt = 0
+                        -- elseif self.actFreqTotal[p_act_ind] <= self.actFreqTotal[self.CIFr.usrActInd_end] * 2 then
+                        --     local _samSeed = torch.uniform()
+                        --     if _samSeed < _dual_act_change_prob then
+                        --         p_act_cnt = p_act_cnt * 2
+                        --     elseif _samSeed > 0.75 then
+                        --         p_act_cnt = 0
+                        --     end
+                        -- elseif self.actFreqTotal[p_act_ind] <= self.actFreqTotal[self.CIFr.usrActInd_end] * 4 then
+                        --     if torch.uniform() < _dual_act_change_prob then
+                        --         p_act_cnt = p_act_cnt * 2
+                        --     end
+                        --     if torch.uniform() < _dual_act_change_prob/4 then
+                        --         p_act_cnt = p_act_cnt/math.abs(p_act_cnt) * 3
+                        --     end
+                        -- else
+                        --     if torch.uniform() < _dual_act_change_prob then
+                        --         p_act_cnt = p_act_cnt * 2
+                        --     end
+                        --     if torch.uniform() < _dual_act_change_prob/3 then
+                        --         p_act_cnt = p_act_cnt/math.abs(p_act_cnt) * 3
+                        --     end
+                        -- end
+                        p_act_cnt = self:_calcActPertCounting(p_act_cnt, p_act_ind, _dual_act_change_prob)
                         -- --- Do a test here. Try to not only change feature values in integer. Try directly to use std
                         -- --- This is an interesting try. It seems that it does not generate better result than integer
                         -- --- perturbed action countings. The result is similar. And training is slower.
@@ -799,7 +852,7 @@ function CIUserSimulator:UserSimDataAugment(input, output, isRNNForm)
             else
                 -- if output[i] == self.CIFr.usrActInd_end
                 -- then purterb all other action features according to action frequency (not considering action time)
-                local actPtbCntForEnd = {1.0, 0.85}  -- This is the probability under which the action counting will be perturbed
+                local actPtbCntForEnd = {1.0, 0.85, 0.3}  -- This is the probability under which the action counting will be perturbed
                 for k=1, #actPtbCntForEnd do
                     -- chance of not perturbing
                     if torch.uniform() > actPtbCntForEnd[k] then
@@ -818,9 +871,10 @@ function CIUserSimulator:UserSimDataAugment(input, output, isRNNForm)
                                 p_act_cnt = -1
                             end
                             -- If std is large, then make the case possible to change act count larger than 2
-                            if math.abs(self.featStdDev[p_act_ind]) > 2 and torch.uniform() < 0.3 then
-                                p_act_cnt = p_act_cnt * 2
-                            end
+                            -- if math.abs(self.actFreqTotal[p_act_ind]) > 2 and torch.uniform() < 0.3 then
+                            --     p_act_cnt = p_act_cnt * 2
+                            -- end
+                            p_act_cnt = self:_calcActPertCounting(p_act_cnt, p_act_ind, 0.45)
                             -- --- Do a test here. Try to not only change feature values in integer. Try directly to use std
                             -- --- This is an interesting try. It seems that it does not generate better result than integer
                             -- --- perturbed action countings. The result is similar. And training is slower.
