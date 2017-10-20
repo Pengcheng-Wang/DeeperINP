@@ -467,7 +467,7 @@ function CIUserSimulator:_calcRealUserStateFeatureRescaleFactor()
     -- 1.1095, 0.4359, 0.4376, 0.3700, 0.3904, 0.4136, 0.3589, 0.4938, 0.4987, 0.2325, 0.1198}
 end
 
---- Right now, this preprocessing is rescaling
+--- Our preprocessing can do re-scaling or normalization
 function CIUserSimulator:preprocessUserStateData(obvUserData, ppType)
 
     -- Attention: We are right now doing a training/test split. So, all preprocessUserStateData
@@ -484,11 +484,26 @@ function CIUserSimulator:preprocessUserStateData(obvUserData, ppType)
         0.3896, 0.4155, 0.3564, 0.4953, 0.4988, 0.2322, 0.1177
     }
 
+    local _stateFeatMean, _stateFeatStd, _stateFeatRescale
+    if obvUserData:squeeze():dim() == 1 then
+        -- If input Tensor obvUerDatais 1-d (only one data point)
+        _stateFeatMean = self.stateFeatureMeanEachFeature
+        _stateFeatStd = self.stateFeatureStdEachFeature
+        _stateFeatRescale = self.stateFeatureRescaleFactor
+    else
+        -- If input tensor is 2-d (each row contains one data point)
+        -- Duplicate mean and std tensors and make them fit the dim of input tensor
+        -- We assume the 1st dim is batch index
+        _stateFeatMean = torch.repeatTensor(self.stateFeatureMeanEachFeature, obvUserData:size(1), 1)
+        _stateFeatStd = torch.repeatTensor(self.stateFeatureStdEachFeature, obvUserData:size(1), 1)
+        _stateFeatRescale = torch.repeatTensor(self.stateFeatureRescaleFactor, obvUserData:size(1), 1)
+    end
+
     if ppType == 'rsc' then
-        return torch.cdiv(obvUserData, self.stateFeatureRescaleFactor)
+        return torch.cdiv(obvUserData, _stateFeatRescale)
     elseif ppType == 'std' then
-        local subMean = torch.add(obvUserData, -1, self.stateFeatureMeanEachFeature)
-        return torch.cdiv(subMean, self.stateFeatureStdEachFeature)
+        local subMean = torch.add(obvUserData, -1, _stateFeatMean)
+        return torch.cdiv(subMean, _stateFeatStd)
     else
         print('!!!Error. Unrecognized preprocessing in UserSimulator.', ppType)
     end
@@ -510,14 +525,14 @@ function CIUserSimulator:isAdpTriggered(curState, userAct)
     elseif userAct == self.CIFr.usrActInd_askBryceSymp then
         return true, self.CIFr.ciAdp_BryceSymp
     elseif userAct == self.CIFr.usrActInd_talkQuentin and
-            stateRef[self.CIFr.usrActInd_KimLetQuentinRevealActOne] < 1 and
-            stateRef[self.CIFr.usrActInd_talkQuentin] < 1 then
+    stateRef[self.CIFr.usrActInd_KimLetQuentinRevealActOne] < 1 and
+    stateRef[self.CIFr.usrActInd_talkQuentin] < 1 then
         return true, self.CIFr.ciAdp_PresentQuiz
     elseif userAct == self.CIFr.usrActInd_talkRobert and
-            stateRef[self.CIFr.usrActInd_talkRobert] < 1 then
+    stateRef[self.CIFr.usrActInd_talkRobert] < 1 then
         return true, self.CIFr.ciAdp_PresentQuiz
     elseif userAct == self.CIFr.usrActInd_talkFord and
-            stateRef[self.CIFr.usrActInd_talkFord] < 1 then
+    stateRef[self.CIFr.usrActInd_talkFord] < 1 then
         return true, self.CIFr.ciAdp_PresentQuiz
     elseif userAct == self.CIFr.usrActInd_submitWorksheet then
         return true, self.CIFr.ciAdp_WorksheetLevel
@@ -723,7 +738,6 @@ function CIUserSimulator:UserSimDataAugment(input, output, isRNNForm)
         -- If the model is not in RNN form, which means each input just contains feature values
         -- at the current time step. Right now, the strategy is using original data points and
         -- augmented data points in ratio of 1:1
-        -- todo: pwang8. This is wrong. Bcz input has been pre-processed before passed into this function. I can change the invokation of preprocess in the other file. This can be easier. Oct 19, 2017.
         input:resize(self.opt.batchSize * 2, self.userStateFeatureCnt)
         output:resize(self.opt.batchSize * 2)
 

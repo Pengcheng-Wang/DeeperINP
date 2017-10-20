@@ -357,13 +357,8 @@ function CIUserActsPredictor:trainOneEpoch()
             targets = torch.Tensor(self.opt.batchSize)
             local k = 1
             for i = t, math.min(t+self.opt.batchSize-1, #self.ciUserSimulator.realUserDataStates) do
-                -- load new sample
-                local input = self.ciUserSimulator.realUserDataStates[i]    -- :clone() -- if preprocess is called, clone is not needed, I believe
-                -- need do preprocess for input features
-                input = self.ciUserSimulator:preprocessUserStateData(input, self.opt.prepro)
-                local target = self.ciUserSimulator.realUserDataActs[i]
-                inputs[k] = input
-                targets[k] = target
+                inputs[k] = self.ciUserSimulator.realUserDataStates[i]
+                targets[k] = self.ciUserSimulator.realUserDataActs[i]
                 k = k + 1
             end
 
@@ -371,7 +366,8 @@ function CIUserActsPredictor:trainOneEpoch()
             if k ~= self.opt.batchSize + 1 then
                 while k <= self.opt.batchSize do
                     local randInd = torch.random(1, #self.ciUserSimulator.realUserDataStates)
-                    inputs[k] = self.ciUserSimulator:preprocessUserStateData(self.ciUserSimulator.realUserDataStates[randInd], self.opt.prepro)
+                    -- I'll put input pre-process after data augmentation
+                    inputs[k] = self.ciUserSimulator.realUserDataStates[randInd]
                     targets[k] = self.ciUserSimulator.realUserDataActs[randInd]
                     k = k + 1
                 end
@@ -382,7 +378,11 @@ function CIUserActsPredictor:trainOneEpoch()
                 epochDone = true
             end
 
+            -- Data augmentation
             self.ciUserSimulator:UserSimDataAugment(inputs, targets, false)
+            -- Should do input feature pre-processing after data augmentation
+            inputs = self.ciUserSimulator:preprocessUserStateData(inputs, self.opt.prepro)
+
             if self.opt.gpu > 0 then
                 inputs = inputs:cuda()
                 targets = targets:cuda()
@@ -398,11 +398,11 @@ function CIUserActsPredictor:trainOneEpoch()
                 targets[j] = torch.Tensor(self.opt.batchSize)
                 k = 1
                 for i = lstmIter, math.min(lstmIter+self.opt.batchSize-1, #self.rnnRealUserDataStates) do
-                    local input = self.rnnRealUserDataStates[i][j]
-                    input = self.ciUserSimulator:preprocessUserStateData(input, self.opt.prepro)
-                    local target = self.rnnRealUserDataActs[i][j]
-                    inputs[j][k] = input
-                    targets[j][k] = target
+                    --local input = self.rnnRealUserDataStates[i][j]
+                    --input = self.ciUserSimulator:preprocessUserStateData(input, self.opt.prepro)
+                    --local target = self.rnnRealUserDataActs[i][j]
+                    inputs[j][k] = self.rnnRealUserDataStates[i][j]
+                    targets[j][k] = self.rnnRealUserDataActs[i][j]
                     k = k + 1
                 end
             end
@@ -412,11 +412,11 @@ function CIUserActsPredictor:trainOneEpoch()
                 while k <= self.opt.batchSize do
                     local randInd = torch.random(1, #self.rnnRealUserDataStates)
                     for j = 1, self.opt.lstmHist do
-                        local input = self.rnnRealUserDataStates[randInd][j]
-                        input = self.ciUserSimulator:preprocessUserStateData(input, self.opt.prepro)
-                        local target = self.rnnRealUserDataActs[randInd][j]
-                        inputs[j][k] = input
-                        targets[j][k] = target
+                        --local input = self.rnnRealUserDataStates[randInd][j]
+                        --input = self.ciUserSimulator:preprocessUserStateData(input, self.opt.prepro)
+                        --local target = self.rnnRealUserDataActs[randInd][j]
+                        inputs[j][k] = self.rnnRealUserDataStates[randInd][j]
+                        targets[j][k] = self.rnnRealUserDataActs[randInd][j]
                     end
                     k = k + 1
                 end
@@ -427,7 +427,13 @@ function CIUserActsPredictor:trainOneEpoch()
                 epochDone = true
             end
 
+            -- Data augmentation
             self.ciUserSimulator:UserSimDataAugment(inputs, targets, true)
+            -- Should do input feature pre-processing after data augmentation
+            for ik=1, #inputs do
+                inputs[ik] = self.ciUserSimulator:preprocessUserStateData(inputs[ik], self.opt.prepro)
+            end
+
             if self.opt.gpu > 0 then
                 nn.utils.recursiveType(inputs, 'torch.CudaTensor')
                 nn.utils.recursiveType(targets, 'torch.CudaTensor')
