@@ -416,6 +416,8 @@ function CIUserSimulator:_init(CIFileReader, opt)
     self.actFreqTotal = torch.Tensor(self.CIFr.usrActInd_end):fill(1e-5)
     self.actFreqSortResCum = nil    -- action frequency cumsum after descending sort
     self.actFreqSortRank = nil  -- action frequency rank after descending sort
+    self.actFreqSigmoid = nil   -- action frequency after through a sigmoid function. This is used in purpose of flatting action distribution
+    self.actFreqSigmoidCum = nil    -- cumsum of the above self.actFreqSigmoid
     self.priorActStatThres = 20
     self.actCntPriorStep = torch.Tensor(self.CIFr.usrActInd_end, self.priorActStatThres, self.CIFr.usrActInd_end):fill(1e-5)
     self.actFreqPriorStep = torch.Tensor(self.CIFr.usrActInd_end, self.priorActStatThres, self.CIFr.usrActInd_end):fill(1e-5)
@@ -695,6 +697,9 @@ function CIUserSimulator:_actionFreqCalc()
     self.actFreqSortResCum, self.actFreqSortRank = torch.sort(self.actFreqTotal[{{1, self.CIFr.usrActInd_end-1}}], true)  -- descending order, only rank first 14 actions (not including game-ending action)
     self.actFreqSortResCum = torch.cumsum(self.actFreqSortResCum)   -- Get the cumsum of player action frequency
     self.actFreqSortResCum:div(self.actFreqSortResCum[self.CIFr.usrActInd_end-1])   -- standardization
+    -- Try this, calculate the sigmoid distribution of actions
+    self.actFreqSigmoid = torch.div(self.actCntTotal, #self.realUserDataStartLines) -- This is action frequency on each sequence averagely
+    self.actFreqSigmoid = torch.sigmoid(self.actFreqSigmoid)    -- todo: pwang8. Here!!! Calculate the sigmoid!!!
 
     for i=1, #self.realUserDataActs-1 do
         if self.realUserDataActs[i] ~= self.CIFr.usrActInd_end then
@@ -723,7 +728,7 @@ function CIUserSimulator:_actionFreqCalc()
 
 end
 
-function CIUserSimulator:_calcActPertCounting(p_act_cnt, p_act_ind, _dual_act_change_prob)
+function CIUserSimulator:calcOneStepActPertCounting(p_act_cnt, p_act_ind, _dual_act_change_prob)
   if self.actFreqTotal[p_act_ind] < self.actFreqTotal[self.CIFr.usrActInd_end] and torch.uniform() < 0.75 then -- as a ref, end-game has actFreqTotal of 0.0245
       -- some actions are rarely adopted.
       p_act_cnt = 0
@@ -764,6 +769,16 @@ function CIUserSimulator:UserSimDataAugment(input, output, isRNNForm)
         end
         -- todo:pwang8. Finish this data aug code. Oct 19, 2017.
 
+        for i=1, self.opt.batchSize do
+            -- clone from original
+            for j=1, self.opt.lstmHist do
+                input[j][self.opt.batchSize+i] = input[j][i]
+                output[j][self.opt.batchSize+i] = output[j][i]
+            end
+
+
+        end
+
     else
         -- If the model is not in RNN form, which means each input just contains feature values
         -- at the current time step. Right now, the strategy is using original data points and
@@ -777,7 +792,7 @@ function CIUserSimulator:UserSimDataAugment(input, output, isRNNForm)
             input[self.opt.batchSize+i] = input[i]
             output[self.opt.batchSize+i] = output[i]
 
-            if output[i] ~= self.CIFr.usrActInd_end and self.actFreqTotal[output[i]] < self.actFreqTotal[self.CIFr.usrActInd_end] * 5 then
+            if output[i] ~= self.CIFr.usrActInd_end then -- and self.actFreqTotal[output[i]] < self.actFreqTotal[self.CIFr.usrActInd_end] * 5
                 -- perturb feature values (action counting) according to correlation
                 -- From the experiment we found that changing counting of highly correlated actions are helpful
                 local correActPertProb  --{0.5, 0.3, 0.1} -- this set is good. MLP-bi act pred reaches to 33.5% high.
@@ -831,7 +846,7 @@ function CIUserSimulator:UserSimDataAugment(input, output, isRNNForm)
                         --         p_act_cnt = p_act_cnt/math.abs(p_act_cnt) * 3
                         --     end
                         -- end
-                        p_act_cnt = self:_calcActPertCounting(p_act_cnt, p_act_ind, _dual_act_change_prob)
+                        p_act_cnt = self:calcOneStepActPertCounting(p_act_cnt, p_act_ind, _dual_act_change_prob)
                         -- --- Do a test here. Try to not only change feature values in integer. Try directly to use std
                         -- --- This is an interesting try. It seems that it does not generate better result than integer
                         -- --- perturbed action countings. The result is similar. And training is slower.
@@ -874,7 +889,7 @@ function CIUserSimulator:UserSimDataAugment(input, output, isRNNForm)
                             -- if math.abs(self.actFreqTotal[p_act_ind]) > 2 and torch.uniform() < 0.3 then
                             --     p_act_cnt = p_act_cnt * 2
                             -- end
-                            p_act_cnt = self:_calcActPertCounting(p_act_cnt, p_act_ind, 0.45)
+                            p_act_cnt = self:calcOneStepActPertCounting(p_act_cnt, p_act_ind, 0.45)
                             -- --- Do a test here. Try to not only change feature values in integer. Try directly to use std
                             -- --- This is an interesting try. It seems that it does not generate better result than integer
                             -- --- perturbed action countings. The result is similar. And training is slower.
