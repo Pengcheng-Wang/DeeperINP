@@ -777,7 +777,7 @@ function CIUserSimulator:UserSimDataAugment(input, output, isRNNForm)
             input[self.opt.batchSize+i] = input[i]
             output[self.opt.batchSize+i] = output[i]
 
-            if output[i] ~= self.CIFr.usrActInd_end then
+            if output[i] ~= self.CIFr.usrActInd_end and self.actFreqTotal[output[i]] < self.actFreqTotal[self.CIFr.usrActInd_end] * 5 then
                 -- perturb feature values (action counting) according to correlation
                 -- From the experiment we found that changing counting of highly correlated actions are helpful
                 local correActPertProb  --{0.5, 0.3, 0.1} -- this set is good. MLP-bi act pred reaches to 33.5% high.
@@ -788,13 +788,13 @@ function CIUserSimulator:UserSimDataAugment(input, output, isRNNForm)
                     correActPertProb = {}
                 elseif actStepCntTotal <= 6 then
                     -- For action 4-6, the standard deviations are not that large, so try to perturb slightly
-                    correActPertProb = {0.4, 0.3, 0.2}
+                    correActPertProb = {0.25, 0.2, 0.15}
                 elseif actStepCntTotal <= 20 then
-                    correActPertProb = {0.5, 0.4, 0.3, 0.2}
+                    correActPertProb = {0.3, 0.3, 0.25, 0.2}
                 elseif actStepCntTotal <= 35 then
-                    correActPertProb = {0.6, 0.5, 0.4, 0.3, 0.2}
+                    correActPertProb = {0.3, 0.45, 0.4, 0.3, 0.15}
                 else
-                    correActPertProb = {0.7, 0.6, 0.5, 0.4, 0.3, 0.2}
+                    correActPertProb = {0.5, 0.55, 0.45, 0.35, 0.2, 0.15}
                 end
                 for k=1, #correActPertProb do
                     if torch.uniform() < correActPertProb[k] then
