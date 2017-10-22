@@ -726,7 +726,7 @@ function CIUserSimulator:_actionFreqCalc()
         self.actSigmoidDistPriorStep[{{}, {ite}, {}}]:cdiv(priorActAlongDisStd)
         self.actSigmoidDistPriorStep[{{}, {ite}, {}}]:mul(2)    -- Try to broaden the threshold a little bit
     end
-    --self.actSigmoidDistPriorStep:sigmoid()  -- Get the sigmoid distribution
+    self.actSigmoidDistPriorStep:sigmoid()  -- Get the sigmoid distribution
 
     local priorActSum = torch.cumsum(self.actCntPriorStep, 3)
     for i=1, self.CIFr.usrActInd_end do
