@@ -718,9 +718,10 @@ function CIUserSimulator:_actionFreqCalc()
     end
 
     -- normalize prior action counting along the distance dimension
+    self.actSigmoidDistPriorStep = self.actCntPriorStep:clone()
     local priorActAlongDisMean = torch.mean(self.actCntPriorStep, 2)    -- the 2nd dim is distance between two actions
     local priorActAlongDisStd = torch.std(self.actCntPriorStep, 2)
-    for ite=1, self.actCntPriorStep:size(2) do
+    for ite=1, self.actSigmoidDistPriorStep:size(2) do
         self.actSigmoidDistPriorStep[{{}, {ite}, {}}]:csub(priorActAlongDisMean)
         self.actSigmoidDistPriorStep[{{}, {ite}, {}}]:cdiv(priorActAlongDisStd)
         self.actSigmoidDistPriorStep[{{}, {ite}, {}}]:mul(2)    -- Try to broaden the threshold a little bit
