@@ -727,6 +727,10 @@ function CIUserSimulator:_actionFreqCalc()
         self.actSigmoidDistPriorStep[{{}, {ite}, {}}]:mul(2)    -- Try to broaden the threshold a little bit
     end
     self.actSigmoidDistPriorStep:sigmoid()  -- Get the sigmoid distribution
+    -- Attention: I've seen that several rows along the 2nd dimension have all 0 values in this tensor. Specifically
+    -- it means no such action pair appeared in the corpus. I would guess it will introduce problems in sampling. So,
+    -- I'll add very small positive constants to all elements in this tensor
+    self.actSigmoidDistPriorStep:add(1e-5)
 
     local priorActSum = torch.cumsum(self.actCntPriorStep, 3)
     for i=1, self.CIFr.usrActInd_end do
