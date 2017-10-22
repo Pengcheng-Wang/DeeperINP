@@ -699,9 +699,9 @@ function CIUserSimulator:_actionFreqCalc()
     self.actFreqSortResCum:div(self.actFreqSortResCum[self.CIFr.usrActInd_end-1])   -- standardization
     -- Try this, calculate the sigmoid distribution of actions
     self.actFreqSigmoid = torch.div(self.actCntTotal, #self.realUserDataStartLines) -- This is action frequency per sequence
-    self.actFreqSigmoid = torch.sigmoid(self.actFreqSigmoid - torch.Tensor(self.actFreqSigmoid:size()):fill(3))    -- calculate the sigmoid distribution of action freq per sequence minus 2.5
+    self.actFreqSigmoid = torch.sigmoid(self.actFreqSigmoid - torch.Tensor(self.actFreqSigmoid:size()):fill(torch.mean(self.actFreqSigmoid)))    -- calculate the sigmoid distribution of action freq per sequence minus Mean. This is a hyper-param
     self.actFreqSigmoidCum = torch.cumsum(self.actFreqSigmoid[{{1, self.CIFr.usrActInd_end-1}}])    -- cumsum of all action sigmoid distribution except for game-ending action
-    self.actFreqSigmoidCum:div(self.actFreqSigmoidCum[self.CIFr.usrActInd_end-1])   -- standardization
+    self.actFreqSigmoidCum:div(self.actFreqSigmoidCum[self.CIFr.usrActInd_end-1])   -- standardization. Attention: this sigmoid distribution does not include game-ending action
 
     for i=1, #self.realUserDataActs-1 do
         if self.realUserDataActs[i] ~= self.CIFr.usrActInd_end then
@@ -762,6 +762,7 @@ end
 
 --- Augment data in training corpus using the proteties we extract here
 function CIUserSimulator:UserSimDataAugment(input, output, isRNNForm)
+    print(self.actCntPriorStep) os.exit()
     if isRNNForm then
         -- If the model is in RNN form, which means the model is a sequencer, and requires input
         -- to be a table of tensors in which the 1st dim (of the table) is time step
@@ -796,13 +797,32 @@ function CIUserSimulator:UserSimDataAugment(input, output, isRNNForm)
                     -- Sample an perturbed action according to action frequency
                     local freqActSmpSeed = torch.uniform()
                     for pai=1, self.actFreqSigmoidCum:size()[1] do
-                        if freqActSmpSeed <= self.actFreqSortResCum[pai] then
+                        if freqActSmpSeed <= self.actFreqSigmoidCum[pai] then
                             -- This is designed differently from the correlation based perturbation method for mlp data augmentation
                             -- So, each time we only perturb one action, and this action can be repeatedly perturbed
+                            -- If the program enters here, that means the action "pai" is the chosen one to be perturbed
                             -- Right now, we determine where this action perturbation should be.
-                            -- The following cumsum calculates the cumsum of appearances of action pai being k steps prior to action output[j][self.opt.batchSize+i]
+                            -- The following cumsum calculates the cumsum of appearances of action pai being priorly k steps to action output[j][self.opt.batchSize+i]
                             local priorActCumsum = torch.cumsum(self.actCntPriorStep[output[self.opt.lstmHist][self.opt.batchSize+i]][{{}, {pai}}])
-                            -- todo: pwang8. time to sample a position(time) for the perturbed action
+
+                            local valActSampDist = 0
+                            local pertActPosPriorInRnn = 0  -- The backward distance of the perturbed action w.r.t current action (output[lstmHist][opt.batchSize+i])
+                            -- If current action time step + 1 is smaller than the prior action counting tensor threshold
+                            if actStepCntTotal - 1 <= self.priorActStatThres then
+                                valActSampDist = actStepCntTotal - 1
+                            else
+                                valActSampDist = self.priorActStatThres
+                            end
+                            priorActCumsum:div(priorActCumsum[valActSampDist])  -- standardization
+                            -- sample a position
+                            local actPosSampSeed = torch.uniform()
+                            for sp=1, actStepCntTotal - 1 do
+                                if actPosSampSeed <= priorActCumsum[sp] then
+                                    pertActPosPriorInRnn = sp    -- This is a relative position, the backward distance w.r.t current position
+                                    break
+                                end
+                            end
+
 
                             break
                         end
