@@ -698,8 +698,10 @@ function CIUserSimulator:_actionFreqCalc()
     self.actFreqSortResCum = torch.cumsum(self.actFreqSortResCum)   -- Get the cumsum of player action frequency
     self.actFreqSortResCum:div(self.actFreqSortResCum[self.CIFr.usrActInd_end-1])   -- standardization
     -- Try this, calculate the sigmoid distribution of actions
-    self.actFreqSigmoid = torch.div(self.actCntTotal, #self.realUserDataStartLines) -- This is action frequency on each sequence averagely
-    self.actFreqSigmoid = torch.sigmoid(self.actFreqSigmoid)    -- todo: pwang8. Here!!! Calculate the sigmoid!!!
+    self.actFreqSigmoid = torch.div(self.actCntTotal, #self.realUserDataStartLines) -- This is action frequency per sequence
+    self.actFreqSigmoid = torch.sigmoid(self.actFreqSigmoid - torch.Tensor(self.actFreqSigmoid:size()):fill(3))    -- calculate the sigmoid distribution of action freq per sequence minus 2.5
+    self.actFreqSigmoidCum = torch.cumsum(self.actFreqSigmoid[{{1, self.CIFr.usrActInd_end-1}}])    -- cumsum of all action sigmoid distribution except for game-ending action
+    self.actFreqSigmoidCum:div(self.actFreqSigmoidCum[self.CIFr.usrActInd_end-1])   -- standardization
 
     for i=1, #self.realUserDataActs-1 do
         if self.realUserDataActs[i] ~= self.CIFr.usrActInd_end then
@@ -776,7 +778,37 @@ function CIUserSimulator:UserSimDataAugment(input, output, isRNNForm)
                 output[j][self.opt.batchSize+i] = output[j][i]
             end
 
+            local actStepCntTotal = torch.cumsum(input[self.opt.lstmHist][self.opt.batchSize+i])[self.CIFr.usrActInd_end-1]    -- the counting of all actions the player took till now
+            local freqActPertProb = {}
+            if actStepCntTotal > 3 and actStepCntTotal <= 6 then
+                -- For action 4-6, the standard deviations are not that large, so try to perturb slightly
+                freqActPertProb = {0.3}
+            elseif actStepCntTotal <= 20 then
+                freqActPertProb = {0.7, 0.35}
+            elseif actStepCntTotal <= 35 then
+                freqActPertProb = {0.8, 0.5, 0.3}
+            else
+                freqActPertProb = {0.9, 0.7, 0.35}
+            end
 
+            for k=1, #freqActPertProb do
+                if torch.uniform() < freqActPertProb[k] then
+                    -- Sample an perturbed action according to action frequency
+                    local freqActSmpSeed = torch.uniform()
+                    for pai=1, self.actFreqSigmoidCum:size()[1] do
+                        if freqActSmpSeed <= self.actFreqSortResCum[pai] then
+                            -- This is designed differently from the correlation based perturbation method for mlp data augmentation
+                            -- So, each time we only perturb one action, and this action can be repeatedly perturbed
+                            -- Right now, we determine where this action perturbation should be.
+                            -- The following cumsum calculates the cumsum of appearances of action pai being k steps prior to action output[j][self.opt.batchSize+i]
+                            local priorActCumsum = torch.cumsum(self.actCntPriorStep[output[self.opt.lstmHist][self.opt.batchSize+i]][{{}, {pai}}])
+                            -- todo: pwang8. time to sample a position(time) for the perturbed action
+
+                            break
+                        end
+                    end
+                end
+            end
         end
 
     else
