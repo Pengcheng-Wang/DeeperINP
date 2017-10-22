@@ -422,6 +422,7 @@ function CIUserSimulator:_init(CIFileReader, opt)
     self.actCntPriorStep = torch.Tensor(self.CIFr.usrActInd_end, self.priorActStatThres, self.CIFr.usrActInd_end):fill(1e-5)
     self.actFreqPriorStep = torch.Tensor(self.CIFr.usrActInd_end, self.priorActStatThres, self.CIFr.usrActInd_end):fill(1e-5)
     self.actRankPriorStep = torch.Tensor(self.CIFr.usrActInd_end, self.priorActStatThres, self.CIFr.usrActInd_end):fill(1)
+    self.actSigmoidDistPriorStep = torch.Tensor(self.CIFr.usrActInd_end, self.priorActStatThres, self.CIFr.usrActInd_end):fill(1e-5)
     self:_actionFreqCalc()  -- Calculate prior action appearance frequency
 
     collectgarbage()
@@ -716,6 +717,16 @@ function CIUserSimulator:_actionFreqCalc()
         end
     end
 
+    -- normalize prior action counting along the distance dimension
+    local priorActAlongDisMean = torch.mean(self.actCntPriorStep, 2)    -- the 2nd dim is distance between two actions
+    local priorActAlongDisStd = torch.std(self.actCntPriorStep, 2)
+    for ite=1, self.actCntPriorStep:size(2) do
+        self.actSigmoidDistPriorStep[{{}, {ite}, {}}]:csub(priorActAlongDisMean)
+        self.actSigmoidDistPriorStep[{{}, {ite}, {}}]:cdiv(priorActAlongDisStd)
+        self.actSigmoidDistPriorStep[{{}, {ite}, {}}]:mul(2)    -- Try to broaden the threshold a little bit
+    end
+    --self.actSigmoidDistPriorStep:sigmoid()  -- Get the sigmoid distribution
+
     local priorActSum = torch.cumsum(self.actCntPriorStep, 3)
     for i=1, self.CIFr.usrActInd_end do
         for j=1, self.priorActStatThres do
@@ -731,38 +742,38 @@ function CIUserSimulator:_actionFreqCalc()
 end
 
 function CIUserSimulator:calcOneStepActPertCounting(p_act_cnt, p_act_ind, _dual_act_change_prob)
-  if self.actFreqTotal[p_act_ind] < self.actFreqTotal[self.CIFr.usrActInd_end] and torch.uniform() < 0.75 then -- as a ref, end-game has actFreqTotal of 0.0245
-      -- some actions are rarely adopted.
-      p_act_cnt = 0
-  elseif self.actFreqTotal[p_act_ind] <= self.actFreqTotal[self.CIFr.usrActInd_end] * 2 then
-      local _samSeed = torch.uniform()
-      if _samSeed < _dual_act_change_prob then
-          p_act_cnt = p_act_cnt * 2
-      elseif _samSeed > 0.75 then
-          p_act_cnt = 0
-      end
-  elseif self.actFreqTotal[p_act_ind] <= self.actFreqTotal[self.CIFr.usrActInd_end] * 4 then
-      if torch.uniform() < _dual_act_change_prob then
-          p_act_cnt = p_act_cnt * 2
-      end
-      if torch.uniform() < _dual_act_change_prob/4 then
-          p_act_cnt = p_act_cnt/math.abs(p_act_cnt) * 3
-      end
-  else
-      if torch.uniform() < _dual_act_change_prob then
-          p_act_cnt = p_act_cnt * 2
-      end
-      if torch.uniform() < _dual_act_change_prob/3 then
-          p_act_cnt = p_act_cnt/math.abs(p_act_cnt) * 3
-      end
-  end
+    if self.actFreqTotal[p_act_ind] < self.actFreqTotal[self.CIFr.usrActInd_end] and torch.uniform() < 0.75 then -- as a ref, end-game has actFreqTotal of 0.0245
+        -- some actions are rarely adopted.
+        p_act_cnt = 0
+    elseif self.actFreqTotal[p_act_ind] <= self.actFreqTotal[self.CIFr.usrActInd_end] * 2 then
+        local _samSeed = torch.uniform()
+        if _samSeed < _dual_act_change_prob then
+            p_act_cnt = p_act_cnt * 2
+        elseif _samSeed > 0.75 then
+            p_act_cnt = 0
+        end
+    elseif self.actFreqTotal[p_act_ind] <= self.actFreqTotal[self.CIFr.usrActInd_end] * 4 then
+        if torch.uniform() < _dual_act_change_prob then
+            p_act_cnt = p_act_cnt * 2
+        end
+        if torch.uniform() < _dual_act_change_prob/4 then
+            p_act_cnt = p_act_cnt/math.abs(p_act_cnt) * 3
+        end
+    else
+        if torch.uniform() < _dual_act_change_prob then
+            p_act_cnt = p_act_cnt * 2
+        end
+        if torch.uniform() < _dual_act_change_prob/3 then
+            p_act_cnt = p_act_cnt/math.abs(p_act_cnt) * 3
+        end
+    end
 
-  return p_act_cnt
+    return p_act_cnt
 end
 
 --- Augment data in training corpus using the proteties we extract here
 function CIUserSimulator:UserSimDataAugment(input, output, isRNNForm)
-    print(self.actCntPriorStep) os.exit()
+    print(self.actSigmoidDistPriorStep) os.exit()
     if isRNNForm then
         -- If the model is in RNN form, which means the model is a sequencer, and requires input
         -- to be a table of tensors in which the 1st dim (of the table) is time step
