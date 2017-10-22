@@ -423,6 +423,7 @@ function CIUserSimulator:_init(CIFileReader, opt)
     self.actFreqPriorStep = torch.Tensor(self.CIFr.usrActInd_end, self.priorActStatThres, self.CIFr.usrActInd_end):fill(1e-5)
     self.actRankPriorStep = torch.Tensor(self.CIFr.usrActInd_end, self.priorActStatThres, self.CIFr.usrActInd_end):fill(1)
     self.actSigmoidDistPriorStep = torch.Tensor(self.CIFr.usrActInd_end, self.priorActStatThres, self.CIFr.usrActInd_end):fill(1e-5)
+    self.actSigmoidDistPriorStepCumsum = nil
     self:_actionFreqCalc()  -- Calculate prior action appearance frequency
 
     collectgarbage()
@@ -731,6 +732,7 @@ function CIUserSimulator:_actionFreqCalc()
     -- it means no such action pair appeared in the corpus. I would guess it will introduce problems in sampling. So,
     -- I'll add very small positive constants to all elements in this tensor
     self.actSigmoidDistPriorStep:add(1e-5)
+    self.actSigmoidDistPriorStepCumsum = torch.cumsum(self.actSigmoidDistPriorStep, 2)
 
     local priorActSum = torch.cumsum(self.actCntPriorStep, 3)
     for i=1, self.CIFr.usrActInd_end do
@@ -778,7 +780,6 @@ end
 
 --- Augment data in training corpus using the proteties we extract here
 function CIUserSimulator:UserSimDataAugment(input, output, isRNNForm)
-    print(self.actSigmoidDistPriorStep) os.exit()
     if isRNNForm then
         -- If the model is in RNN form, which means the model is a sequencer, and requires input
         -- to be a table of tensors in which the 1st dim (of the table) is time step
@@ -819,26 +820,27 @@ function CIUserSimulator:UserSimDataAugment(input, output, isRNNForm)
                             -- If the program enters here, that means the action "pai" is the chosen one to be perturbed
                             -- Right now, we determine where this action perturbation should be.
                             -- The following cumsum calculates the cumsum of appearances of action pai being priorly k steps to action output[j][self.opt.batchSize+i]
-                            local priorActCumsum = torch.cumsum(self.actCntPriorStep[output[self.opt.lstmHist][self.opt.batchSize+i]][{{}, {pai}}])
+                            local priorActCumsum = self.actSigmoidDistPriorStepCumsum[{output[self.opt.lstmHist][self.opt.batchSize+i], {}, pai}]:clone() -- clone() should be necessary, since we change its value later
 
-                            local valActSampDist = 0
-                            local pertActPosPriorInRnn = 0  -- The backward distance of the perturbed action w.r.t current action (output[lstmHist][opt.batchSize+i])
                             -- If current action time step + 1 is smaller than the prior action counting tensor threshold
-                            if actStepCntTotal - 1 <= self.priorActStatThres then
-                                valActSampDist = actStepCntTotal - 1
-                            else
-                                valActSampDist = self.priorActStatThres
-                            end
+                            local valActSampDist = math.min(actStepCntTotal - 1, self.priorActStatThres)
+                            local pertActPosPriorInRnn = 0  -- The backward distance of the perturbed action w.r.t current action (output[lstmHist][opt.batchSize+i])
                             priorActCumsum:div(priorActCumsum[valActSampDist])  -- standardization
                             -- sample a position
                             local actPosSampSeed = torch.uniform()
-                            for sp=1, actStepCntTotal - 1 do
+                            for sp=1, valActSampDist do
                                 if actPosSampSeed <= priorActCumsum[sp] then
                                     pertActPosPriorInRnn = sp    -- This is a relative position, the backward distance w.r.t current position
                                     break
                                 end
                             end
 
+                            -- Now, we try to add extra actions
+                            if pertActPosPriorInRnn < self.opt.lstmHist then
+                                -- Move back actions and states along the time dim
+                                -- todo: pwang8. Oct 22, 2017. Time to add input, output representations
+                            end
+                                -- the newly added action should be long ago, longer than the input lstm sequence length
 
                             break
                         end
