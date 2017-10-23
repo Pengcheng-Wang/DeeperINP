@@ -796,8 +796,10 @@ function CIUserSimulator:UserSimDataAugment(input, output, isRNNForm)
             end
 
             local actStepCntTotal = torch.cumsum(input[self.opt.lstmHist][self.opt.batchSize+i])[self.CIFr.usrActInd_end-1]    -- the counting of all actions the player took till now
-            local freqActPertProb = {}
-            if actStepCntTotal >= 3 and actStepCntTotal < 6 then
+            local freqActPertProb
+            if actStepCntTotal < 3 then
+                freqActPertProb = {}
+            elseif actStepCntTotal < 6 then
                 -- For action 4-6, the standard deviations are not that large, so try to perturb slightly
                 freqActPertProb = {0.3}
             elseif actStepCntTotal <= 20 then
@@ -807,7 +809,7 @@ function CIUserSimulator:UserSimDataAugment(input, output, isRNNForm)
             else
                 freqActPertProb = {0.9, 0.7, 0.35}
             end
-            print(actStepCntTotal, #freqActPertProb)
+
             assert(self.priorActStatThres >= self.opt.lstmHist)     -- I think in idle case self.priorActStatThres should be much larger than opt.lstmHist
             for k=1, #freqActPertProb do
                 assert(actStepCntTotal >= 2 )
@@ -937,7 +939,7 @@ function CIUserSimulator:UserSimDataAugment(input, output, isRNNForm)
                     end
                 end
             end
-        end
+            end
 
     else
         -- If the model is not in RNN form, which means each input just contains feature values
