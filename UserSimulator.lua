@@ -787,7 +787,6 @@ function CIUserSimulator:UserSimDataAugment(input, output, isRNNForm)
             input[j]:resize(self.opt.batchSize * 2, self.userStateFeatureCnt)
             output[j]:resize(self.opt.batchSize * 2)
         end
-        -- todo:pwang8. Finish this data aug code. Oct 19, 2017.
 
         for i=1, self.opt.batchSize do
             -- clone from original
@@ -809,6 +808,7 @@ function CIUserSimulator:UserSimDataAugment(input, output, isRNNForm)
                 freqActPertProb = {0.9, 0.7, 0.35}
             end
 
+            assert(self.priorActStatThres >= self.opt.lstmHist)     -- I think in idle case self.priorActStatThres should be much larger than opt.lstmHist
             for k=1, #freqActPertProb do
                 assert(actStepCntTotal >= 2 )
                 if torch.uniform() < freqActPertProb[k] then
@@ -861,45 +861,73 @@ function CIUserSimulator:UserSimDataAugment(input, output, isRNNForm)
                                 end
                             else
                                 --- delete an existed action (if possible) in this sequence
-                                if actStepCntTotal < self.opt.lstmHist then
+                                local _delActInSeqWithinSeq = function ()
                                     -- In this case, all previous actions are in the input/output representation
                                     local pActAppPos = {}
-                                    for _paap=1, actStepCntTotal do
+                                    for _paap=1, math.min(actStepCntTotal, self.opt.lstmHist-1) do
                                         if output[self.opt.lstmHist - _paap][self.opt.batchSize+i] == pai then
-                                            pActAppPos[#pActAppPos+1] = _paap   -- _paap is a distance from last action to the sampled action
+                                            pActAppPos[#pActAppPos+1] = _paap   -- _paap is a distance from lastest action to the sampled action
                                         end
-
-                                        if #pActAppPos > 0 then
-                                            local pActSigmDistT = torch.Tensor(#pActAppPos)
-                                            for _obvAct=1, #pActAppPos do
-                                                pActSigmDistT[_obvAct] = self.actSigmoidDistPriorStep[{output[self.opt.lstmHist][self.opt.batchSize+i], pActAppPos[_obvAct], pai}]
-                                            end
-                                            pActSigmDistT:cumsum()
-                                            -- Sample that position of action "pai" to delete
-                                            local _dltSampSeed = torch.uniform()
-                                            for dltPos=1, #pActAppPos do
-                                                if _dltSampSeed <= pActSigmDistT[dltPos] then
-                                                    -- delete action "pai" at this sampled position
-                                                    for fra=self.opt.lstmHist-pActAppPos[dltPos], 2 do
-                                                        input[fra][self.opt.batchSize+i] = input[fra-1][self.opt.batchSize+i]
-                                                        output[fra][self.opt.batchSize+i] = output[fra-1][self.opt.batchSize+i]
-                                                    end
-                                                    input[1][self.opt.batchSize+i]:zero()
-                                                    for bra=self.opt.lstmHist-pActAppPos[dltPos] + 1, self.opt.lstmHist do
-                                                        input[bra][self.opt.batchSize+i][pai] = input[bra][self.opt.batchSize+i][pai] - 1
-                                                        if input[bra][self.opt.batchSize+i][pai] < 0 then
-                                                            input[bra][self.opt.batchSize+i][pai] = 0
-                                                        end
-                                                    end
-
-                                                    break
+                                    end
+                                    -- If there are actions "pai" in this sequence that can be deleted, then try to find this action with a proper place (if there are multiple "pai"s)
+                                    if #pActAppPos > 0 then
+                                        local pActSigmDistT = torch.Tensor(#pActAppPos)
+                                        for _obvAct=1, #pActAppPos do
+                                            pActSigmDistT[_obvAct] = self.actSigmoidDistPriorStep[{output[self.opt.lstmHist][self.opt.batchSize+i], pActAppPos[_obvAct], pai}]
+                                        end
+                                        pActSigmDistT:cumsum()
+                                        -- Sample that position of action "pai" to delete
+                                        local _dltSampSeed = torch.uniform()
+                                        for dltPos=1, #pActAppPos do
+                                            if _dltSampSeed <= pActSigmDistT[dltPos] then
+                                                -- delete action "pai" at this sampled position
+                                                for fra=self.opt.lstmHist-pActAppPos[dltPos], 2, -1 do
+                                                    input[fra][self.opt.batchSize+i] = input[fra-1][self.opt.batchSize+i]
+                                                    output[fra][self.opt.batchSize+i] = output[fra-1][self.opt.batchSize+i]
                                                 end
+                                                input[1][self.opt.batchSize+i]:zero()
+                                                for bra=self.opt.lstmHist-pActAppPos[dltPos] + 1, self.opt.lstmHist do
+                                                    input[bra][self.opt.batchSize+i][pai] = input[bra][self.opt.batchSize+i][pai] - 1
+                                                    if input[bra][self.opt.batchSize+i][pai] < 0 then
+                                                        input[bra][self.opt.batchSize+i][pai] = 0
+                                                    end
+                                                end
+                                                -- Done from action deletion in a sequence, in which case the sequence is shorter than opt.lstmHist. Break out of for-loop
+                                                break
                                             end
                                         end
                                     end
+                                end -- end of the function _delActInSeqWithinSeq definition
+
+                                if actStepCntTotal < self.opt.lstmHist then
+                                    ---- In this case, all previous actions are in the input/output representation
+                                    _delActInSeqWithinSeq()
                                 else
                                     -- In this case, there were prior actions (at so early time) not recorded in the output list
-                                    -- todo: pwang8. Oct 23, 2017. Here, it's time to delete actions in case the sequence is long. Need to check the correctness of the above script snippet
+                                    -- We first tell is the deleted "pai" action should be in a short range (in range of opt.lstmHist),
+                                    -- in which case we need to sample that action in the squence we've had, or the deleted "pai" action
+                                    -- is in a long range, which means it does not appear in the state representation, and we just delete
+                                    -- that action counting
+                                    local priorActCumsum = self.actSigmoidDistPriorStepCumsum[{output[self.opt.lstmHist][self.opt.batchSize+i], {}, pai}]:clone() -- clone() should be necessary, since we change its value later
+                                    -- valActSampDist is the valid number of time steps we can count backwards to add an extra player action.
+                                    -- Attention: actStepCntTotal is 1 step less than the current time, bcz it is calculated from input features, which contain cumsum of prior actions
+                                    local valActSampDist = math.min(actStepCntTotal, self.priorActStatThres)
+                                    priorActCumsum:div(priorActCumsum[valActSampDist])  -- standardization
+                                    local _rndActPosRangeSeed = torch.uniform()
+                                    if _rndActPosRangeSeed <= priorActCumsum[self.opt.lstmHist-1] then
+                                        -- This case is that the deleted action should appear in the current state representation (distance from lastest action is smaller than opt.lstmHist)
+                                        -- Then what we do here is pretty similar to the action deletion up there (if actStepCntTotal < self.opt.lstmHist)
+                                        _delActInSeqWithinSeq()
+                                    else
+                                        -- This case is that the deleted action should NOT appear in the current state representation (the deleted action is not recorded in the input sequence)
+                                        for _bapit=1, self.opt.lstmHist do
+                                            input[_bapit][self.opt.batchSize+i][pai] = input[_bapit][self.opt.batchSize+i][pai] - 1
+                                            if input[_bapit][self.opt.batchSize+i][pai] < 0 then
+                                                input[_bapit][self.opt.batchSize+i][pai] = 0
+                                            end
+                                        end
+                                    end
+
                                 end
                             end
 
