@@ -798,7 +798,7 @@ function CIUserSimulator:UserSimDataAugment(input, output, isRNNForm)
 
             local actStepCntTotal = torch.cumsum(input[self.opt.lstmHist][self.opt.batchSize+i])[self.CIFr.usrActInd_end-1]    -- the counting of all actions the player took till now
             local freqActPertProb = {}
-            if actStepCntTotal > 3 and actStepCntTotal <= 6 then
+            if actStepCntTotal >= 3 and actStepCntTotal < 6 then
                 -- For action 4-6, the standard deviations are not that large, so try to perturb slightly
                 freqActPertProb = {0.3}
             elseif actStepCntTotal <= 20 then
@@ -825,8 +825,9 @@ function CIUserSimulator:UserSimDataAugment(input, output, isRNNForm)
                             if torch.uniform() < 0.5 then
                                 --- Add an extra action into this sequence
                                 local priorActCumsum = self.actSigmoidDistPriorStepCumsum[{output[self.opt.lstmHist][self.opt.batchSize+i], {}, pai}]:clone() -- clone() should be necessary, since we change its value later
-                                -- If current action time step + 1 is smaller than the prior action counting tensor threshold
-                                local valActSampDist = math.min(actStepCntTotal - 1, self.priorActStatThres)
+                                -- valActSampDist is the valid number of time steps we can count backwards to add an extra player action.
+                                -- Attention: actStepCntTotal is 1 step less than the current time, bcz it is calculated from input features, which contain cumsum of prior actions
+                                local valActSampDist = math.min(actStepCntTotal, self.priorActStatThres)
                                 priorActCumsum:div(priorActCumsum[valActSampDist])  -- standardization
 
                                 -- sample a position to add an action
@@ -902,7 +903,7 @@ function CIUserSimulator:UserSimDataAugment(input, output, isRNNForm)
                                 end
                             end
 
-
+                            --- We've found an action to perturb its counting, so break from the for-loop
                             break
                         end
                     end
@@ -952,31 +953,7 @@ function CIUserSimulator:UserSimDataAugment(input, output, isRNNForm)
                         end
                         -- If std is large, then make the case possible to change act count larger than 2
                         local _dual_act_change_prob = #correActPertProb * 0.07
-                        -- if self.actFreqTotal[p_act_ind] < self.actFreqTotal[self.CIFr.usrActInd_end] and torch.uniform() < 0.75 then -- as a ref, end-game has actFreqTotal of 0.0245
-                        --     -- some actions are rarely adopted.
-                        --     p_act_cnt = 0
-                        -- elseif self.actFreqTotal[p_act_ind] <= self.actFreqTotal[self.CIFr.usrActInd_end] * 2 then
-                        --     local _samSeed = torch.uniform()
-                        --     if _samSeed < _dual_act_change_prob then
-                        --         p_act_cnt = p_act_cnt * 2
-                        --     elseif _samSeed > 0.75 then
-                        --         p_act_cnt = 0
-                        --     end
-                        -- elseif self.actFreqTotal[p_act_ind] <= self.actFreqTotal[self.CIFr.usrActInd_end] * 4 then
-                        --     if torch.uniform() < _dual_act_change_prob then
-                        --         p_act_cnt = p_act_cnt * 2
-                        --     end
-                        --     if torch.uniform() < _dual_act_change_prob/4 then
-                        --         p_act_cnt = p_act_cnt/math.abs(p_act_cnt) * 3
-                        --     end
-                        -- else
-                        --     if torch.uniform() < _dual_act_change_prob then
-                        --         p_act_cnt = p_act_cnt * 2
-                        --     end
-                        --     if torch.uniform() < _dual_act_change_prob/3 then
-                        --         p_act_cnt = p_act_cnt/math.abs(p_act_cnt) * 3
-                        --     end
-                        -- end
+
                         p_act_cnt = self:calcOneStepActPertCounting(p_act_cnt, p_act_ind, _dual_act_change_prob)
                         -- --- Do a test here. Try to not only change feature values in integer. Try directly to use std
                         -- --- This is an interesting try. It seems that it does not generate better result than integer
