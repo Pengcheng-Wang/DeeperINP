@@ -810,6 +810,7 @@ function CIUserSimulator:UserSimDataAugment(input, output, isRNNForm)
             end
 
             for k=1, #freqActPertProb do
+                assert(actStepCntTotal >= 2 )
                 if torch.uniform() < freqActPertProb[k] then
                     -- Sample an perturbed action according to action frequency
                     local freqActSmpSeed = torch.uniform()
@@ -820,27 +821,87 @@ function CIUserSimulator:UserSimDataAugment(input, output, isRNNForm)
                             -- If the program enters here, that means the action "pai" is the chosen one to be perturbed
                             -- Right now, we determine where this action perturbation should be.
                             -- The following cumsum calculates the cumsum of appearances of action pai being priorly k steps to action output[j][self.opt.batchSize+i]
-                            local priorActCumsum = self.actSigmoidDistPriorStepCumsum[{output[self.opt.lstmHist][self.opt.batchSize+i], {}, pai}]:clone() -- clone() should be necessary, since we change its value later
 
-                            -- If current action time step + 1 is smaller than the prior action counting tensor threshold
-                            local valActSampDist = math.min(actStepCntTotal - 1, self.priorActStatThres)
-                            local pertActPosPriorInRnn = 0  -- The backward distance of the perturbed action w.r.t current action (output[lstmHist][opt.batchSize+i])
-                            priorActCumsum:div(priorActCumsum[valActSampDist])  -- standardization
-                            -- sample a position
-                            local actPosSampSeed = torch.uniform()
-                            for sp=1, valActSampDist do
-                                if actPosSampSeed <= priorActCumsum[sp] then
-                                    pertActPosPriorInRnn = sp    -- This is a relative position, the backward distance w.r.t current position
-                                    break
+                            if torch.uniform() < 0.5 then
+                                --- Add an extra action into this sequence
+                                local priorActCumsum = self.actSigmoidDistPriorStepCumsum[{output[self.opt.lstmHist][self.opt.batchSize+i], {}, pai}]:clone() -- clone() should be necessary, since we change its value later
+                                -- If current action time step + 1 is smaller than the prior action counting tensor threshold
+                                local valActSampDist = math.min(actStepCntTotal - 1, self.priorActStatThres)
+                                priorActCumsum:div(priorActCumsum[valActSampDist])  -- standardization
+
+                                -- sample a position to add an action
+                                local pertActPosPriorInRnn = 0  -- The backward distance of the perturbed action w.r.t current action (output[lstmHist][opt.batchSize+i])
+                                local actPosSampSeed = torch.uniform()
+                                for sp=1, valActSampDist do
+                                    if actPosSampSeed <= priorActCumsum[sp] then
+                                        pertActPosPriorInRnn = sp    -- This is a relative position, the backward distance w.r.t current position
+                                        break
+                                    end
+                                end
+
+                                -- Now, we try to add extra actions
+                                if pertActPosPriorInRnn < self.opt.lstmHist then
+                                    -- Move back actions and states along the time dim
+                                    -- For actions prior to the newly added action, move them front
+                                    for frm=1, self.opt.lstmHist - pertActPosPriorInRnn - 1 do
+                                        input[frm][self.opt.batchSize+i] = input[frm+1][self.opt.batchSize+i]
+                                        output[frm][self.opt.batchSize+i] = output[frm+1][self.opt.batchSize+i]
+                                    end
+                                    input[self.opt.lstmHist - pertActPosPriorInRnn][self.opt.batchSize+i] = input[self.opt.lstmHist - pertActPosPriorInRnn + 1][self.opt.batchSize+i]
+                                    output[self.opt.lstmHist - pertActPosPriorInRnn][self.opt.batchSize+i] = pai
+                                    for brm=self.opt.lstmHist - pertActPosPriorInRnn + 1, self.opt.lstmHist do
+                                        input[brm][self.opt.batchSize+i][pai] = input[brm][self.opt.batchSize+i][pai] + 1
+                                    end
+                                else
+                                    -- the newly added action should be long ago, longer than the input lstm sequence length
+                                    for brm=1, self.opt.lstmHist do
+                                        input[brm][self.opt.batchSize+i][pai] = input[brm][self.opt.batchSize+i][pai] + 1
+                                    end
+                                end
+                            else
+                                --- delete an existed action (if possible) in this sequence
+                                if actStepCntTotal < self.opt.lstmHist then
+                                    -- In this case, all previous actions are in the input/output representation
+                                    local pActAppPos = {}
+                                    for _paap=1, actStepCntTotal do
+                                        if output[self.opt.lstmHist - _paap][self.opt.batchSize+i] == pai then
+                                            pActAppPos[#pActAppPos+1] = _paap   -- _paap is a distance from last action to the sampled action
+                                        end
+
+                                        if #pActAppPos > 0 then
+                                            local pActSigmDistT = torch.Tensor(#pActAppPos)
+                                            for _obvAct=1, #pActAppPos do
+                                                pActSigmDistT[_obvAct] = self.actSigmoidDistPriorStep[{output[self.opt.lstmHist][self.opt.batchSize+i], pActAppPos[_obvAct], pai}]
+                                            end
+                                            pActSigmDistT:cumsum()
+                                            -- Sample that position of action "pai" to delete
+                                            local _dltSampSeed = torch.uniform()
+                                            for dltPos=1, #pActAppPos do
+                                                if _dltSampSeed <= pActSigmDistT[dltPos] then
+                                                    -- delete action "pai" at this sampled position
+                                                    for fra=self.opt.lstmHist-pActAppPos[dltPos], 2 do
+                                                        input[fra][self.opt.batchSize+i] = input[fra-1][self.opt.batchSize+i]
+                                                        output[fra][self.opt.batchSize+i] = output[fra-1][self.opt.batchSize+i]
+                                                    end
+                                                    input[1][self.opt.batchSize+i]:zero()
+                                                    for bra=self.opt.lstmHist-pActAppPos[dltPos] + 1, self.opt.lstmHist do
+                                                        input[bra][self.opt.batchSize+i][pai] = input[bra][self.opt.batchSize+i][pai] - 1
+                                                        if input[bra][self.opt.batchSize+i][pai] < 0 then
+                                                            input[bra][self.opt.batchSize+i][pai] = 0
+                                                        end
+                                                    end
+
+                                                    break
+                                                end
+                                            end
+                                        end
+                                    end
+                                else
+                                    -- In this case, there were prior actions (at so early time) not recorded in the output list
+                                    -- todo: pwang8. Oct 23, 2017. Here, it's time to delete actions in case the sequence is long.
                                 end
                             end
 
-                            -- Now, we try to add extra actions
-                            if pertActPosPriorInRnn < self.opt.lstmHist then
-                                -- Move back actions and states along the time dim
-                                -- todo: pwang8. Oct 22, 2017. Time to add input, output representations
-                            end
-                                -- the newly added action should be long ago, longer than the input lstm sequence length
 
                             break
                         end
