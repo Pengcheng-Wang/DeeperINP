@@ -898,7 +898,7 @@ function CIUserSimulator:UserSimDataAugment(input, output, isRNNForm)
                                     end
                                 else
                                     -- In this case, there were prior actions (at so early time) not recorded in the output list
-                                    -- todo: pwang8. Oct 23, 2017. Here, it's time to delete actions in case the sequence is long.
+                                    -- todo: pwang8. Oct 23, 2017. Here, it's time to delete actions in case the sequence is long. Need to check the correctness of the above script snippet
                                 end
                             end
 
