@@ -807,7 +807,7 @@ function CIUserSimulator:UserSimDataAugment(input, output, isRNNForm)
             else
                 freqActPertProb = {0.9, 0.7, 0.35}
             end
-
+            print(actStepCntTotal, #freqActPertProb)
             assert(self.priorActStatThres >= self.opt.lstmHist)     -- I think in idle case self.priorActStatThres should be much larger than opt.lstmHist
             for k=1, #freqActPertProb do
                 assert(actStepCntTotal >= 2 )
