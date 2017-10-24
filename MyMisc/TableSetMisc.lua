@@ -80,6 +80,7 @@ function TableSetMisc.static.fastLSTMForgetGateInit(fLstmM, dropoutRate, fLstmSi
         -- If dropoutRate == 0, meaning dropOut is not applied, then
         -- the structure of i2g is a nn.Linear(21->128), which merges 4 gates in one
         fLstmM.i2g:init({'bias', {{2*fLstmSize+1, 3*fLstmSize}}}, nninit.constant, 1)
+        --fLstmM.i2g:init({'bias', {{3*fLstmSize+1, 4*fLstmSize}}}, nninit.constant, 1)
     end
 end
 
