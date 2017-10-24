@@ -109,8 +109,8 @@ function CIUserActsPredictor:_init(CIUserSimulator, opt)
             nn.FastLSTM.bn = true
             local lstm
             if opt.uSimGru == 0 then
-                lstm = nn.FastLSTM(self.inputFeatureNum, opt.lstmHd, opt.uSimLstmBackLen, nil, nil, nil, opt.dropoutUSim) -- the 3rd param, [rho], the maximum amount of backpropagation steps to take back in time, default value is 9999
-                TableSet.fastLSTMForgetGateInit(lstm, opt.dropoutUSim, opt.lstmHd, nninit)
+                lstm = nn.FastLSTM(self.inputFeatureNum, opt.lstmHd, opt.uSimLstmBackLen, nil, nil, nil, 0) --opt.dropoutUSim --todo:pwang8. Oct 23. Testing -- the 3rd param, [rho], the maximum amount of backpropagation steps to take back in time, default value is 9999
+                TableSet.fastLSTMForgetGateInit(lstm, 0, opt.lstmHd, nninit) --(lstm, opt.dropoutUSim, opt.lstmHd, nninit) --todo:pwang8. Oct 23. Testing
             else
                 lstm = nn.GRU(self.inputFeatureNum, opt.lstmHd, opt.uSimLstmBackLen, opt.dropoutUSim)   -- GRU implements its RNN dropout, but does not have built-in batch normalization, as it is for FastLSTM
             end
@@ -439,7 +439,7 @@ function CIUserActsPredictor:trainOneEpoch()
             end
 
             -- Data augmentation
-            self.ciUserSimulator:UserSimDataAugment(inputs, targets, true)
+            -- self.ciUserSimulator:UserSimDataAugment(inputs, targets, true)
             -- Should do input feature pre-processing after data augmentation
             for ik=1, #inputs do
                 inputs[ik] = self.ciUserSimulator:preprocessUserStateData(inputs[ik], self.opt.prepro)
