@@ -815,13 +815,18 @@ function CIUserSimulator:UserSimDataAugment(input, output, isRNNForm)
             end
 
             assert(self.priorActStatThres >= self.opt.lstmHist)     -- I think in idle case self.priorActStatThres should be much larger than opt.lstmHist
+            local _pertActCandidateList = self.actFreqSigmoidCum    -- This is set bcz we cannot sample actions w.r.t correlation for game-ending action
+            if output[self.opt.lstmHist][self.opt.batchSize+i] ~= self.CIFr.usrActInd_end then  -- if current action is not ending action, then use correlation, otherwise use action freq
+                _pertActCandidateList = self.featOfActCorreAbsTabCumsum[output[self.opt.lstmHist][self.opt.batchSize+i]]
+            end
+
             for k=1, #freqActPertProb do
                 assert(actStepCntTotal >= 2 )
                 if torch.uniform() < freqActPertProb[k] then
                     -- Sample an perturbed action according to action frequency
                     local freqActSmpSeed = torch.uniform()
                     for pai=1, self.featOfActCorreAbsTabCumsum:size(2) do --self.actFreqSigmoidCum:size()[1] do
-                        if freqActSmpSeed <= self.featOfActCorreAbsTabCumsum[output[self.opt.lstmHist][self.opt.batchSize+i]][pai] then    --self.actFreqSigmoidCum[pai] then
+                        if freqActSmpSeed <= _pertActCandidateList then    --self.actFreqSigmoidCum[pai] then
                             -- This is designed differently from the correlation based perturbation method for mlp data augmentation
                             -- So, each time we only perturb one action, and this action can be repeatedly perturbed
                             -- If the program enters here, that means the action "pai" is the chosen one to be perturbed
