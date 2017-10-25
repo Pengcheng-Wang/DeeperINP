@@ -826,7 +826,7 @@ function CIUserSimulator:UserSimDataAugment(input, output, isRNNForm)
                     -- Sample an perturbed action according to action frequency
                     local freqActSmpSeed = torch.uniform()
                     for pai=1, self.featOfActCorreAbsTabCumsum:size(2) do --self.actFreqSigmoidCum:size()[1] do
-                        if freqActSmpSeed <= _pertActCandidateList then    --self.actFreqSigmoidCum[pai] then
+                        if freqActSmpSeed <= _pertActCandidateList[pai] then    --self.actFreqSigmoidCum[pai] then
                             -- This is designed differently from the correlation based perturbation method for mlp data augmentation
                             -- So, each time we only perturb one action, and this action can be repeatedly perturbed
                             -- If the program enters here, that means the action "pai" is the chosen one to be perturbed
