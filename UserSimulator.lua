@@ -816,9 +816,9 @@ function CIUserSimulator:UserSimDataAugment(input, output, isRNNForm)
 
             assert(self.priorActStatThres >= self.opt.lstmHist)     -- I think in idle case self.priorActStatThres should be much larger than opt.lstmHist
             local _pertActCandidateList = self.actFreqSigmoidCum    -- This is set bcz we cannot sample actions w.r.t correlation for game-ending action
-            if output[self.opt.lstmHist][self.opt.batchSize+i] ~= self.CIFr.usrActInd_end then  -- if current action is not ending action, then use correlation, otherwise use action freq
-                _pertActCandidateList = self.featOfActCorreAbsTabCumsum[output[self.opt.lstmHist][self.opt.batchSize+i]]
-            end
+            --if output[self.opt.lstmHist][self.opt.batchSize+i] ~= self.CIFr.usrActInd_end then  -- if current action is not ending action, then use correlation, otherwise use action freq
+            --    _pertActCandidateList = self.featOfActCorreAbsTabCumsum[output[self.opt.lstmHist][self.opt.batchSize+i]]
+            --end
 
             for k=1, #freqActPertProb do
                 assert(actStepCntTotal >= 2 )
