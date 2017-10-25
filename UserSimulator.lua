@@ -409,6 +409,7 @@ function CIUserSimulator:_init(CIFileReader, opt)
     self.featOfActCorreTable = nil  -- a table only stores player action feature correlations
     self.featOfActCorreTabSortRes = nil     -- sorted feature absolute correlations (including only player acts)
     self.featOfActCorreTabRank = nil    -- rank of sorted feature absolute correlations (including only player acts)
+    self.featOfActCorreAbsTabCumsum = nil    -- get the absolute values of action correlation coefficients, and get the cumsum of each row
     self:_PearsonCorrCalc() -- Calculate a-squared, b-squared and a*b, that are all required in Pearson's correlation calculation
 
     --- The following tensors are used to record statistics of actions observed in training set
@@ -677,6 +678,9 @@ function CIUserSimulator:_PearsonCorrCalc()
     self.featOfActCorreTable = self.featCorreTable[{{1, self.CIFr.usrActInd_end-1}, {1, self.CIFr.usrActInd_end-1}}]:clone()
     -- Sort the abs of Pearson's correlation along each line in between only player action features, ascending order
     self.featOfActCorreTabSortRes, self.featOfActCorreTabRank = torch.sort(torch.abs(self.featOfActCorreTable), 2)
+    self.featOfActCorreAbsTabCumsum = torch.cumsum(torch.abs(self.featOfActCorreTable), 2)
+    local _lastCumsumItemTensor = self.featOfActCorreAbsTabCumsum[{{}, {self.CIFr.usrActInd_end-1}}]    -- this is a 2-d (self.CIFr.usrActInd_end-1 * 1) matrix
+    self.featOfActCorreAbsTabCumsum:cdiv(torch.repeatTensor(_lastCumsumItemTensor, 1, self.CIFr.usrActInd_end-1))    -- standardization
 
 end
 
@@ -816,8 +820,8 @@ function CIUserSimulator:UserSimDataAugment(input, output, isRNNForm)
                 if torch.uniform() < freqActPertProb[k] then
                     -- Sample an perturbed action according to action frequency
                     local freqActSmpSeed = torch.uniform()
-                    for pai=1, self.actFreqSigmoidCum:size()[1] do
-                        if freqActSmpSeed <= self.actFreqSigmoidCum[pai] then
+                    for pai=1, self.featOfActCorreAbsTabCumsum:size(2) do --self.actFreqSigmoidCum:size()[1] do
+                        if freqActSmpSeed <= self.featOfActCorreAbsTabCumsum[output[self.opt.lstmHist][self.opt.batchSize+i]][pai] then    --self.actFreqSigmoidCum[pai] then
                             -- This is designed differently from the correlation based perturbation method for mlp data augmentation
                             -- So, each time we only perturb one action, and this action can be repeatedly perturbed
                             -- If the program enters here, that means the action "pai" is the chosen one to be perturbed
