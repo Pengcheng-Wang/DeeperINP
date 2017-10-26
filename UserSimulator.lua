@@ -805,13 +805,13 @@ function CIUserSimulator:UserSimDataAugment(input, output, isRNNForm)
                 freqActPertProb = {}
             elseif actStepCntTotal < 6 then
                 -- For action 4-6, the standard deviations are not that large, so try to perturb slightly
-                freqActPertProb = {0.3}
+                freqActPertProb = {0.3}--{0.3}
             elseif actStepCntTotal <= 20 then
-                freqActPertProb = {0.7, 0.35}
+                freqActPertProb = {0.8, 0.25}--{0.7, 0.35}
             elseif actStepCntTotal <= 35 then
-                freqActPertProb = {0.8, 0.5, 0.3}
+                freqActPertProb = {0.9, 0.4, 0.25}--{0.8, 0.5, 0.3}
             else
-                freqActPertProb = {0.9, 0.7, 0.35}
+                freqActPertProb = {0.95, 0.5, 0.25}--{0.9, 0.7, 0.35}
             end
 
             assert(self.priorActStatThres >= self.opt.lstmHist)     -- I think in idle case self.priorActStatThres should be much larger than opt.lstmHist
