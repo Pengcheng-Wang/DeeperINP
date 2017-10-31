@@ -339,7 +339,7 @@ end
 
 -- training function
 function CIUserActsPredictor:trainOneEpoch()
-    -- -- todo: pwang8. Oct 20, 2017. This is some test to print out player actions into a file. I'd like to check them
+    -- Oct 20, 2017. This is some test to print out player actions into a file.
     -- file = io.open(paths.concat('userModelTrained', 'userActsTrain.csv'), 'w')
     -- for i=1, #self.ciUserSimulator.realUserDataActs do
     --     if self.ciUserSimulator.realUserDataActs[i] ~= self.ciUserSimulator.CIFr.usrActInd_end then
@@ -393,9 +393,9 @@ function CIUserActsPredictor:trainOneEpoch()
             self.ciUserSimulator:UserSimDataAugment(inputs, targets, false)
             -- Should do input feature pre-processing after data augmentation
             inputs = self.ciUserSimulator:preprocessUserStateData(inputs, self.opt.prepro)
-            -- Try to add random normal noise to input features and see how it performs
-            -- This should be invoked after input preprocess bcz we want to set an unique std
-            self.ciUserSimulator:UserSimDataAddRandNoise(inputs, false, 0.01)
+            ---- Try to add random normal noise to input features and see how it performs
+            ---- This should be invoked after input preprocess bcz we want to set an unique std
+            --self.ciUserSimulator:UserSimDataAddRandNoise(inputs, false, 0.01)
 
             if self.opt.gpu > 0 then
                 inputs = inputs:cuda()
@@ -449,7 +449,7 @@ function CIUserActsPredictor:trainOneEpoch()
             end
             -- Try to add random normal noise to input features and see how it performs
             -- This should be invoked after input preprocess bcz we want to set an unique std
-            self.ciUserSimulator:UserSimDataAddRandNoise(inputs, true, 0.01)
+            self.ciUserSimulator:UserSimDataAddRandNoise(inputs, true, 0.005)
 
             if self.opt.gpu > 0 then
                 nn.utils.recursiveType(inputs, 'torch.CudaTensor')
