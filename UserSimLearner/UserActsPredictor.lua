@@ -447,9 +447,10 @@ function CIUserActsPredictor:trainOneEpoch()
             for ik=1, #inputs do
                 inputs[ik] = self.ciUserSimulator:preprocessUserStateData(inputs[ik], self.opt.prepro)
             end
-            -- Try to add random normal noise to input features and see how it performs
-            -- This should be invoked after input preprocess bcz we want to set an unique std
-            self.ciUserSimulator:UserSimDataAddRandNoise(inputs, true, 0.005)
+            ---- Try to add random normal noise to input features and see how it performs
+            ---- This should be invoked after input preprocess bcz we want to set an unique std
+            ---- I've tried to apply adding random normal noise in rnn form of data. It seems the result is not good.
+            --self.ciUserSimulator:UserSimDataAddRandNoise(inputs, true, 0.005)
 
             if self.opt.gpu > 0 then
                 nn.utils.recursiveType(inputs, 'torch.CudaTensor')
