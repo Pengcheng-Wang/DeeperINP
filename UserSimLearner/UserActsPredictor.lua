@@ -176,7 +176,7 @@ function CIUserActsPredictor:_init(CIUserSimulator, opt)
     -- log results to files
     self.uapTrainLogger = optim.Logger(paths.concat('userModelTrained', opt.save, 'train.log'))
     self.uapTestLogger = optim.Logger(paths.concat('userModelTrained', opt.save, 'test.log'))
-    self.uapTestLogger:setNames{'Epoch', 'Act Test acc.'}
+    self.uapTestLogger:setNames{'Epoch', 'Act Test acc.', 'Act Test LogLoss'}
 
     ----------------------------------------------------------------------
     --- initialize cunn/cutorch for training on the GPU and fall back to CPU gracefully
@@ -618,9 +618,10 @@ function CIUserActsPredictor:trainOneEpoch()
     end
 
     if (self.opt.ciuTType == 'train' or self.opt.ciuTType == 'train_tr') and self.trainEpoch % self.opt.testOnTestFreq == 0 then
-        local testAccu = self:testActPredOnTestDetOneEpoch()
-        print('<Act prediction accuracy at epoch '..string.format('%d', self.trainEpoch)..' on test set > '..string.format('%.2f%%', testAccu*100))
-        self.uapTestLogger:add{string.format('%d', self.trainEpoch), string.format('%.5f%%', testAccu*100)}
+        local testEval = self:testActPredOnTestDetOneEpoch()
+        print('<Act prediction accuracy at epoch '..string.format('%d', self.trainEpoch)..' on test set > '..string.format('%.2f%%', testEval[1]*100)..
+              ', and LogLoss '..string.format('%.2f', testEval[2]))
+        self.uapTestLogger:add{string.format('%d', self.trainEpoch), string.format('%.5f%%', testEval[1]*100), string.format('%.5f', testEval[2])}
     end
 
     self.uapConfusion:zero()
@@ -635,7 +636,7 @@ function CIUserActsPredictor:testActPredOnTestDetOneEpoch()
     --    local actPredFP = torch.Tensor(self.ciUserSimulator.CIFr.usrActInd_end):fill(1e-3)
     --    local actPredFN = torch.Tensor(self.ciUserSimulator.CIFr.usrActInd_end):fill(1e-3)
     -- todo:pwang8. Need to calculate cross validated cross entropy (log loss in scikit-learn) for evaluation
-
+    local _logLoss = 0
     if self.opt.uppModel == 'lstm' then
         -- uSimShLayer == 0 and lstm model
         self.model:evaluate()
@@ -658,13 +659,12 @@ function CIUserActsPredictor:testActPredOnTestDetOneEpoch()
         nn.utils.recursiveType(nll_acts, 'torch.FloatTensor')
         for i=1, #self.rnnRealUserDataStatesTest do
             self.uapConfusion:add(nll_acts[self.opt.lstmHist][i], self.rnnRealUserDataActsTest[i][self.opt.lstmHist])
-            print('###', nll_acts[self.opt.lstmHist][i], '\n@@@', self.rnnRealUserDataActsTest[i][self.opt.lstmHist])
-            os.exit()
+            _logLoss = _logLoss + -1 * nll_acts[self.opt.lstmHist][i][self.rnnRealUserDataActsTest[i][self.opt.lstmHist]]
         end
         self.uapConfusion:updateValids()
         local tvalid = self.uapConfusion.totalValid
         self.uapConfusion:zero()
-        return tvalid
+        return {tvalid, _logLoss/#self.rnnRealUserDataStatesTest}
 
     else
         -- uSimShLayer == 0 and not lstm models
@@ -683,11 +683,12 @@ function CIUserActsPredictor:testActPredOnTestDetOneEpoch()
         nll_acts:float()     -- set nll_rewards back to cpu mode (in main memory)
         for i=1, #self.ciUserSimulator.realUserDataStatesTest do
             self.uapConfusion:add(nll_acts[i], self.ciUserSimulator.realUserDataActsTest[i])
+            _logLoss = _logLoss + -1 * nll_acts[i][self.ciUserSimulator.realUserDataActsTest[i]]
         end
         self.uapConfusion:updateValids()
         local tvalid = self.uapConfusion.totalValid
         self.uapConfusion:zero()
-        return tvalid
+        return {tvalid, _logLoss/#self.ciUserSimulator.realUserDataStatesTest}
     end
 
 end
