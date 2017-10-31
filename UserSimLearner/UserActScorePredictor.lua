@@ -150,7 +150,7 @@ function CIUserActScorePredictor:_init(CIUserSimulator, opt)
             -- lstm
             ------------------------------------------------------------
             self.model:add(nn.Reshape(self.inputFeatureNum))
-            nn.FastLSTM.bn = true   -- turn on batch normalization
+            --nn.FastLSTM.bn = true   -- turn on batch normalization
             local lstm
             if opt.uSimGru == 0 then
                 lstm = nn.FastLSTM(self.inputFeatureNum, opt.lstmHd, opt.uSimLstmBackLen, nil, nil, nil, opt.dropoutUSim) -- the 3rd param, [rho], the maximum amount of backpropagation steps to take back in time, default value is 9999
@@ -783,6 +783,7 @@ function CIUserActScorePredictor:testActScorePredOnTestDetOneEpoch()
     local crcActCnt = 0
     local crcRewCnt = 0
 
+    -- todo:pwang8. Need to calculate cross validated cross entropy (log loss in scikit-learn) for action/outcome prediction evaluation
     if self.opt.uppModel == 'lstm' then
         -- uSimShLayer == 1 and lstm model
 

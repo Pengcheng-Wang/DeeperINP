@@ -635,7 +635,6 @@ function CIUserActsPredictor:testActPredOnTestDetOneEpoch()
     --    local actPredTP = torch.Tensor(self.ciUserSimulator.CIFr.usrActInd_end):fill(1e-3)
     --    local actPredFP = torch.Tensor(self.ciUserSimulator.CIFr.usrActInd_end):fill(1e-3)
     --    local actPredFN = torch.Tensor(self.ciUserSimulator.CIFr.usrActInd_end):fill(1e-3)
-    -- todo:pwang8. Need to calculate cross validated cross entropy (log loss in scikit-learn) for evaluation
     local _logLoss = 0
     if self.opt.uppModel == 'lstm' then
         -- uSimShLayer == 0 and lstm model
