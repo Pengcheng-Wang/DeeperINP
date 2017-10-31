@@ -419,7 +419,7 @@ function CIUserSimulator:_init(CIFileReader, opt)
     self.actFreqSortRank = nil  -- action frequency rank after descending sort
     self.actFreqSigmoid = nil   -- action frequency after through a sigmoid function. This is used in purpose of flatting action distribution
     self.actFreqSigmoidCum = nil    -- cumsum of the above self.actFreqSigmoid
-    self.priorActStatThres = 20
+    self.priorActStatThres = 20     -- This is the constant threshold parameter indicating for how long time step from currect time step the prior action stats we're going to calculate
     self.actCntPriorStep = torch.Tensor(self.CIFr.usrActInd_end, self.priorActStatThres, self.CIFr.usrActInd_end):fill(1e-5)
     self.actFreqPriorStep = torch.Tensor(self.CIFr.usrActInd_end, self.priorActStatThres, self.CIFr.usrActInd_end):fill(1e-5)
     self.actRankPriorStep = torch.Tensor(self.CIFr.usrActInd_end, self.priorActStatThres, self.CIFr.usrActInd_end):fill(1)
@@ -814,8 +814,8 @@ function CIUserSimulator:UserSimDataAugment(input, output, isRNNForm)
                 freqActPertProb = {0.9, 0.8, 0.7, 0.5, 0.35, 0.25, 0.1}--{0.9, 0.7, 0.35}
             end
 
-            assert(self.priorActStatThres >= self.opt.lstmHist)     -- I think in idle case self.priorActStatThres should be much larger than opt.lstmHist
-            local _pertActCandidateList = self.actFreqSigmoidCum    -- This is set bcz we cannot sample actions w.r.t correlation for game-ending action
+            assert(self.priorActStatThres >= self.opt.lstmHist)     -- I think in ideal case self.priorActStatThres should be much larger than opt.lstmHist
+            local _pertActCandidateList = self.actFreqSigmoidCum    -- It is set up in this way bcz we cannot sample actions w.r.t correlation for game-ending action
             if output[self.opt.lstmHist][self.opt.batchSize+i] ~= self.CIFr.usrActInd_end then  -- if current action is not ending action, then use correlation, otherwise use action freq
                 _pertActCandidateList = self.featOfActCorreAbsTabCumsum[output[self.opt.lstmHist][self.opt.batchSize+i]]
             end
@@ -823,7 +823,7 @@ function CIUserSimulator:UserSimDataAugment(input, output, isRNNForm)
             for k=1, #freqActPertProb do
                 assert(actStepCntTotal >= 2 )
                 if torch.uniform() < freqActPertProb[k] then
-                    -- Sample an perturbed action according to action frequency
+                    -- Sample an perturbed action according to correlation or action frequency
                     local freqActSmpSeed = torch.uniform()
                     for pai=1, self.featOfActCorreAbsTabCumsum:size(2) do --self.actFreqSigmoidCum:size()[1] do
                         if freqActSmpSeed <= _pertActCandidateList[pai] then    --self.actFreqSigmoidCum[pai] then
@@ -853,7 +853,6 @@ function CIUserSimulator:UserSimDataAugment(input, output, isRNNForm)
 
                                 -- Now, we try to add extra actions
                                 if pertActPosPriorInRnn < self.opt.lstmHist then
-                                    -- Move back actions and states along the time dim
                                     -- For actions prior to the newly added action, move them front
                                     for frm=1, self.opt.lstmHist - pertActPosPriorInRnn - 1 do
                                         input[frm][self.opt.batchSize+i] = input[frm+1][self.opt.batchSize+i]
@@ -873,7 +872,7 @@ function CIUserSimulator:UserSimDataAugment(input, output, isRNNForm)
                             else
                                 --- delete an existed action (if possible) in this sequence
                                 local _delActInSeqWithinSeq = function ()
-                                    -- In this case, all previous actions are in the input/output representation
+                                    -- This function is used to try to delete an action from a RNN sequence in which the delted action should appear in the sequence
                                     local pActAppPos = {}
                                     for _paap=1, math.min(actStepCntTotal, self.opt.lstmHist-1) do
                                         if output[self.opt.lstmHist - _paap][self.opt.batchSize+i] == pai then
@@ -911,7 +910,7 @@ function CIUserSimulator:UserSimDataAugment(input, output, isRNNForm)
                                 end -- end of the function _delActInSeqWithinSeq definition
 
                                 if actStepCntTotal < self.opt.lstmHist then
-                                    ---- In this case, all previous actions are in the input/output representation
+                                    ---- In this case, all previous actions are in the rnn sequence representation
                                     _delActInSeqWithinSeq()
                                 else
                                     -- In this case, there were prior actions (at so early time) not recorded in the output list
@@ -930,7 +929,7 @@ function CIUserSimulator:UserSimDataAugment(input, output, isRNNForm)
                                         -- Then what we do here is pretty similar to the action deletion up there (if actStepCntTotal < self.opt.lstmHist)
                                         _delActInSeqWithinSeq()
                                     else
-                                        -- This case is that the deleted action should NOT appear in the current state representation (the deleted action is not recorded in the input sequence)
+                                        -- This case is that the deleted action should NOT appear in the current rnn state sequence representation (the deleted action is not recorded in the input sequence)
                                         for _bapit=1, self.opt.lstmHist do
                                             input[_bapit][self.opt.batchSize+i][pai] = input[_bapit][self.opt.batchSize+i][pai] - 1
                                             if input[_bapit][self.opt.batchSize+i][pai] < 0 then
