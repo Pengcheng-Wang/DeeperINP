@@ -393,6 +393,9 @@ function CIUserActsPredictor:trainOneEpoch()
             self.ciUserSimulator:UserSimDataAugment(inputs, targets, false)
             -- Should do input feature pre-processing after data augmentation
             inputs = self.ciUserSimulator:preprocessUserStateData(inputs, self.opt.prepro)
+            -- Try to add random normal noise to input features and see how it performs
+            -- This should be invoked after input preprocess bcz we want to set an unique std
+            self.ciUserSimulator:UserSimDataAddRandNoise(inputs, false, 0.01)
 
             if self.opt.gpu > 0 then
                 inputs = inputs:cuda()
@@ -444,6 +447,9 @@ function CIUserActsPredictor:trainOneEpoch()
             for ik=1, #inputs do
                 inputs[ik] = self.ciUserSimulator:preprocessUserStateData(inputs[ik], self.opt.prepro)
             end
+            -- Try to add random normal noise to input features and see how it performs
+            -- This should be invoked after input preprocess bcz we want to set an unique std
+            self.ciUserSimulator:UserSimDataAddRandNoise(inputs, true, 0.01)
 
             if self.opt.gpu > 0 then
                 nn.utils.recursiveType(inputs, 'torch.CudaTensor')

@@ -1061,6 +1061,19 @@ function CIUserSimulator:UserSimDataAugment(input, output, isRNNForm)
         end
 
     end
+
+end
+
+--- Add random noise to input feature set
+function CIUserSimulator:UserSimDataAddRandNoise(input, isRNNForm, rndNoiseStd)
+    -- We add random normal noise to the input feature values
+    if isRNNForm then
+        for j = 1, self.opt.lstmHist do
+            input[j]:add(torch.randn(input[j]:size()) * rndNoiseStd)
+        end
+    else
+        input:add(torch.randn(input:size()) * rndNoiseStd)
+    end
 end
 
 return CIUserSimulator
