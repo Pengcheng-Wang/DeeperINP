@@ -389,7 +389,7 @@ function CIUserActsPredictor:trainOneEpoch()
                 epochDone = true
             end
 
-            if self.opt.actPredDataAug > 1 then
+            if self.opt.actPredDataAug > 0 then
                 -- Data augmentation
                 self.ciUserSimulator:UserSimDataAugment(inputs, targets, false)
             end
@@ -443,7 +443,7 @@ function CIUserActsPredictor:trainOneEpoch()
                 epochDone = true
             end
 
-            if self.opt.actPredDataAug == 1 then
+            if self.opt.actPredDataAug > 0 then
                 -- Data augmentation
                 self.ciUserSimulator:UserSimDataAugment(inputs, targets, true)
             end
