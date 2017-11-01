@@ -389,8 +389,10 @@ function CIUserActsPredictor:trainOneEpoch()
                 epochDone = true
             end
 
-            -- Data augmentation
-            self.ciUserSimulator:UserSimDataAugment(inputs, targets, false)
+            if self.opt.actPredDataAug > 1 then
+                -- Data augmentation
+                self.ciUserSimulator:UserSimDataAugment(inputs, targets, false)
+            end
             -- Should do input feature pre-processing after data augmentation
             inputs = self.ciUserSimulator:preprocessUserStateData(inputs, self.opt.prepro)
             ---- Try to add random normal noise to input features and see how it performs
@@ -441,8 +443,10 @@ function CIUserActsPredictor:trainOneEpoch()
                 epochDone = true
             end
 
-            -- Data augmentation
-            self.ciUserSimulator:UserSimDataAugment(inputs, targets, true)
+            if self.opt.actPredDataAug == 1 then
+                -- Data augmentation
+                self.ciUserSimulator:UserSimDataAugment(inputs, targets, true)
+            end
             -- Should do input feature pre-processing after data augmentation
             for ik=1, #inputs do
                 inputs[ik] = self.ciUserSimulator:preprocessUserStateData(inputs[ik], self.opt.prepro)
@@ -620,7 +624,7 @@ function CIUserActsPredictor:trainOneEpoch()
     if (self.opt.ciuTType == 'train' or self.opt.ciuTType == 'train_tr') and self.trainEpoch % self.opt.testOnTestFreq == 0 then
         local testEval = self:testActPredOnTestDetOneEpoch()
         print('<Act prediction accuracy at epoch '..string.format('%d', self.trainEpoch)..' on test set > '..string.format('%.2f%%', testEval[1]*100)..
-              ', and LogLoss '..string.format('%.2f', testEval[2]))
+        ', and LogLoss '..string.format('%.2f', testEval[2]))
         self.uapTestLogger:add{string.format('%d', self.trainEpoch), string.format('%.5f%%', testEval[1]*100), string.format('%.5f', testEval[2])}
     end
 

@@ -47,6 +47,7 @@ opt = lapp[[
        --dropoutUSim        (default 0.2)       The dropout rate used in user simulation model building. Set 0 to turn off droput
        --testOnTestFreq     (default 1)         The frequency of testing user simulation model's performance on test/train_valid set
        --scorePredStateScope     (default 60)        The range of distance of a player state to the end of the player interaction trajectory (ending state) that makes the state a valid training data poing for score prediction. The idea is to throw out early interaction state for user outcome predictor training
+       --actPredDataAug     (default 1)        Whether to use data augmentation in action prediction model training. 0 for not using, 1 for using.
     ]]
 
 -- threads and default tensor type
