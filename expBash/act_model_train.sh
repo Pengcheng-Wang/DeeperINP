@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # Train action prediction models
-cd ../
+#cd ../
 for s in `seq 1 10`;
 do
     ## Train models without data augmentation
