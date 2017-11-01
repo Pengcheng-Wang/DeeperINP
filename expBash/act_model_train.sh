@@ -2,13 +2,13 @@
 
 # Train action prediction models
 cd ../
-for s in {1..10}
+for s in {1..10};
 do
     ## Train models without data augmentation
-    for t in {1..5}
+    for t in {1..5};
     do
         g=0
-        if [ $t -eq 2 ]
+        if [ $t -eq 2 ];
         then
             g=1
         fi
@@ -16,7 +16,7 @@ do
     done
     wait
     ## Train models with data augmentation
-    for t in {1..5}
+    for t in {1..5};
     do
         g=0
         if [ $t -eq 2 ]
