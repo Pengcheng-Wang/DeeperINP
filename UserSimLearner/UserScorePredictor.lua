@@ -192,7 +192,7 @@ function CIUserScorePredictor:_init(CIUserSimulator, opt)
         if ok and ok2 then
             print('using CUDA on GPU ' .. opt.gpu .. '...')
             cutorch.setDevice(opt.gpu)
-            --            cutorch.manualSeed(opt.seed)
+            cutorch.manualSeed(opt.seed)
             --- set up cuda nn
             self.model = self.model:cuda()
             self.uspCriterion = self.uspCriterion:cuda()

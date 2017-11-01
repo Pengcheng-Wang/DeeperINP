@@ -23,6 +23,7 @@ opt = lapp[[
        --coefL2           (default 0)           L2 penalty on the weights
        -t,--threads       (default 4)           number of threads
        -g,--gpu        (default 0)          gpu device id, 0 for using cpu
+       --seed             (default 1)           Random seed
        --prepro           (default "std")       input state feature preprocessing: rsc | std
        --lstmHd           (default 32)          lstm hidden layer size
        --lstmHdL2         (default 0)          lstm hidden layer size in 2nd lstm layer
@@ -53,6 +54,8 @@ opt = lapp[[
 -- threads and default tensor type
 torch.setnumthreads(opt.threads)
 torch.setdefaulttensortype('torch.FloatTensor')
+-- Set manual seed
+torch.manualSeed(opt.seed)
 
 -- Read CI trace and survey data files, and do validation
 local fr = CIFileReader()
