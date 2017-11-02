@@ -40,7 +40,7 @@ do
         then
             g=1
         fi
-        th userSimMain.lua -trType ac -save seed$(($s))/no_aug/tdiv$(($t))/ -batchSize 80 -coefL2 5e-3 -lstmHd 64 -ciuTType train -uppModel lstm -lstmHist 10 -usimTrIte 400  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0.25 -actPredDataAug 0 -seed $(($s)) &
+        th userSimMain.lua -trType ac -save rnndrop/seed$(($s))/no_aug/tdiv$(($t))/ -batchSize 80 -coefL2 5e-3 -lstmHd 64 -ciuTType train -uppModel lstm -lstmHist 10 -usimTrIte 400  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0.25 -actPredDataAug 0 -seed $(($s)) &
     done
     wait
     ## Train models with data augmentation
@@ -51,7 +51,7 @@ do
         then
             g=1
         fi
-        th userSimMain.lua -trType ac -save seed$(($s))/aug/tdiv$(($t))/ -batchSize 160 -coefL2 5e-3 -lstmHd 64 -ciuTType train -uppModel lstm -lstmHist 10 -usimTrIte 400  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0.25 -actPredDataAug 1 -seed $(($s)) &
+        th userSimMain.lua -trType ac -save rnndrop/seed$(($s))/aug/tdiv$(($t))/ -batchSize 160 -coefL2 5e-3 -lstmHd 64 -ciuTType train -uppModel lstm -lstmHist 10 -usimTrIte 400  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0.25 -actPredDataAug 1 -seed $(($s)) &
     done
     wait
 done
