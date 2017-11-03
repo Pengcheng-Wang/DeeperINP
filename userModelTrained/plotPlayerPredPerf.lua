@@ -19,7 +19,7 @@ for _testSeed=1,5 do
         end
     end
     -- now read the file from the aug directory
-    _accFile = io.opne(paths.concat(_resDic, string.format('aug/tdiv%d', _testSeed), 'test.log'), 'r')
+    _accFile = io.open(paths.concat(_resDic, string.format('aug/tdiv%d', _testSeed), 'test.log'), 'r')
     local _actAccAug = {}
     local _ = _accFile:read()   -- Pass the first row/line in the file, which contains header
     for _line in _accFile:lines('*l') do
