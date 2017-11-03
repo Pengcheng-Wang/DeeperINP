@@ -29,6 +29,8 @@ for _testSeed=1,5 do
         end
     end
     -- Can draw the figure using the two tables, need to construct tensors based on the two tables
+    print(torch.Tensor(_actAccNoAug))
+    print(torch.Tensor(_actAccAug))
     gnuplot.plot({'no_aug', torch.Tensor(_actAccNoAug)}, {'aug', torch.Tensor(_actAccAug)})
     gnuplot.plotflush()
     gnuplot.axis({1, math.max(#_actAccNoAug, #_actAccAug), 0, ''})
