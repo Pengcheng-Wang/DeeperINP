@@ -30,7 +30,7 @@ for _randSeed=1, 10 do
             end
         end
         -- Can draw the figure using the two tables, need to construct tensors based on the two tables
-        gnuplot.plot({'no_aug', torch.Tensor(_actAccNoAug)}, {'aug', torch.Tensor(_actAccAug)})
+        gnuplot.plot({'no_aug', torch.Tensor(_actAccNoAug), '-'}, {'aug', torch.Tensor(_actAccAug), '-'})
         gnuplot.raw('set xtics <INCREMENT>')
         gnuplot.raw('set term png size 1000, 400')
         --gnuplot.raw('set size 1.5,2')
