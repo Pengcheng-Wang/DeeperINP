@@ -15,7 +15,7 @@ for _testSeed=1,5 do
     for _line in _accFile:lines('*l') do
         local _oneLine = _line:split('|')
         if #_oneLine == 3 then
-            _actAccNoAug[#_actAccNoAug + 1] = string.sub(_oneLine[2], 1, -2) -- the 2nd item in each line is the act prediction accuracy, and need to take out the % char at the end
+            _actAccNoAug[#_actAccNoAug + 1] = tonumber(string.sub(_oneLine[2], 1, -2)) -- the 2nd item in each line is the act prediction accuracy, and need to take out the % char at the end
         end
     end
     -- now read the file from the aug directory
@@ -25,7 +25,7 @@ for _testSeed=1,5 do
     for _line in _accFile:lines('*l') do
         local _oneLine = _line:split('|')
         if #_oneLine == 3 then
-            _actAccAug[#_actAccAug + 1] = string.sub(_oneLine[2], 1, -2) -- the 2nd item in each line is the act prediction accuracy, and need to take out the % char at the end
+            _actAccAug[#_actAccAug + 1] = tonumber(string.sub(_oneLine[2], 1, -2)) -- the 2nd item in each line is the act prediction accuracy, and need to take out the % char at the end
         end
     end
     -- Can draw the figure using the two tables, need to construct tensors based on the two tables
