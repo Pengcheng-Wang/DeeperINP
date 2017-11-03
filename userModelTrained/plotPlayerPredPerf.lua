@@ -7,8 +7,8 @@ local gnuplot = require 'gnuplot'
 
 for _randSeed=1, 10 do
     local _resDic = string.format('seed%d', _randSeed)
-    gnuplot.pngfigure(paths.concat(_resDic, 'actPA.png'))
     for _testSeed=1,5 do
+        gnuplot.pngfigure(paths.concat(_resDic, string.format('actPA%d.png', _testSeed)))
         -- read data from file
         local _accFile = io.open(paths.concat(_resDic, string.format('no_aug/tdiv%d', _testSeed), 'test.log'), 'r')
         local _actAccNoAug = {}
@@ -38,4 +38,5 @@ for _randSeed=1, 10 do
         gnuplot.axis({1, math.max(#_actAccNoAug, #_actAccAug), 0, ''})
         gnuplot.title(string.format('Act Pred Accu when testSeed is %d', _testSeed))
     end
+    gnuplot.close()
 end
