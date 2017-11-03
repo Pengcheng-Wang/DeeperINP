@@ -13,6 +13,7 @@ for _testSeed=1,5 do
     local _actAccNoAug = {}
     local _ = _accFile:read() -- This is the header in the file, read and ignore this line
     for _line in _accFile:lines('*l') do
+        print(_line)
         local _oneLine = _line:split('|')
         if #_oneLine == 3 then
             _actAccNoAug[#_actAccNoAug + 1] = tonumber(string.sub(_oneLine[2], 1, -2)) -- the 2nd item in each line is the act prediction accuracy, and need to take out the % char at the end
