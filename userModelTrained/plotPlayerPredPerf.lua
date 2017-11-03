@@ -31,6 +31,7 @@ for _testSeed=1,5 do
     -- Can draw the figure using the two tables, need to construct tensors based on the two tables
     gnuplot.plot({'no_aug', torch.Tensor(_actAccNoAug)}, {'aug', torch.Tensor(_actAccAug)})
     gnuplot.raw('set xtics <INCREMENT>')
+    gnuplot.raw('set size 1.5,2')
     gnuplot.plotflush()
     gnuplot.axis({1, math.max(#_actAccNoAug, #_actAccAug), 0, ''})
     gnuplot.title(string.format('Act Pred Accu when testSeed is %d', _testSeed))
