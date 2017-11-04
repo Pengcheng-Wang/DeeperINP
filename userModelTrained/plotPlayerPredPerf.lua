@@ -5,8 +5,8 @@
 
 local gnuplot = require 'gnuplot'
 
-for _randSeed=1, 10 do
-    local _resDic = string.format('seed%d', _randSeed)
+for _randSeed=1, 1 do
+    local _resDic = string.format('2L64_48_lstm/rnndrop.15/seed%d', _randSeed)
     for _testSeed=1,5 do
         gnuplot.pngfigure(paths.concat(_resDic, string.format('actPA%d.png', _testSeed)))
         -- read test-set data from file
