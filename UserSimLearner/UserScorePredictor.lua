@@ -130,6 +130,19 @@ function CIUserScorePredictor:_init(CIUserSimulator, opt)
                 lstmL2:remember('both')
                 self.model:add(lstmL2)
                 self.model:add(nn.NormStabilizer())
+                -- If extra layers were needed. Right now we use the same setting for lstm layers that higher than 2
+                for _extL=3, opt.lstmHdLyCnt do
+                    local _extLstmL
+                    if opt.uSimGru == 0 then
+                        _extLstmL = nn.FastLSTM(opt.lstmHdL2, opt.lstmHdL2, opt.uSimLstmBackLen, nil, nil, nil, opt.dropoutUSim) -- the 3rd param, [rho], the maximum amount of backpropagation steps to take back in time, default value is 9999
+                        TableSet.fastLSTMForgetGateInit(_extLstmL, opt.dropoutUSim, opt.lstmHdL2, nninit)
+                    else
+                        _extLstmL = nn.GRU(opt.lstmHdL2, opt.lstmHdL2, opt.uSimLstmBackLen, opt.dropoutUSim)
+                    end
+                    _extLstmL:remember('both')
+                    self.model:add(_extLstmL)
+                    self.model:add(nn.NormStabilizer())
+                end
             end
             if opt.lstmHdL2 == 0 then
                 self.model:add(nn.Linear(opt.lstmHd, #self.classes))

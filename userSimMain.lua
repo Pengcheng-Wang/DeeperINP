@@ -27,6 +27,7 @@ opt = lapp[[
        --prepro           (default "std")       input state feature preprocessing: rsc | std
        --lstmHd           (default 32)          lstm hidden layer size
        --lstmHdL2         (default 0)          lstm hidden layer size in 2nd lstm layer
+       --lstmHdLyCnt      (default 2)          number of lstm hidden layer. Default is 2 bcz only when lstmHdL2 is not 0 this opt will be examined
        --lstmHist         (default 10)           lstm hist length. This influence the rnn tensor table construction in data preparation
        --uSimGru           (default 0)          whether to substitue lstm with gru (0 for using lstm, 1 for GRU)
        --uSimLstmBackLen         (default 3)           The maximum step applied in bptt in lstm
