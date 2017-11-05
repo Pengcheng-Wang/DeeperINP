@@ -103,6 +103,7 @@
 #     wait
 # done
 
+# Test for different 2-layer lstm size
 s=1
 for lsz in 16 32 64 128
 do
