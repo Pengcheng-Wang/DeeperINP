@@ -529,6 +529,7 @@ function CIUserActsPredictor:trainOneEpoch()
 
         self.model:training()
         if self.opt.uppModel == 'lstm' then
+            self.model:clearState()
             self.model:forget()
         end
 
