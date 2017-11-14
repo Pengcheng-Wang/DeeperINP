@@ -17,6 +17,7 @@ local _ = require 'moses'
 local class = require 'classic'
 require 'classic.torch' -- Enables serialisation
 local TableSet = require 'MyMisc.TableSetMisc'
+require 'modules.RecurrenHighwayNetworkRNN'
 
 local CIUserActsPredictor = classic.class('UserActsPredictor')
 
@@ -112,7 +113,7 @@ function CIUserActsPredictor:_init(CIUserSimulator, opt)
                 lstm = nn.FastLSTM(self.inputFeatureNum, opt.lstmHd, opt.uSimLstmBackLen, nil, nil, nil, opt.dropoutUSim) --todo:pwang8. Oct 23. Testing -- the 3rd param, [rho], the maximum amount of backpropagation steps to take back in time, default value is 9999
                 TableSet.fastLSTMForgetGateInit(lstm, opt.dropoutUSim, opt.lstmHd, nninit) --(lstm, opt.dropoutUSim, opt.lstmHd, nninit) --todo:pwang8. Oct 23. Testing
             else
-                lstm = nn.GRU(self.inputFeatureNum, opt.lstmHd, opt.uSimLstmBackLen, opt.dropoutUSim)   -- GRU implements its RNN dropout, but does not have built-in batch normalization, as it is for FastLSTM
+                lstm = nn.RHN(self.inputFeatureNum, opt.lstmHd, opt.uSimLstmBackLen, opt.dropoutUSim)   -- GRU implements its RNN dropout, but does not have built-in batch normalization, as it is for FastLSTM -- todo:pwang8. Nov 13. Try to set RHN
             end
             lstm:remember('both')
             self.model:add(lstm)
@@ -155,7 +156,7 @@ function CIUserActsPredictor:_init(CIUserSimulator, opt)
 
         else
             print('Unknown model type')
-            cmd:text()
+            torch.CmdLine():text()
             error()
         end
 
