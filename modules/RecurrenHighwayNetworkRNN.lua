@@ -20,7 +20,7 @@ function RHN:__init(inputSize, recurrence_depth, rhn_layers, rho)    -- p, mono 
     --self.p = p or 0   -- the param p and mono are not used right now, because we are implementing dropout outside of the RHN model,
     --self.mono = mono or false     -- it means dropout masks are passed into the RHN model as params
     self.inputSize = inputSize  -- for RHN, the hiddensize should be the same as inputsize
-    self.recurrence_depth = recurrence_depth    -- recurrence_depth in one RHN unit
+    self.recurrence_depth = recurrence_depth or 1    -- recurrence_depth in one RHN unit
     self.rhn_layers = rhn_layers or 1   -- this is the vertical layer number of the whole RHN. It is explicitly set up here because we want to use the output_rnn_dropout, which is not very convenient if used stacked structure in sequencer
     -- build the model
     self.recurrentModule = self:buildModel()
@@ -62,7 +62,7 @@ function RHN:buildRHNUnit(x, prev_h, noise_i, noise_h)
                 i2h[i]                  = nn.Linear(self.inputSize, self.inputSize)(dropped_x)    -- there are two i2h and h2h_tab bcz in equation 7 and 8 x and hidden state_h are utilized twice (2 sets of matrix multiplication)
                 h2h_tab[layer_i][i]     = nn.Linear(self.inputSize, self.inputSize)(dropped_h_tab[layer_i])
             end
-            t_gate_tab[layer_i]       = nn.Sigmoid()(nn.AddConstant(params.initial_bias, False)(nn.CAddTable()({i2h[1], h2h_tab[layer_i][1]}))) -- this is the tranform module in equation 8 in the paper. I guess the AddConstant is an init step
+            t_gate_tab[layer_i]       = nn.Sigmoid()(nn.AddConstant(-2, False)(nn.CAddTable()({i2h[1], h2h_tab[layer_i][1]}))) -- this is the tranform module in equation 8 in the paper. I guess the AddConstant is an init step
             in_transform_tab[layer_i] = nn.Tanh()(nn.CAddTable()({i2h[2], h2h_tab[layer_i][2]}))  -- calculate the hidden module, depicted in equation 7 in the paper
             c_gate_tab[layer_i]       = nn.AddConstant(1,false)(nn.MulConstant(-1, false)(t_gate_tab[layer_i])) -- in the implementation, the c gate is designed as (1-t), in which the t gate is calculated aboved
             s_tab[layer_i]           = nn.CAddTable()({
@@ -75,7 +75,7 @@ function RHN:buildRHNUnit(x, prev_h, noise_i, noise_h)
                 dropped_h_tab[layer_i]  = self:local_Dropout(s_tab[layer_i-1], nn.SelectTable(i)(sliced_noise_h))
                 h2h_tab[layer_i][i]     = nn.Linear(self.inputSize, self.inputSize)(dropped_h_tab[layer_i]) -- h2h_tab[layer_i][1] is the multiplication in equation 8, h2h_tab[layer_i][2] is multiplication in equation 7
             end
-            t_gate_tab[layer_i]       = nn.Sigmoid()(nn.AddConstant(params.initial_bias, False)(h2h_tab[layer_i][1]))   -- Attention: refer to the Deep Transition RNN figure in readme file to check the structure here    -- Equation 8
+            t_gate_tab[layer_i]       = nn.Sigmoid()(nn.AddConstant(-2, False)(h2h_tab[layer_i][1]))   -- Attention: refer to the Deep Transition RNN figure in readme file to check the structure here    -- Equation 8
             in_transform_tab[layer_i] = nn.Tanh()(h2h_tab[layer_i][2])  -- for transition layers inside one time step, only the h2h state values (horizontal) are propagated. So, it's a little different from the first transition layer   -- Equation 7
             c_gate_tab[layer_i]       = nn.AddConstant(1,false)(nn.MulConstant(-1, false)(t_gate_tab[layer_i]))     -- Equation 9, with the simplified assumption that c = 1 - t
             s_tab[layer_i]           = nn.CAddTable()({
@@ -91,8 +91,8 @@ end
 -- output of RHN:buildModel is table : {output(t), hidden_s(t)}. The whole model can be a multi-layer RHN,
 -- so the output(t) is the output of the highest RHN (vertical) layer. And this output(t) is the result
 -- after dropout using the mask of noise_o. hidden_s(t) is a table of hidden_s states for each (vertical) layer
--- of the multi-layer RHN model, so its size equals self.rhn_layers. All values contains in this table are values
--- of the each RHN layer (of the last recurrent depth RHN cell in one layer). Values in hidden_s(t) are not dropout-ed
+-- of the multi-layer RHN model, so its size equals self.rhn_layers. All values contains in this table are outputs
+-- of each RHN layer (of the last recurrent depth RHN cell in one layer). Values in hidden_s(t) are not dropout-ed
 --
 -- input of this Model is like: {x, prev_s}. x is the input of the whole RHN model, and prev_s is a table contains
 -- prior calculated hidden state_s values. input also contains noise_i, noise_h, noise_o, which are dropout masks
@@ -161,21 +161,28 @@ end
 
 ------------------------- forward backward -----------------------------
 function RHN:updateOutput(input)
-    local prevOutput, prevCell = unpack(self:getHiddenState(self.step-1, input))
+    -- Attention: because we also have dropout masks as inputs into the RHN nn structure,
+    -- so the input param here should be a table contains {x, noise_i, noise_h, noise_o}
+    -- And this actually is the required input format for invoking the forward function
+    -- when utilizing this multi-layer RHN module
+    local _inputX, _inputNoise_i, _inputNoise_h, _inputNoise_o = unpack(input)
+    local prevOutput, prevCell = unpack(self:getHiddenState(self.step-1, _inputX))
 
-    -- output(t), cell(t) = lstm{input(t), output(t-1), cell(t-1)}
-    local output, cell
+    local output, cell  -- in this multi-layer RHN, cell is a table of hidden state values from all (vertical) RHN layers
     if self.train ~= false then
         self:recycle()
         local recurrentModule = self:getStepModule(self.step)
         -- the actual forward propagation
-        output, cell = unpack(recurrentModule:updateOutput{input, prevOutput, prevCell})
+        -- Attention: according to the model design in buildModel(), input should be {x, prev_s, noise_i, noise_h, noise_o}
+        -- and prevOutput is not required in input param list.
+        -- and output should be {dropped_o, nn.Identity()(next_s)}
+        output, cell = unpack(recurrentModule:updateOutput{_inputX, prevCell, _inputNoise_i, _inputNoise_h, _inputNoise_o})
     else
-        output, cell = unpack(self.recurrentModule:updateOutput{input, prevOutput, prevCell})
+        output, cell = unpack(self.recurrentModule:updateOutput{_inputX, prevCell, _inputNoise_i, _inputNoise_h, _inputNoise_o})
     end
 
-    self.outputs[self.step] = output
-    self.cells[self.step] = cell    -- cell is a table of tensors in RHN model, with each tensor inside the table represent hidden output value in each rhn_layer
+    self.outputs[self.step] = output    -- this is dropped_o
+    self.cells[self.step] = cell    -- in this multi-layer RHN model, cell is a table of hidden state values from all (vertical) layers
 
     self.output = output
     self.cell = cell
@@ -185,6 +192,8 @@ function RHN:updateOutput(input)
     self.updateGradInputStep = nil
     self.accGradParametersStep = nil
     -- note that we don't return the cell, just the output
+    -- although the output of our multi-layer RHN model is two-part {dropped_o, nn.Identity()(next_s)},
+    -- after calling the forward() of this whole model, the output is only dropped_o
     return self.output
 end
 
