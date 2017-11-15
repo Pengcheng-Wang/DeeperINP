@@ -113,7 +113,7 @@ function CIUserActsPredictor:_init(CIUserSimulator, opt)
                 lstm = nn.FastLSTM(self.inputFeatureNum, opt.lstmHd, opt.uSimLstmBackLen, nil, nil, nil, opt.dropoutUSim) --todo:pwang8. Oct 23. Testing -- the 3rd param, [rho], the maximum amount of backpropagation steps to take back in time, default value is 9999
                 TableSet.fastLSTMForgetGateInit(lstm, opt.dropoutUSim, opt.lstmHd, nninit) --(lstm, opt.dropoutUSim, opt.lstmHd, nninit) --todo:pwang8. Oct 23. Testing
             else
-                lstm = nn.RHN(self.inputFeatureNum, opt.lstmHd, opt.uSimLstmBackLen, opt.dropoutUSim)   -- GRU implements its RNN dropout, but does not have built-in batch normalization, as it is for FastLSTM -- todo:pwang8. Nov 13. Try to set RHN
+                lstm = nn.GRU(self.inputFeatureNum, opt.lstmHd, opt.uSimLstmBackLen, opt.dropoutUSim)   -- GRU implements its RNN dropout, but does not have built-in batch normalization, as it is for FastLSTM
             end
             lstm:remember('both')
             self.model:add(lstm)
@@ -144,6 +144,27 @@ function CIUserActsPredictor:_init(CIUserSimulator, opt)
                     self.model:add(nn.NormStabilizer())
                 end
             end
+            if opt.lstmHdL2 == 0 then
+                self.model:add(nn.Linear(opt.lstmHd, #classes))
+            else
+                self.model:add(nn.Linear(opt.lstmHdL2, #classes))
+            end
+
+            self.model:add(nn.LogSoftMax())
+            self.model = nn.Sequencer(self.model)
+            ------------------------------------------------------------
+
+        elseif opt.uppModel == 'rhn' then
+            ------------------------------------------------------------
+            -- Recurrent Highway Network
+            ------------------------------------------------------------
+            self.model:add(nn.Reshape(self.inputFeatureNum))
+            local rhn
+            rhn = nn.RHN(self.inputFeatureNum, 5, 1, opt.uSimLstmBackLen) --inputSize, recurrence_depth, rhn_layers, rho
+            rhn:remember('both')
+            self.model:add(rhn)
+            self.model:add(nn.NormStabilizer())
+
             if opt.lstmHdL2 == 0 then
                 self.model:add(nn.Linear(opt.lstmHd, #classes))
             else

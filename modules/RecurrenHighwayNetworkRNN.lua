@@ -9,16 +9,16 @@
 -- Expects 1D or 2D input.
 -- The first input in sequence uses zero value for hidden state
 
--- For p > 0, it uses variational dropouts [Gal, 2015].
--- In this case, please do not dropout on input.
+-- It uses variational dropouts [Gal, 2015]. But dropout implementation is
+-- based on dropout masks passed into this RHN model as params.
 ------------------------------------------------------------------------
 assert(not nn.RHN, "update nnx package : luarocks install nnx")
 local RHN, parent = torch.class('nn.RHN', 'nn.AbstractRecurrent')
 
-function RHN:__init(inputSize, recurrence_depth, rhn_layers, rho, p, mono)    -- not sure if mono is useful yet. mono is used in original lstm model to set Dropout
+function RHN:__init(inputSize, recurrence_depth, rhn_layers, rho)    -- p, mono in param list are deleted. not sure if mono is useful yet. mono is used in original lstm model to set Dropout
     parent.__init(self, rho or 9999)
-    self.p = p or 0
-    self.mono = mono or false
+    --self.p = p or 0   -- the param p and mono are not used right now, because we are implementing dropout outside of the RHN model,
+    --self.mono = mono or false     -- it means dropout masks are passed into the RHN model as params
     self.inputSize = inputSize  -- for RHN, the hiddensize should be the same as inputsize
     self.recurrence_depth = recurrence_depth    -- recurrence_depth in one RHN unit
     self.rhn_layers = rhn_layers or 1   -- this is the vertical layer number of the whole RHN. It is explicitly set up here because we want to use the output_rnn_dropout, which is not very convenient if used stacked structure in sequencer
@@ -101,6 +101,7 @@ end
 -- layers and time for one batch, it is not clear to me how to construct such a shared weights dropout module.
 -- todo:pwang8. Nov 14, 2017. Maybe it can be achieved by adopting clone() or share() to construct customized dropout with shared weights
 function RHN:buildModel()
+    -- todo:pwang8. The implementation is not correct! The current problem is that the input structrue of the nn is not set correctly. Input from outside of the model should contain x, and 3 noise mask. Pay attention how updateOutput() works.
     local x                = nn.Identity()()    -- input of rhn_network
     local prev_s           = nn.Identity()()    -- previous hidden state s from each rhn (vertical) layer.
     local noise_i          = nn.Identity()()    -- the dropout mask (before) entering the hidden layer. It doubles the size of rnn_size, bcz we use this input twice to calculate hidden state_s in rhn module and the t_gate.
@@ -212,7 +213,7 @@ function RHN:setGradHiddenState(step, gradHiddenState)
     self.gradOutputs[step] = gradHiddenState[1]
     self.gradCells[step] = gradHiddenState[2]
 end
--- todo:pwang8. Nov14, 2017. Time to edit from here. All code below has not been modified to fit RHN definition
+
 function RHN:_updateGradInput(input, gradOutput)
     assert(self.step > 1, "expecting at least one updateOutput")
     local step = self.updateGradInputStep - 1
