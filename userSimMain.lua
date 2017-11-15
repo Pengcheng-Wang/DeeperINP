@@ -8,10 +8,10 @@ local CIUserBehaviorGenEvaluator = require 'UserSimLearner/UserBehaviorGenEvalua
 local CIUserSimEnv = require 'UserSimLearner/CIUserSimEnv'
 
 opt = lapp[[
-       --trType         (default "rl")           training type : sc (score) | ac (action) | bg (behavior generation) | rl (implement rlenvs API) | ev (evaluation of act/score prediction)
-       -s,--save          (default "upplogs")      subdirectory to save logs
-       -n,--ciunet       (default "")          reload pretrained CI user simulation network
-       -m,--uppModel         (default "lstm")   type of model to train: moe | mlp | linear | lstm
+       --trType           (default "rl")        training type : sc (score) | ac (action) | bg (behavior generation) | rl (implement rlenvs API) | ev (evaluation of act/score prediction)
+       -s,--save          (default "upplogs")   subdirectory to save logs
+       -n,--ciunet        (default "")          reload pretrained CI user simulation network
+       -m,--uppModel      (default "rnn_lstm")      type of model to train: moe | mlp | linear | rnn_lstm | rnn_rhn
        -f,--full                                use the full dataset
        -p,--plot                                plot while training
        -o,--optimization  (default "adam")       optimization: SGD | LBFGS | adam | rmsprop
@@ -22,34 +22,35 @@ opt = lapp[[
        --coefL1           (default 0)           L1 penalty on the weights
        --coefL2           (default 0)           L2 penalty on the weights
        -t,--threads       (default 4)           number of threads
-       -g,--gpu        (default 0)          gpu device id, 0 for using cpu
+       -g,--gpu           (default 0)           gpu device id, 0 for using cpu
        --seed             (default 1)           Random seed
        --prepro           (default "std")       input state feature preprocessing: rsc | std
-       --lstmHd           (default 32)          lstm hidden layer size
-       --lstmHdL2         (default 0)          lstm hidden layer size in 2nd lstm layer
-       --lstmHdLyCnt      (default 2)          number of lstm hidden layer. Default is 2 bcz only when lstmHdL2 is not 0 this opt will be examined
-       --lstmHist         (default 10)           lstm hist length. This influence the rnn tensor table construction in data preparation
-       --uSimGru           (default 0)          whether to substitue lstm with gru (0 for using lstm, 1 for GRU)
-       --uSimLstmBackLen         (default 3)           The maximum step applied in bptt in lstm
+       --rnnHdSizeL1      (default 32)          lstm hidden layer size
+       --rnnHdSizeL2      (default 0)           lstm hidden layer size in 2nd lstm layer
+       --rnnHdLyCnt       (default 2)           number of lstm hidden layer. Default is 2 bcz only when rnnHdSizeL2 is not 0 this opt will be examined. The RHN layer number also uses this opt param
+       --rhnReccDept      (default 5)           The recurrent depth of RHN model in one layer
+       --lstmHist         (default 10)          lstm hist length. This influence the rnn tensor table construction in data preparation
+       --uSimGru          (default 0)           whether to substitue lstm with gru (0 for using lstm, 1 for GRU)
+       --uSimLstmBackLen  (default 3)           The maximum step applied in bptt in lstm
        --ubgDir           (default "ubgModel")  directory storing uap and usp models
-       --uapFile          (default "uap.t7")          file storing userActsPredictor model
-       --uspFile          (default "usp.t7")          file storing userScorePredictor model
+       --uapFile          (default "uap.t7")    file storing userActsPredictor model
+       --uspFile          (default "usp.t7")    file storing userScorePredictor model
        --actSmpLen        (default 8)           The sampling candidate list length for user action generation
        --ciuTType         (default "train")     Training or testing or validation for use sim model train | test | train_tr
        --actEvaScp        (default 1)           The action selection range in prediction evaluation calculation, corresponds to the top-i prediction accuracy
        --actSmpEps        (default 0)           User action sampling threshold. If rand se than this value, reture 1st pred. Otherwise, sample sim user's next action according to the predicted distribution
        --rwdSmpEps        (default 0)           User reward sampling threshold. If rand se than this value, reture 1st pred. Otherwise, sample sim user's predicted outcome according to the predicted distribution
-       --uSimShLayer        (default 0)           Whether the lower layers in Action and Score prediction NNs are shared. If this value is 1, use shared layers
-       --rlEvnIte        (default 10000)           No of iterations in rl type of evaluation
-       --usimTrIte        (default 400)           No of iterations used in user simulation model training. Recom for act training is 300, score training is 3000
-       --termActSmgLen     (default 50)           The length above which user termination action would be highly probably sampled. The observed avg length is about 40
-       --termActSmgEps     (default 0.9)           The probability which user termination action would be sampled after certain length
-       --testSetDivSeed     (default 2)         The default seed value when separating a test set from the dataset
-       --validSetDivSeed    (default 3)         The default seed value when separating a validation set out from the training set
-       --dropoutUSim        (default 0.2)       The dropout rate used in user simulation model building. Set 0 to turn off droput
-       --testOnTestFreq     (default 1)         The frequency of testing user simulation model's performance on test/train_valid set
-       --scorePredStateScope     (default 60)        The range of distance of a player state to the end of the player interaction trajectory (ending state) that makes the state a valid training data poing for score prediction. The idea is to throw out early interaction state for user outcome predictor training
-       --actPredDataAug     (default 1)        Whether to use data augmentation in action prediction model training. 0 for not using, 1 for using.
+       --uSimShLayer      (default 0)           Whether the lower layers in Action and Score prediction NNs are shared. If this value is 1, use shared layers
+       --rlEvnIte         (default 10000)       No of iterations in rl type of evaluation
+       --usimTrIte        (default 400)         No of iterations used in user simulation model training. Recom for act training is 300, score training is 3000
+       --termActSmgLen    (default 50)          The length above which user termination action would be highly probably sampled. The observed avg length is about 40
+       --termActSmgEps    (default 0.9)         The probability which user termination action would be sampled after certain length
+       --testSetDivSeed   (default 2)           The default seed value when separating a test set from the dataset
+       --validSetDivSeed  (default 3)           The default seed value when separating a validation set out from the training set
+       --dropoutUSim      (default 0.2)         The dropout rate used in user simulation model building. Set 0 to turn off droput
+       --testOnTestFreq   (default 1)           The frequency of testing user simulation model's performance on test/train_valid set
+       --scorePredStateScope     (default 60)   The range of distance of a player state to the end of the player interaction trajectory (ending state) that makes the state a valid training data poing for score prediction. The idea is to throw out early interaction state for user outcome predictor training
+       --actPredDataAug   (default 1)           Whether to use data augmentation in action prediction model training. 0 for not using, 1 for using.
     ]]
 
 -- threads and default tensor type

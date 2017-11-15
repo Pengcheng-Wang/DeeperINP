@@ -15,11 +15,12 @@
 assert(not nn.RHN, "update nnx package : luarocks install nnx")
 local RHN, parent = torch.class('nn.RHN', 'nn.AbstractRecurrent')
 
-function RHN:__init(inputSize, recurrence_depth, rhn_layers, rho)    -- p, mono in param list are deleted. not sure if mono is useful yet. mono is used in original lstm model to set Dropout
+function RHN:__init(inputSize, outputSize, recurrence_depth, rhn_layers, rho)    -- p, mono in param list are deleted. not sure if mono is useful yet. mono is used in original lstm model to set Dropout
     parent.__init(self, rho or 9999)
     --self.p = p or 0   -- the param p and mono are not used right now, because we are implementing dropout outside of the RHN model,
     --self.mono = mono or false     -- it means dropout masks are passed into the RHN model as params
-    self.inputSize = inputSize  -- for RHN, the hiddensize should be the same as inputsize
+    self.inputSize = inputSize  -- It looks like output size does not have to equal to inputSize, because we did not
+    self.outputSize = outputSize    -- do element-wise addition for x and hidden value directly. If we want to introduce residual module, then it is necessary
     self.recurrence_depth = recurrence_depth or 1    -- recurrence_depth in one RHN unit
     self.rhn_layers = rhn_layers or 1   -- this is the vertical layer number of the whole RHN. It is explicitly set up here because we want to use the output_rnn_dropout, which is not very convenient if used stacked structure in sequencer
     -- build the model
@@ -41,7 +42,7 @@ function RHN:buildRHNUnit(x, prev_h, noise_i, noise_h)
     -- Reshape to (batch_size, n_gates, hid_size)
     -- Then slice the n_gates dimension, i.e dimension 2
     local reshaped_noise_i = nn.Reshape(2, self.inputSize)(noise_i)   -- this might mean rhn has 2 gates, and this is the noise mask for input
-    local reshaped_noise_h = nn.Reshape(2, self.inputSize)(noise_h)   -- this should be the noise for prior hidden state
+    local reshaped_noise_h = nn.Reshape(2, self.outputSize)(noise_h)   -- this should be the noise for prior hidden state
     local sliced_noise_i   = nn.SplitTable(2)(reshaped_noise_i)   -- SplitTable(2) means split the input tensor along the 2nd dim, which is the num of gates dim
     local sliced_noise_h   = nn.SplitTable(2)(reshaped_noise_h)   -- after SplitTable, the output is a table of tensors
     -- Calculate all two gates
@@ -59,8 +60,8 @@ function RHN:buildRHNUnit(x, prev_h, noise_i, noise_h)
                 -- Use select table to fetch each gate
                 local dropped_x         = self:local_Dropout(x, nn.SelectTable(i)(sliced_noise_i)) -- slidced_noise_i is a table of tensors. So there are 2 gates and corresponding noise mask
                 dropped_h_tab[layer_i]  = self:local_Dropout(prev_h, nn.SelectTable(i)(sliced_noise_h))  -- the 2 gates contain one gate for calc hidden state, and the other gate being the transform gate
-                i2h[i]                  = nn.Linear(self.inputSize, self.inputSize)(dropped_x)    -- there are two i2h and h2h_tab bcz in equation 7 and 8 x and hidden state_h are utilized twice (2 sets of matrix multiplication)
-                h2h_tab[layer_i][i]     = nn.Linear(self.inputSize, self.inputSize)(dropped_h_tab[layer_i])
+                i2h[i]                  = nn.Linear(self.inputSize, self.outputSize)(dropped_x)    -- there are two i2h and h2h_tab bcz in equation 7 and 8 x and hidden state_h are utilized twice (2 sets of matrix multiplication)
+                h2h_tab[layer_i][i]     = nn.Linear(self.outputSize, self.outputSize)(dropped_h_tab[layer_i])
             end
             t_gate_tab[layer_i]       = nn.Sigmoid()(nn.AddConstant(-2, False)(nn.CAddTable()({i2h[1], h2h_tab[layer_i][1]}))) -- this is the tranform module in equation 8 in the paper. I guess the AddConstant is an init step
             in_transform_tab[layer_i] = nn.Tanh()(nn.CAddTable()({i2h[2], h2h_tab[layer_i][2]}))  -- calculate the hidden module, depicted in equation 7 in the paper
@@ -73,7 +74,7 @@ function RHN:buildRHNUnit(x, prev_h, noise_i, noise_h)
             for i = 1, 2 do
                 -- Use select table to fetch each gate
                 dropped_h_tab[layer_i]  = self:local_Dropout(s_tab[layer_i-1], nn.SelectTable(i)(sliced_noise_h))
-                h2h_tab[layer_i][i]     = nn.Linear(self.inputSize, self.inputSize)(dropped_h_tab[layer_i]) -- h2h_tab[layer_i][1] is the multiplication in equation 8, h2h_tab[layer_i][2] is multiplication in equation 7
+                h2h_tab[layer_i][i]     = nn.Linear(self.outputSize, self.outputSize)(dropped_h_tab[layer_i]) -- h2h_tab[layer_i][1] is the multiplication in equation 8, h2h_tab[layer_i][2] is multiplication in equation 7
             end
             t_gate_tab[layer_i]       = nn.Sigmoid()(nn.AddConstant(-2, False)(h2h_tab[layer_i][1]))   -- Attention: refer to the Deep Transition RNN figure in readme file to check the structure here    -- Equation 8
             in_transform_tab[layer_i] = nn.Tanh()(h2h_tab[layer_i][2])  -- for transition layers inside one time step, only the h2h state values (horizontal) are propagated. So, it's a little different from the first transition layer   -- Equation 7
@@ -134,9 +135,9 @@ function RHN:getHiddenState(step, input) -- this input param is only used to set
     if step == 0 then
         if input then
             if input:dim() == 2 then
-                self.zeroTensor:resize(input:size(1), self.inputSize):zero()
+                self.zeroTensor:resize(input:size(1), self.outputSize):zero()
             else
-                self.zeroTensor:resize(self.inputSize):zero()
+                self.zeroTensor:resize(self.outputSize):zero()
             end
         end
         local _cellTab = {} -- Because this RHN model could have multiple layers, its hidden state_s is a table of all hidden states in all RHN layers at prior time step

@@ -110,44 +110,44 @@ function CIUserScorePredictor:_init(CIUserSimulator, opt)
             nn.FastLSTM.bn = true
             local lstm
             if opt.uSimGru == 0 then
-                lstm = nn.FastLSTM(self.inputFeatureNum, opt.lstmHd, opt.uSimLstmBackLen, nil, nil, nil, opt.dropoutUSim) -- the 3rd param, [rho], the maximum amount of backpropagation steps to take back in time, default value is 9999
-                TableSet.fastLSTMForgetGateInit(lstm, opt.dropoutUSim, opt.lstmHd, nninit)
+                lstm = nn.FastLSTM(self.inputFeatureNum, opt.rnnHdSizeL1, opt.uSimLstmBackLen, nil, nil, nil, opt.dropoutUSim) -- the 3rd param, [rho], the maximum amount of backpropagation steps to take back in time, default value is 9999
+                TableSet.fastLSTMForgetGateInit(lstm, opt.dropoutUSim, opt.rnnHdSizeL1, nninit)
             else
-                lstm = nn.GRU(self.inputFeatureNum, opt.lstmHd, opt.uSimLstmBackLen, opt.dropoutUSim)
+                lstm = nn.GRU(self.inputFeatureNum, opt.rnnHdSizeL1, opt.uSimLstmBackLen, opt.dropoutUSim)
             end
             lstm:remember('both')
             self.model:add(lstm)
             self.model:add(nn.NormStabilizer())
             -- if need a 2nd lstm layer
-            if opt.lstmHdL2 ~= 0 then
+            if opt.rnnHdSizeL2 ~= 0 then
                 local lstmL2
                 if opt.uSimGru == 0 then
-                    lstmL2 = nn.FastLSTM(opt.lstmHd, opt.lstmHdL2, opt.uSimLstmBackLen, nil, nil, nil, opt.dropoutUSim) -- the 3rd param, [rho], the maximum amount of backpropagation steps to take back in time, default value is 9999
-                    TableSet.fastLSTMForgetGateInit(lstmL2, opt.dropoutUSim, opt.lstmHdL2, nninit)  -- The current implementation is not very flexible
+                    lstmL2 = nn.FastLSTM(opt.rnnHdSizeL1, opt.rnnHdSizeL2, opt.uSimLstmBackLen, nil, nil, nil, opt.dropoutUSim) -- the 3rd param, [rho], the maximum amount of backpropagation steps to take back in time, default value is 9999
+                    TableSet.fastLSTMForgetGateInit(lstmL2, opt.dropoutUSim, opt.rnnHdSizeL2, nninit)  -- The current implementation is not very flexible
                 else
-                    lstmL2 = nn.GRU(opt.lstmHd, opt.lstmHdL2, opt.uSimLstmBackLen, opt.dropoutUSim)
+                    lstmL2 = nn.GRU(opt.rnnHdSizeL1, opt.rnnHdSizeL2, opt.uSimLstmBackLen, opt.dropoutUSim)
                 end
                 lstmL2:remember('both')
                 self.model:add(lstmL2)
                 self.model:add(nn.NormStabilizer())
                 -- If extra layers were needed. Right now we use the same setting for lstm layers that higher than 2
-                for _extL=3, opt.lstmHdLyCnt do
+                for _extL=3, opt.rnnHdLyCnt do
                     local _extLstmL
                     if opt.uSimGru == 0 then
-                        _extLstmL = nn.FastLSTM(opt.lstmHdL2, opt.lstmHdL2, opt.uSimLstmBackLen, nil, nil, nil, opt.dropoutUSim) -- the 3rd param, [rho], the maximum amount of backpropagation steps to take back in time, default value is 9999
-                        TableSet.fastLSTMForgetGateInit(_extLstmL, opt.dropoutUSim, opt.lstmHdL2, nninit)
+                        _extLstmL = nn.FastLSTM(opt.rnnHdSizeL2, opt.rnnHdSizeL2, opt.uSimLstmBackLen, nil, nil, nil, opt.dropoutUSim) -- the 3rd param, [rho], the maximum amount of backpropagation steps to take back in time, default value is 9999
+                        TableSet.fastLSTMForgetGateInit(_extLstmL, opt.dropoutUSim, opt.rnnHdSizeL2, nninit)
                     else
-                        _extLstmL = nn.GRU(opt.lstmHdL2, opt.lstmHdL2, opt.uSimLstmBackLen, opt.dropoutUSim)
+                        _extLstmL = nn.GRU(opt.rnnHdSizeL2, opt.rnnHdSizeL2, opt.uSimLstmBackLen, opt.dropoutUSim)
                     end
                     _extLstmL:remember('both')
                     self.model:add(_extLstmL)
                     self.model:add(nn.NormStabilizer())
                 end
             end
-            if opt.lstmHdL2 == 0 then
-                self.model:add(nn.Linear(opt.lstmHd, #self.classes))
+            if opt.rnnHdSizeL2 == 0 then
+                self.model:add(nn.Linear(opt.rnnHdSizeL1, #self.classes))
             else
-                self.model:add(nn.Linear(opt.lstmHdL2, #self.classes))
+                self.model:add(nn.Linear(opt.rnnHdSizeL2, #self.classes))
             end
 
             self.model:add(nn.LogSoftMax())

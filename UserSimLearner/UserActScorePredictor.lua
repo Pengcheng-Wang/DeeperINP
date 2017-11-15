@@ -153,36 +153,36 @@ function CIUserActScorePredictor:_init(CIUserSimulator, opt)
             --nn.FastLSTM.bn = true   -- turn on batch normalization
             local lstm
             if opt.uSimGru == 0 then
-                lstm = nn.FastLSTM(self.inputFeatureNum, opt.lstmHd, opt.uSimLstmBackLen, nil, nil, nil, opt.dropoutUSim) -- the 3rd param, [rho], the maximum amount of backpropagation steps to take back in time, default value is 9999
-                TableSet.fastLSTMForgetGateInit(lstm, opt.dropoutUSim, opt.lstmHd, nninit)
+                lstm = nn.FastLSTM(self.inputFeatureNum, opt.rnnHdSizeL1, opt.uSimLstmBackLen, nil, nil, nil, opt.dropoutUSim) -- the 3rd param, [rho], the maximum amount of backpropagation steps to take back in time, default value is 9999
+                TableSet.fastLSTMForgetGateInit(lstm, opt.dropoutUSim, opt.rnnHdSizeL1, nninit)
                 -- has not applied batch normalization for fastLSTM before, should try it.
             else
-                lstm = nn.GRU(self.inputFeatureNum, opt.lstmHd, opt.uSimLstmBackLen, opt.dropoutUSim)   -- did not apply dropout or batchNormalization for GRU before
+                lstm = nn.GRU(self.inputFeatureNum, opt.rnnHdSizeL1, opt.uSimLstmBackLen, opt.dropoutUSim)   -- did not apply dropout or batchNormalization for GRU before
             end
             lstm:remember('both')
             self.model:add(lstm)
             self.model:add(nn.NormStabilizer())
             -- if need a 2nd lstm layer
-            if opt.lstmHdL2 ~= 0 then
+            if opt.rnnHdSizeL2 ~= 0 then
                 local lstmL2
                 if opt.uSimGru == 0 then
-                    lstmL2 = nn.FastLSTM(opt.lstmHd, opt.lstmHdL2, opt.uSimLstmBackLen, nil, nil, nil, opt.dropoutUSim) -- the 3rd param, [rho], the maximum amount of backpropagation steps to take back in time, default value is 9999
-                    TableSet.fastLSTMForgetGateInit(lstmL2, opt.dropoutUSim, opt.lstmHdL2, nninit)
+                    lstmL2 = nn.FastLSTM(opt.rnnHdSizeL1, opt.rnnHdSizeL2, opt.uSimLstmBackLen, nil, nil, nil, opt.dropoutUSim) -- the 3rd param, [rho], the maximum amount of backpropagation steps to take back in time, default value is 9999
+                    TableSet.fastLSTMForgetGateInit(lstmL2, opt.dropoutUSim, opt.rnnHdSizeL2, nninit)
                     -- has not applied batch normalization for fastLSTM before, should try it.
                 else
-                    lstmL2 = nn.GRU(opt.lstmHd, opt.lstmHdL2, opt.uSimLstmBackLen, opt.dropoutUSim)     -- did not apply dropout or batchNormalization for GRU before
+                    lstmL2 = nn.GRU(opt.rnnHdSizeL1, opt.rnnHdSizeL2, opt.uSimLstmBackLen, opt.dropoutUSim)     -- did not apply dropout or batchNormalization for GRU before
                 end
                 lstmL2:remember('both')
                 self.model:add(lstmL2)
                 self.model:add(nn.NormStabilizer()) -- I am not very clear if NormStabilizer should be used togeher with Dropout, especially since dropout is used on memory value, equals to change memory value distribution a little
                 -- If extra layers were needed. Right now we use the same setting for lstm layers that higher than 2
-                for _extL=3, opt.lstmHdLyCnt do
+                for _extL=3, opt.rnnHdLyCnt do
                     local _extLstmL
                     if opt.uSimGru == 0 then
-                        _extLstmL = nn.FastLSTM(opt.lstmHdL2, opt.lstmHdL2, opt.uSimLstmBackLen, nil, nil, nil, opt.dropoutUSim) -- the 3rd param, [rho], the maximum amount of backpropagation steps to take back in time, default value is 9999
-                        TableSet.fastLSTMForgetGateInit(_extLstmL, opt.dropoutUSim, opt.lstmHdL2, nninit)
+                        _extLstmL = nn.FastLSTM(opt.rnnHdSizeL2, opt.rnnHdSizeL2, opt.uSimLstmBackLen, nil, nil, nil, opt.dropoutUSim) -- the 3rd param, [rho], the maximum amount of backpropagation steps to take back in time, default value is 9999
+                        TableSet.fastLSTMForgetGateInit(_extLstmL, opt.dropoutUSim, opt.rnnHdSizeL2, nninit)
                     else
-                        _extLstmL = nn.GRU(opt.lstmHdL2, opt.lstmHdL2, opt.uSimLstmBackLen, opt.dropoutUSim)
+                        _extLstmL = nn.GRU(opt.rnnHdSizeL2, opt.rnnHdSizeL2, opt.uSimLstmBackLen, opt.dropoutUSim)
                     end
                     _extLstmL:remember('both')
                     self.model:add(_extLstmL)
@@ -190,10 +190,10 @@ function CIUserActScorePredictor:_init(CIUserSimulator, opt)
                 end
             end
             local lastHidNum
-            if opt.lstmHdL2 == 0 then
-                lastHidNum = opt.lstmHd
+            if opt.rnnHdSizeL2 == 0 then
+                lastHidNum = opt.rnnHdSizeL1
             else
-                lastHidNum = opt.lstmHdL2
+                lastHidNum = opt.rnnHdSizeL2
             end
 
             -- The following code creates two output modules, with one module matches

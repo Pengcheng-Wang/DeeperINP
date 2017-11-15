@@ -102,7 +102,7 @@ function CIUserActsPredictor:_init(CIUserSimulator, opt)
             self.model:add(nn.LogSoftMax())
             ------------------------------------------------------------
 
-        elseif opt.uppModel == 'lstm' then
+        elseif opt.uppModel == 'rnn_lstm' then
             ------------------------------------------------------------
             -- lstm
             ------------------------------------------------------------
@@ -110,66 +110,62 @@ function CIUserActsPredictor:_init(CIUserSimulator, opt)
             --nn.FastLSTM.bn = true
             local lstm
             if opt.uSimGru == 0 then
-                lstm = nn.FastLSTM(self.inputFeatureNum, opt.lstmHd, opt.uSimLstmBackLen, nil, nil, nil, opt.dropoutUSim) --todo:pwang8. Oct 23. Testing -- the 3rd param, [rho], the maximum amount of backpropagation steps to take back in time, default value is 9999
-                TableSet.fastLSTMForgetGateInit(lstm, opt.dropoutUSim, opt.lstmHd, nninit) --(lstm, opt.dropoutUSim, opt.lstmHd, nninit) --todo:pwang8. Oct 23. Testing
+                lstm = nn.FastLSTM(self.inputFeatureNum, opt.rnnHdSizeL1, opt.uSimLstmBackLen, nil, nil, nil, opt.dropoutUSim) --todo:pwang8. Oct 23. Testing -- the 3rd param, [rho], the maximum amount of backpropagation steps to take back in time, default value is 9999
+                TableSet.fastLSTMForgetGateInit(lstm, opt.dropoutUSim, opt.rnnHdSizeL1, nninit) --(lstm, opt.dropoutUSim, opt.rnnHdSizeL1, nninit) --todo:pwang8. Oct 23. Testing
             else
-                lstm = nn.GRU(self.inputFeatureNum, opt.lstmHd, opt.uSimLstmBackLen, opt.dropoutUSim)   -- GRU implements its RNN dropout, but does not have built-in batch normalization, as it is for FastLSTM
+                lstm = nn.GRU(self.inputFeatureNum, opt.rnnHdSizeL1, opt.uSimLstmBackLen, opt.dropoutUSim)   -- GRU implements its RNN dropout, but does not have built-in batch normalization, as it is for FastLSTM
             end
             lstm:remember('both')
             self.model:add(lstm)
             self.model:add(nn.NormStabilizer())
             -- if need a 2nd lstm layer
-            if opt.lstmHdL2 ~= 0 then
+            if opt.rnnHdSizeL2 ~= 0 then
                 local lstmL2
                 if opt.uSimGru == 0 then
-                    lstmL2 = nn.FastLSTM(opt.lstmHd, opt.lstmHdL2, opt.uSimLstmBackLen, nil, nil, nil, opt.dropoutUSim) -- the 3rd param, [rho], the maximum amount of backpropagation steps to take back in time, default value is 9999
-                    TableSet.fastLSTMForgetGateInit(lstmL2, opt.dropoutUSim, opt.lstmHdL2, nninit)
+                    lstmL2 = nn.FastLSTM(opt.rnnHdSizeL1, opt.rnnHdSizeL2, opt.uSimLstmBackLen, nil, nil, nil, opt.dropoutUSim) -- the 3rd param, [rho], the maximum amount of backpropagation steps to take back in time, default value is 9999
+                    TableSet.fastLSTMForgetGateInit(lstmL2, opt.dropoutUSim, opt.rnnHdSizeL2, nninit)
                 else
-                    lstmL2 = nn.GRU(opt.lstmHd, opt.lstmHdL2, opt.uSimLstmBackLen, opt.dropoutUSim)
+                    lstmL2 = nn.GRU(opt.rnnHdSizeL1, opt.rnnHdSizeL2, opt.uSimLstmBackLen, opt.dropoutUSim)
                 end
                 lstmL2:remember('both')
                 self.model:add(lstmL2)
                 self.model:add(nn.NormStabilizer())
                 -- If extra layers were needed. Right now we use the same setting for lstm layers that higher than 2
-                for _extL=3, opt.lstmHdLyCnt do
+                for _extL=3, opt.rnnHdLyCnt do
                     local _extLstmL
                     if opt.uSimGru == 0 then
-                        _extLstmL = nn.FastLSTM(opt.lstmHdL2, opt.lstmHdL2, opt.uSimLstmBackLen, nil, nil, nil, opt.dropoutUSim) -- the 3rd param, [rho], the maximum amount of backpropagation steps to take back in time, default value is 9999
-                        TableSet.fastLSTMForgetGateInit(_extLstmL, opt.dropoutUSim, opt.lstmHdL2, nninit)
+                        _extLstmL = nn.FastLSTM(opt.rnnHdSizeL2, opt.rnnHdSizeL2, opt.uSimLstmBackLen, nil, nil, nil, opt.dropoutUSim) -- the 3rd param, [rho], the maximum amount of backpropagation steps to take back in time, default value is 9999
+                        TableSet.fastLSTMForgetGateInit(_extLstmL, opt.dropoutUSim, opt.rnnHdSizeL2, nninit)
                     else
-                        _extLstmL = nn.GRU(opt.lstmHdL2, opt.lstmHdL2, opt.uSimLstmBackLen, opt.dropoutUSim)
+                        _extLstmL = nn.GRU(opt.rnnHdSizeL2, opt.rnnHdSizeL2, opt.uSimLstmBackLen, opt.dropoutUSim)
                     end
                     _extLstmL:remember('both')
                     self.model:add(_extLstmL)
                     self.model:add(nn.NormStabilizer())
                 end
             end
-            if opt.lstmHdL2 == 0 then
-                self.model:add(nn.Linear(opt.lstmHd, #classes))
+            if opt.rnnHdSizeL2 == 0 then
+                self.model:add(nn.Linear(opt.rnnHdSizeL1, #classes))
             else
-                self.model:add(nn.Linear(opt.lstmHdL2, #classes))
+                self.model:add(nn.Linear(opt.rnnHdSizeL2, #classes))
             end
 
             self.model:add(nn.LogSoftMax())
             self.model = nn.Sequencer(self.model)
             ------------------------------------------------------------
 
-        elseif opt.uppModel == 'rhn' then
+        elseif opt.uppModel == 'rnn_rhn' then
             ------------------------------------------------------------
             -- Recurrent Highway Network
             ------------------------------------------------------------
             self.model:add(nn.Reshape(self.inputFeatureNum))
             local rhn
-            rhn = nn.RHN(self.inputFeatureNum, 5, 1, opt.uSimLstmBackLen) --inputSize, recurrence_depth, rhn_layers, rho
+            rhn = nn.RHN(self.inputFeatureNum, opt.rnnHdSizeL1, opt.rhnReccDept, opt.rnnHdLyCnt, opt.uSimLstmBackLen) --inputSize, outputSize, recurrence_depth, rhn_layers, rho
             rhn:remember('both')
             self.model:add(rhn)
             self.model:add(nn.NormStabilizer())
 
-            if opt.lstmHdL2 == 0 then
-                self.model:add(nn.Linear(opt.lstmHd, #classes))
-            else
-                self.model:add(nn.Linear(opt.lstmHdL2, #classes))
-            end
+            self.model:add(nn.Linear(opt.rnnHdSizeL1, #classes))
 
             self.model:add(nn.LogSoftMax())
             self.model = nn.Sequencer(self.model)
@@ -200,7 +196,7 @@ function CIUserActsPredictor:_init(CIUserSimulator, opt)
     -- loss function: negative log-likelihood
     --
     self.uapCriterion = nn.ClassNLLCriterion()
-    if opt.uppModel == 'lstm' then
+    if string.sub(opt.uppModel, 1, 4) == 'rnn_' then
         self.uapCriterion = nn.SequencerCriterion(nn.ClassNLLCriterion())
     end
 
@@ -237,14 +233,14 @@ function CIUserActsPredictor:_init(CIUserSimulator, opt)
     end
 
     ----------------------------------------------------------------------
-    --- Prepare data for lstm in training set
+    --- Prepare data for rnn models in training set
     ---
     self.rnnRealUserDataStates = {}
     self.rnnRealUserDataActs = {}
     self.rnnRealUserDataStarts = {}
     self.rnnRealUserDataEnds = {}
     self.rnnRealUserDataPad = torch.Tensor(#self.ciUserSimulator.realUserDataStartLines):fill(0)    -- indicating whether data has padding at head (should be padded)
-    if opt.uppModel == 'lstm' then
+    if string.sub(opt.uppModel, 1, 4) == 'rnn_' then
         local indSeqHead = 1
         local indSeqTail = opt.lstmHist
         local indUserSeq = 1    -- user id ptr. Use this to get the tail of each trajectory
@@ -294,7 +290,7 @@ function CIUserActsPredictor:_init(CIUserSimulator, opt)
 
 
     ----------------------------------------------------------------------
-    --- Prepare data for lstm in test/train_validation set
+    --- Prepare data for rnn models in test/train_validation set
     ---
     self.rnnRealUserDataStatesTest = {}
     self.rnnRealUserDataActsTest = {}
@@ -302,7 +298,7 @@ function CIUserActsPredictor:_init(CIUserSimulator, opt)
     self.rnnRealUserDataEndsTest = {}
     self.rnnRealUserDataPadTest = torch.Tensor(#self.ciUserSimulator.realUserDataStartLinesTest):fill(0)    -- indicating whether data has padding at head (should be padded)
     if self.opt.ciuTType == 'train' or self.opt.ciuTType == 'train_tr' then
-        if opt.uppModel == 'lstm' then
+        if string.sub(opt.uppModel, 1, 4) == 'rnn_' then
             local indSeqHeadTest = 1
             local indSeqTailTest = opt.lstmHist
             local indUserSeqTest = 1    -- user id ptr. Use this to get the tail of each trajectory
@@ -397,7 +393,7 @@ function CIUserActsPredictor:trainOneEpoch()
     local lstmIter = 1  -- lstm iterate for each squence starts from this value
     local epochDone = false
     while not epochDone do
-        if self.opt.uppModel ~= 'lstm' then
+        if string.sub(self.opt.uppModel, 1, 4) ~= 'rnn_' then
             -- create mini batch
             inputs = torch.Tensor(self.opt.batchSize, self.inputFeatureNum)
             targets = torch.Tensor(self.opt.batchSize)
@@ -440,7 +436,7 @@ function CIUserActsPredictor:trainOneEpoch()
             end
 
         else
-            -- lstm
+            -- rnn models
             inputs = {}
             targets = {}
             local k
@@ -533,7 +529,7 @@ function CIUserActsPredictor:trainOneEpoch()
             end
 
             -- update self.uapConfusion
-            if self.opt.uppModel == 'lstm' then
+            if string.sub(self.opt.uppModel, 1, 4) == 'rnn_' then
                 for j = 1, self.opt.lstmHist do
                     for i = 1,self.opt.batchSize do
                         self.uapConfusion:add(outputs[j][i], targets[j][i])
@@ -550,7 +546,7 @@ function CIUserActsPredictor:trainOneEpoch()
         end
 
         self.model:training()
-        if self.opt.uppModel == 'lstm' then
+        if string.sub(self.opt.uppModel, 1, 4) == 'rnn_' then
             self.model:clearState()
             self.model:forget()
         end
@@ -582,7 +578,7 @@ function CIUserActsPredictor:trainOneEpoch()
             optim.sgd(feval, self.uapParam, sgdState)
 
             -- disp progress
-            if self.opt.uppModel ~= 'lstm' then
+            if string.sub(self.opt.uppModel, 1, 4) ~= 'rnn_' then
                 xlua.progress(t, #self.ciUserSimulator.realUserDataStates)
             else
                 xlua.progress(lstmIter, #self.rnnRealUserDataStates)
@@ -599,7 +595,7 @@ function CIUserActsPredictor:trainOneEpoch()
             optim.adam(feval, self.uapParam, adamState)
 
             -- disp progress
-            if self.opt.uppModel ~= 'lstm' then
+            if string.sub(self.opt.uppModel, 1, 4) ~= 'rnn_' then
                 xlua.progress(t, #self.ciUserSimulator.realUserDataStates)
             else
                 xlua.progress(lstmIter, #self.rnnRealUserDataStates)
@@ -614,7 +610,7 @@ function CIUserActsPredictor:trainOneEpoch()
             optim.rmsprop(feval, self.uapParam, rmspropState)
 
             -- disp progress
-            if self.opt.uppModel ~= 'lstm' then
+            if string.sub(self.opt.uppModel, 1, 4) ~= 'rnn_' then
                 xlua.progress(t, #self.ciUserSimulator.realUserDataStates)
             else
                 xlua.progress(lstmIter, #self.rnnRealUserDataStates)
@@ -676,7 +672,7 @@ function CIUserActsPredictor:testActPredOnTestDetOneEpoch()
     --    local actPredFP = torch.Tensor(self.ciUserSimulator.CIFr.usrActInd_end):fill(1e-3)
     --    local actPredFN = torch.Tensor(self.ciUserSimulator.CIFr.usrActInd_end):fill(1e-3)
     local _logLoss = 0
-    if self.opt.uppModel == 'lstm' then
+    if string.sub(self.opt.uppModel, 1, 4) == 'rnn_' then
         -- uSimShLayer == 0 and lstm model
         self.model:evaluate()
         self.model:forget()
