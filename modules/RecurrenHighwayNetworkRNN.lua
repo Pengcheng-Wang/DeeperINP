@@ -126,9 +126,11 @@ function RHN:buildModel()
     return module
 end
 
+-- In this multi-layer RHN model, this input param should only be the
+-- data point feature values, not including dropout mask noises.
 function RHN:getHiddenState(step, input) -- this input param is only used to set size of self.zeroTensor
     step = step == nil and (self.step - 1) or (step < 0) and (self.step - step - 1) or step
-    local prevOutput, prevCell
+    local prevCell
     if step == 0 then
         if input then
             if input:dim() == 2 then
@@ -137,26 +139,24 @@ function RHN:getHiddenState(step, input) -- this input param is only used to set
                 self.zeroTensor:resize(self.inputSize):zero()
             end
         end
-        prevOutput = self.userPrevOutput or self.outputs[step] or self.zeroTensor
         local _cellTab = {} -- Because this RHN model could have multiple layers, its hidden state_s is a table of all hidden states in all RHN layers at prior time step
         for i=1, self.rhn_layers do table.insert(_cellTab, self.zeroTensor:clone()) end
         prevCell = self.userPrevCell or self.cells[step] or _cellTab
     else
-        -- previous output and cell of this module
-        prevOutput = self.outputs[step]
+        -- previous cell of this module
         prevCell = self.cells[step]
     end
-    return {prevOutput, prevCell}
+    return prevCell
 end
 
+-- I suspect if this function is actually invoked in this implementation
 function RHN:setHiddenState(step, hiddenState)
     step = step == nil and (self.step - 1) or (step < 0) and (self.step - step - 1) or step
-    assert(torch.type(hiddenState) == 'table')
-    assert(#hiddenState == 2)
+    assert(torch.type(hiddenState) == 'table')  -- in this multi-layer RHN model, hidden state should be a table containing hidden states from all (vertical) rhn layers
+    assert(#hiddenState == self.rhn_layers)
 
-    -- previous output of this module
-    self.outputs[step] = hiddenState[1]
-    self.cells[step] = hiddenState[2]
+    -- previous hidden states of this module
+    self.cells[step] = hiddenState -- in this multi-layer RHN, the hiddenState should be a table of hidden state values from each (vertical) layer
 end
 
 ------------------------- forward backward -----------------------------
@@ -166,7 +166,7 @@ function RHN:updateOutput(input)
     -- And this actually is the required input format for invoking the forward function
     -- when utilizing this multi-layer RHN module
     local _inputX, _inputNoise_i, _inputNoise_h, _inputNoise_o = unpack(input)
-    local prevOutput, prevCell = unpack(self:getHiddenState(self.step-1, _inputX))
+    local prevCell = self:getHiddenState(self.step-1, _inputX)
 
     local output, cell  -- in this multi-layer RHN, cell is a table of hidden state values from all (vertical) RHN layers
     if self.train ~= false then
@@ -198,31 +198,28 @@ function RHN:updateOutput(input)
 end
 
 function RHN:getGradHiddenState(step)
-    self.gradOutputs = self.gradOutputs or {}
     self.gradCells = self.gradCells or {}
     local _step = self.updateGradInputStep or self.step
     step = step == nil and (_step - 1) or (step < 0) and (_step - step - 1) or step
-    local gradOutput, gradCell
+    local gradCell
     if step == self.step-1 then
-        gradOutput = self.userNextGradOutput or self.gradOutputs[step] or self.zeroTensor
         gradCell = self.userNextGradCell or self.gradCells[step] or self.zeroTensor
     else
-        gradOutput = self.gradOutputs[step]
         gradCell = self.gradCells[step]
     end
-    return {gradOutput, gradCell}
+    return gradCell
 end
 
 function RHN:setGradHiddenState(step, gradHiddenState)
     local _step = self.updateGradInputStep or self.step
     step = step == nil and (_step - 1) or (step < 0) and (_step - step - 1) or step
-    assert(torch.type(gradHiddenState) == 'table')
-    assert(#gradHiddenState == 2)
+    assert(torch.type(gradHiddenState) == 'table')  -- in this multi-layer RHN model, hidden state should be a table containing hidden states from all (vertical) rhn layers
+    assert(#gradHiddenState == self.rhn_layers)
 
-    self.gradOutputs[step] = gradHiddenState[1]
-    self.gradCells[step] = gradHiddenState[2]
+    self.gradCells[step] = gradHiddenState
 end
 
+-- This input, as a input from invoking the multi-layer RHN model, should be in form of {x, noise_i, noise_h, noise_o}
 function RHN:_updateGradInput(input, gradOutput)
     assert(self.step > 1, "expecting at least one updateOutput")
     local step = self.updateGradInputStep - 1
@@ -232,21 +229,23 @@ function RHN:_updateGradInput(input, gradOutput)
     local recurrentModule = self:getStepModule(step)
 
     -- backward propagate through this step
-    local gradHiddenState = self:getGradHiddenState(step)
-    local _gradOutput, gradCell = gradHiddenState[1], gradHiddenState[2]
-    assert(_gradOutput and gradCell)
+    local gradCell = self:getGradHiddenState(step)
+    assert(gradCell)
 
-    self._gradOutputs[step] = nn.rnn.recursiveCopy(self._gradOutputs[step], _gradOutput)
-    nn.rnn.recursiveAdd(self._gradOutputs[step], gradOutput)
-    gradOutput = self._gradOutputs[step]
+    self._gradOutputs[step] = nn.rnn.recursiveCopy(self._gradOutputs[step], gradOutput)
 
-    local inputTable = self:getHiddenState(step-1)
-    table.insert(inputTable, 1, input)
+    -- Attention: because we also have dropout masks as inputs into the RHN nn structure,
+    -- so the input param here should be a table contains {x, noise_i, noise_h, noise_o}
+    -- and the _input into the multi-layer RHN model, according to the structure defined
+    -- in buildModel(), should be {x, prev_s, noise_i, noise_h, noise_o}, so we add prev_s
+    -- as the 2nd item in the input table
+    assert(#input == 4, 'Input dim for the Multi-layer RHN should be 4.')
+    local _inputX, _inputNoise_i, _inputNoise_h, _inputNoise_o = unpack(input)
+    local _inTab = {_inputX, self:getHiddenState(step-1), _inputNoise_i, _inputNoise_h, _inputNoise_o}
+    -- table.insert is not used bcz I'm afraid _accGradParameters() will use the same input table again
 
-    local gradInputTable = recurrentModule:updateGradInput(inputTable, {gradOutput, gradCell})   -- updateGradInput(input, gradOutput), from https://github.com/torch/nn/blob/master/doc/module.md#updategradinputinput-gradoutput
-
-    local _ = require 'moses'
-    self:setGradHiddenState(step-1, _.slice(gradInputTable, 2, 3)) -- use slice() bcz the inputTable contains 3 components, including {input(t), output(t), cell(t)}
+    local gradInputTable = recurrentModule:updateGradInput(_inTab, {gradOutput, gradCell})   -- updateGradInput(input, gradOutput), from https://github.com/torch/nn/blob/master/doc/module.md#updategradinputinput-gradoutput
+    self:setGradHiddenState(step-1, gradInputTable[2])  -- use gradInputTable[2] bcz input into the multi-layer RHN model is {x, prev_s, noise_i, noise_h, noise_o}
 
     return gradInputTable[1]
 end
@@ -259,11 +258,14 @@ function RHN:_accGradParameters(input, gradOutput, scale)
     local recurrentModule = self:getStepModule(step)
 
     -- backward propagate through this step
-    local inputTable = self:getHiddenState(step-1)
-    table.insert(inputTable, 1, input)
-    local gradOutputTable = self:getGradHiddenState(step)
-    gradOutputTable[1] = self._gradOutputs[step] or gradOutputTable[1]
-    recurrentModule:accGradParameters(inputTable, gradOutputTable, scale)
+    --local inputTable = self:getHiddenState(step-1)
+    --table.insert(inputTable, 1, input)
+    assert(#input == 4, 'Input dim for the Multi-layer RHN should be 4.')
+    local _inputX, _inputNoise_i, _inputNoise_h, _inputNoise_o = unpack(input)
+    local _inTab = {_inputX, self:getHiddenState(step-1), _inputNoise_i, _inputNoise_h, _inputNoise_o}
+    local _gradCell = self:getGradHiddenState(step)
+    gradOutput = self._gradOutputs[step] or gradOutput
+    recurrentModule:accGradParameters(_inTab, {gradOutput, _gradCell}, scale)
 end
 
 function RHN:clearState()
