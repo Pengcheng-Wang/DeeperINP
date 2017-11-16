@@ -245,11 +245,12 @@ function RHN:_updateGradInput(input, gradOutput)
     local _inputX, _inputNoise_i, _inputNoise_h, _inputNoise_o = unpack(input)
     local _inTab = {_inputX, self:getHiddenState(step-1), _inputNoise_i, _inputNoise_h, _inputNoise_o}
     -- table.insert is not used bcz I'm afraid _accGradParameters() will use the same input table again
-print('#####', gradCell)
+
+    if #gradCell == 1 then gradCell = unpack(gradCell) end  -- This is even more weird. When RHN layer # is 1, which means #gradCell == 1, I have to unpack gradCell bcz torch says it expects a tensor, not a table. But the table works for 2-layer RHN, which is actually following the structure defined above
     local gradInputTable = recurrentModule:updateGradInput(_inTab, {gradOutput, gradCell})   -- updateGradInput(input, gradOutput), from https://github.com/torch/nn/blob/master/doc/module.md#updategradinputinput-gradoutput
     self:setGradHiddenState(step-1, gradInputTable[2])  -- use gradInputTable[2] bcz input into the multi-layer RHN model is {x, prev_s, noise_i, noise_h, noise_o}
 
-    return gradInputTable[1]
+    return gradInputTable[1]    -- return [1] bcz the actual input into this structure contains hidden states, and we only want to output grad over actual input
 end
 
 function RHN:_accGradParameters(input, gradOutput, scale)

@@ -587,8 +587,7 @@ function CIUserActsPredictor:trainOneEpoch()
 
         self.model:training()
         if string.sub(self.opt.uppModel, 1, 4) == 'rnn_' then
-            self.model:clearState()
-            self.model:forget()
+            self.model:forget() -- I used to try to call clearState() here, which introduces weird run-time error. The error is that a table of tensors were erased to empty tensor in some setting (1-layer RHN) but not other setting (2-layer RHN)
         end
 
         -- optimize on current mini-batch
