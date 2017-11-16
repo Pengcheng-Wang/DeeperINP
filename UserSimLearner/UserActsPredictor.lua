@@ -159,7 +159,12 @@ function CIUserActsPredictor:_init(CIUserSimulator, opt)
             -- Recurrent Highway Network
             ------------------------------------------------------------
             if opt.rnnHdLyCnt > 1 then assert(self.inputFeatureNum==opt.rnnHdSizeL1, 'For multi-layer RHN, inputSize should equal to hiddenSize') end
-            self.model:add(nn.Reshape(self.inputFeatureNum))
+            --local _rhnReshaper = nn.ParallelTable()
+            --_rhnReshaper:add(nn.Reshape(self.inputFeatureNum))
+            --_rhnReshaper:add(nn.Reshape(self.inputFeatureNum))
+            --_rhnReshaper:add(nn.Reshape(self.inputFeatureNum))
+            --_rhnReshaper:add(nn.Reshape(self.inputFeatureNum))
+            --self.model:add(_rhnReshaper)
             local rhn
             rhn = nn.RHN(self.inputFeatureNum, opt.rnnHdSizeL1, opt.rhnReccDept, opt.rnnHdLyCnt, opt.uSimLstmBackLen) --inputSize, outputSize, recurrence_depth, rhn_layers, rho
             rhn:remember('both')

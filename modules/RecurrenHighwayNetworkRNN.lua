@@ -31,6 +31,7 @@ function RHN:__init(inputSize, outputSize, recurrence_depth, rhn_layers, rho)   
 
     -- for output(0), cell(0) and gradCell(T)
     self.zeroTensor = torch.Tensor()
+    self.zeroCellTab = {}   -- we use a table to store hidden states from multiple layers in this multi-layer RHN model
 
     self.cells = {}
     self.gradCells = {}
@@ -102,7 +103,6 @@ end
 -- layers and time for one batch, it is not clear to me how to construct such a shared weights dropout module.
 -- todo:pwang8. Nov 14, 2017. Maybe it can be achieved by adopting clone() or share() to construct customized dropout with shared weights
 function RHN:buildModel()
-    -- todo:pwang8. The implementation is not correct! The current problem is that the input structrue of the nn is not set correctly. Input from outside of the model should contain x, and 3 noise mask. Pay attention how updateOutput() works.
     local x                = nn.Identity()()    -- input of rhn_network
     local prev_s           = nn.Identity()()    -- previous hidden state s from each rhn (vertical) layer.
     local noise_i          = nn.Identity()()    -- the dropout mask (before) entering the hidden layer. It doubles the size of rnn_size, bcz we use this input twice to calculate hidden state_s in rhn module and the t_gate.
@@ -140,9 +140,9 @@ function RHN:getHiddenState(step, input) -- this input param is only used to set
                 self.zeroTensor:resize(self.outputSize):zero()
             end
         end
-        local _cellTab = {} -- Because this RHN model could have multiple layers, its hidden state_s is a table of all hidden states in all RHN layers at prior time step
-        for i=1, self.rhn_layers do table.insert(_cellTab, self.zeroTensor:clone()) end
-        prevCell = self.userPrevCell or self.cells[step] or _cellTab
+        self.zeroCellTab = {}
+        for i=1, self.rhn_layers do table.insert(self.zeroCellTab, self.zeroTensor:clone()) end
+        prevCell = self.userPrevCell or self.cells[step] or self.zeroCellTab
     else
         -- previous cell of this module
         prevCell = self.cells[step]
@@ -182,6 +182,8 @@ function RHN:updateOutput(input)
         output, cell = unpack(self.recurrentModule:updateOutput{_inputX, prevCell, _inputNoise_i, _inputNoise_h, _inputNoise_o})
     end
 
+    -- when the RHN layer number is 1, the cell will be unpacked into a single tensor, so need to wrap it back to a table. This is weird
+    if(torch.type(cell) ~= 'table') then cell = {cell} end
     self.outputs[self.step] = output    -- this is dropped_o
     self.cells[self.step] = cell    -- in this multi-layer RHN model, cell is a table of hidden state values from all (vertical) layers
 
@@ -204,7 +206,7 @@ function RHN:getGradHiddenState(step)
     step = step == nil and (_step - 1) or (step < 0) and (_step - step - 1) or step
     local gradCell
     if step == self.step-1 then
-        gradCell = self.userNextGradCell or self.gradCells[step] or self.zeroTensor
+        gradCell = self.userNextGradCell or self.gradCells[step] or self.zeroCellTab
     else
         gradCell = self.gradCells[step]
     end
@@ -216,7 +218,6 @@ function RHN:setGradHiddenState(step, gradHiddenState)
     step = step == nil and (_step - 1) or (step < 0) and (_step - step - 1) or step
     assert(torch.type(gradHiddenState) == 'table')  -- in this multi-layer RHN model, hidden state should be a table containing hidden states from all (vertical) rhn layers
     assert(#gradHiddenState == self.rhn_layers)
-
     self.gradCells[step] = gradHiddenState
 end
 
@@ -231,7 +232,7 @@ function RHN:_updateGradInput(input, gradOutput)
 
     -- backward propagate through this step
     local gradCell = self:getGradHiddenState(step)
-    assert(gradCell)
+    assert(gradCell and torch.type(gradCell) == 'table', 'Gradient of cell values in multi-layer RHN model is wrong.')
 
     self._gradOutputs[step] = nn.rnn.recursiveCopy(self._gradOutputs[step], gradOutput)
 
@@ -244,7 +245,7 @@ function RHN:_updateGradInput(input, gradOutput)
     local _inputX, _inputNoise_i, _inputNoise_h, _inputNoise_o = unpack(input)
     local _inTab = {_inputX, self:getHiddenState(step-1), _inputNoise_i, _inputNoise_h, _inputNoise_o}
     -- table.insert is not used bcz I'm afraid _accGradParameters() will use the same input table again
-
+print('#####', gradCell)
     local gradInputTable = recurrentModule:updateGradInput(_inTab, {gradOutput, gradCell})   -- updateGradInput(input, gradOutput), from https://github.com/torch/nn/blob/master/doc/module.md#updategradinputinput-gradoutput
     self:setGradHiddenState(step-1, gradInputTable[2])  -- use gradInputTable[2] bcz input into the multi-layer RHN model is {x, prev_s, noise_i, noise_h, noise_o}
 
@@ -271,6 +272,7 @@ end
 
 function RHN:clearState()
     self.zeroTensor:set()
+    self.zeroCellTab = {}
     if self.userPrevOutput then self.userPrevOutput:set() end
     if self.userPrevCell then self.userPrevCell:set() end
     if self.userGradPrevOutput then self.userGradPrevOutput:set() end
@@ -283,6 +285,7 @@ function RHN:type(type, ...)
         self:forget()
         self:clearState()
         self.zeroTensor = self.zeroTensor:type(type)
+        self.zeroCellTab = {}
     end
     return parent.type(self, type, ...)
 end
