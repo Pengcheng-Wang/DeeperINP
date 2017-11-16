@@ -158,6 +158,7 @@ function CIUserActsPredictor:_init(CIUserSimulator, opt)
             ------------------------------------------------------------
             -- Recurrent Highway Network
             ------------------------------------------------------------
+            if opt.rnnHdLyCnt > 1 then assert(self.inputFeatureNum==opt.rnnHdSizeL1, 'For multi-layer RHN, inputSize should equal to hiddenSize') end
             self.model:add(nn.Reshape(self.inputFeatureNum))
             local rhn
             rhn = nn.RHN(self.inputFeatureNum, opt.rnnHdSizeL1, opt.rhnReccDept, opt.rnnHdLyCnt, opt.uSimLstmBackLen) --inputSize, outputSize, recurrence_depth, rhn_layers, rho
@@ -348,6 +349,33 @@ function CIUserActsPredictor:_init(CIUserSimulator, opt)
     end
 
 
+    ----------------------------------------------------------------------
+    --- Prepare 3 dropout masks for RHN, right now it is only used by RHN
+    ---
+    self.rnn_noise_i = {}
+    self.rnn_noise_h = {}
+    self.rnn_noise_o = {}   --transfer_data(torch.zeros(params.batch_size, params.rnn_size))
+    if opt.uppModel == 'rnn_rhn' then
+        self.rnn_noise_i[1] = {}
+        self.rnn_noise_h[1] = {}
+        self.rnn_noise_o[1] = torch.zeros(self.opt.batchSize, opt.rnnHdSizeL1)
+        for _d = 1, opt.rnnHdLyCnt do
+            self.rnn_noise_i[1][_d] = torch.zeros(self.opt.batchSize, 2 * self.inputFeatureNum)
+            self.rnn_noise_h[1][_d] = torch.zeros(self.opt.batchSize, 2 * opt.rnnHdSizeL1)
+        end
+
+        for _h=2, opt.lstmHist do
+            self.rnn_noise_o[_h] = self.rnn_noise_o[1]:clone()
+            self.rnn_noise_i[_h] = {}
+            self.rnn_noise_h[_h] = {}
+            for _d = 1, opt.rnnHdLyCnt do
+                self.rnn_noise_i[_h][_d] = self.rnn_noise_i[1][_d]:clone()
+                self.rnn_noise_h[_h][_d] = self.rnn_noise_h[1][_d]:clone()
+            end
+        end
+    end
+
+
     -- retrieve parameters and gradients
     -- have to put these lines here below the gpu setting
     self.uapParam, self.uapDParam = self.model:getParameters()
@@ -486,6 +514,13 @@ function CIUserActsPredictor:trainOneEpoch()
             -- This should be invoked after input preprocess bcz we want to set an unique std
             -- I've tried to apply adding random normal noise in rnn form of data. It seems the result is not good.
             self.ciUserSimulator:UserSimDataAddRandNoise(inputs, true, 0.01)
+
+            if opt.uppModel == 'rnn_rhn' then
+                self:sampleRNNDropoutMask(self.opt.dropoutUSim)
+                for j = 1, self.opt.lstmHist do
+                    inputs[j] = {inputs[j], self.rnn_noise_i[j], self.rnn_noise_h[j], self.rnn_noise_o[j]}
+                end
+            end
 
             if self.opt.gpu > 0 then
                 nn.utils.recursiveType(inputs, 'torch.CudaTensor')
@@ -726,6 +761,35 @@ function CIUserActsPredictor:testActPredOnTestDetOneEpoch()
         return {tvalid, _logLoss/#self.ciUserSimulator.realUserDataStatesTest}
     end
 
+end
+
+function CIUserActsPredictor:sampleRNNDropoutMask(prob)
+    assert(prob>=0 and prob<1, 'Dropout prob should be in [0,1)')
+    if prob>0 then
+        self.rnn_noise_o[1]:bernoulli(1 - prob)
+        self.rnn_noise_o[1]:div(1 - prob)
+        for _d = 1, opt.rnnHdLyCnt do
+            self.rnn_noise_i[1][_d]:bernoulli(1 - prob)
+            self.rnn_noise_i[1][_d]:div(1 - prob)
+            self.rnn_noise_h[1][_d]:bernoulli(1 - prob)
+            self.rnn_noise_h[1][_d]:div(1 - prob)
+        end
+        for _h=2, opt.lstmHist do
+            self.rnn_noise_o[_h] = self.rnn_noise_o[1]:clone()
+            for _d = 1, opt.rnnHdLyCnt do
+                self.rnn_noise_i[_h][_d] = self.rnn_noise_i[1][_d]:clone()
+                self.rnn_noise_h[_h][_d] = self.rnn_noise_h[1][_d]:clone()
+            end
+        end
+    else    -- prob == 0
+        for _h=1, opt.lstmHist do
+            self.rnn_noise_o[_h]:zero():add(1)
+            for _d = 1, opt.rnnHdLyCnt do
+                self.rnn_noise_i[_h][_d]:zero():add(1)
+                self.rnn_noise_h[_h][_d]:zero():add(1)
+            end
+        end
+    end
 end
 
 return CIUserActsPredictor
