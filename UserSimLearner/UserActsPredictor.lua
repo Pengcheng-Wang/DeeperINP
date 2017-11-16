@@ -361,23 +361,24 @@ function CIUserActsPredictor:_init(CIUserSimulator, opt)
     self.rnn_noise_h = {}
     self.rnn_noise_o = {}   --transfer_data(torch.zeros(params.batch_size, params.rnn_size))
     if opt.uppModel == 'rnn_rhn' then
-        self.rnn_noise_i[1] = {}
-        self.rnn_noise_h[1] = {}
-        self.rnn_noise_o[1] = torch.zeros(self.opt.batchSize, opt.rnnHdSizeL1)
-        for _d = 1, opt.rnnHdLyCnt do
-            self.rnn_noise_i[1][_d] = torch.zeros(self.opt.batchSize, 2 * self.inputFeatureNum)
-            self.rnn_noise_h[1][_d] = torch.zeros(self.opt.batchSize, 2 * opt.rnnHdSizeL1)
-        end
-
-        for _h=2, opt.lstmHist do
-            self.rnn_noise_o[_h] = self.rnn_noise_o[1]:clone()
-            self.rnn_noise_i[_h] = {}
-            self.rnn_noise_h[_h] = {}
-            for _d = 1, opt.rnnHdLyCnt do
-                self.rnn_noise_i[_h][_d] = self.rnn_noise_i[1][_d]:clone()
-                self.rnn_noise_h[_h][_d] = self.rnn_noise_h[1][_d]:clone()
-            end
-        end
+        --self.rnn_noise_i[1] = {}
+        --self.rnn_noise_h[1] = {}
+        --self.rnn_noise_o[1] = torch.zeros(self.opt.batchSize, opt.rnnHdSizeL1)
+        --for _d = 1, opt.rnnHdLyCnt do
+        --    self.rnn_noise_i[1][_d] = torch.zeros(self.opt.batchSize, 2 * self.inputFeatureNum)
+        --    self.rnn_noise_h[1][_d] = torch.zeros(self.opt.batchSize, 2 * opt.rnnHdSizeL1)
+        --end
+        --
+        --for _h=2, opt.lstmHist do
+        --    self.rnn_noise_o[_h] = self.rnn_noise_o[1]:clone()
+        --    self.rnn_noise_i[_h] = {}
+        --    self.rnn_noise_h[_h] = {}
+        --    for _d = 1, opt.rnnHdLyCnt do
+        --        self.rnn_noise_i[_h][_d] = self.rnn_noise_i[1][_d]:clone()
+        --        self.rnn_noise_h[_h][_d] = self.rnn_noise_h[1][_d]:clone()
+        --    end
+        --end
+        self:buildRNNDropoutMaks(self.rnn_noise_i, self.rnn_noise_h, self.rnn_noise_o, self.inputFeatureNum, opt.rnnHdSizeL1, opt.rnnHdLyCnt, self.opt.batchSize)
     end
 
 
@@ -521,7 +522,7 @@ function CIUserActsPredictor:trainOneEpoch()
             self.ciUserSimulator:UserSimDataAddRandNoise(inputs, true, 0.01)
 
             if opt.uppModel == 'rnn_rhn' then
-                self:sampleRNNDropoutMask(self.opt.dropoutUSim)
+                self:sampleRNNDropoutMask(self.opt.dropoutUSim, self.rnn_noise_i, self.rnn_noise_h, self.rnn_noise_o, self.opt.rnnHdLyCnt)
                 for j = 1, self.opt.lstmHist do
                     inputs[j] = {inputs[j], self.rnn_noise_i[j], self.rnn_noise_h[j], self.rnn_noise_o[j]}
                 end
@@ -724,6 +725,18 @@ function CIUserActsPredictor:testActPredOnTestDetOneEpoch()
             end
             tabState[j] = prepUserState
         end
+
+        test_rnn_noise_i = {}
+        test_rnn_noise_h = {}
+        test_rnn_noise_o = {}
+        if opt.uppModel == 'rnn_rhn' then
+            self:buildRNNDropoutMaks(test_rnn_noise_i, test_rnn_noise_h, test_rnn_noise_o, self.inputFeatureNum, self.opt.rnnHdSizeL1, self.opt.rnnHdLyCnt, #self.rnnRealUserDataStatesTest)
+            self:sampleRNNDropoutMask(0, test_rnn_noise_i, test_rnn_noise_h, test_rnn_noise_o, self.opt.rnnHdLyCnt)
+            for j = 1, self.opt.lstmHist do
+                tabState[j] = {tabState[j], test_rnn_noise_i[j], test_rnn_noise_h[j], test_rnn_noise_o[j]}
+            end
+        end
+
         if self.opt.gpu > 0 then
             nn.utils.recursiveType(tabState, 'torch.CudaTensor')
         end
@@ -767,30 +780,51 @@ function CIUserActsPredictor:testActPredOnTestDetOneEpoch()
 
 end
 
-function CIUserActsPredictor:sampleRNNDropoutMask(prob)
+function CIUserActsPredictor:buildRNNDropoutMaks(rnn_noise_i, rnn_noise_h, rnn_noise_o, _inSize, _outSize, _hiddenLayerCnt, _batchSize)
+    -- rnn_noise_i, rnn_noise_h, rnn_noise_o should all be empty tables as input params
+    rnn_noise_i[1] = {}
+    rnn_noise_h[1] = {}
+    rnn_noise_o[1] = torch.zeros(_batchSize, _outSize)
+    for _d = 1, _hiddenLayerCnt do
+        rnn_noise_i[1][_d] = torch.zeros(_batchSize, 2 * _inSize)
+        rnn_noise_h[1][_d] = torch.zeros(_batchSize, 2 * _outSize)
+    end
+
+    for _h=2, self.opt.lstmHist do
+        rnn_noise_o[_h] = rnn_noise_o[1]:clone()
+        rnn_noise_i[_h] = {}
+        rnn_noise_h[_h] = {}
+        for _d = 1, _hiddenLayerCnt do
+            rnn_noise_i[_h][_d] = rnn_noise_i[1][_d]:clone()
+            rnn_noise_h[_h][_d] = rnn_noise_h[1][_d]:clone()
+        end
+    end
+end
+
+function CIUserActsPredictor:sampleRNNDropoutMask(prob, rnn_noise_i, rnn_noise_h, rnn_noise_o, _hiddenLayerCnt)
     assert(prob>=0 and prob<1, 'Dropout prob should be in [0,1)')
     if prob>0 then
-        self.rnn_noise_o[1]:bernoulli(1 - prob)
-        self.rnn_noise_o[1]:div(1 - prob)
-        for _d = 1, opt.rnnHdLyCnt do
-            self.rnn_noise_i[1][_d]:bernoulli(1 - prob)
-            self.rnn_noise_i[1][_d]:div(1 - prob)
-            self.rnn_noise_h[1][_d]:bernoulli(1 - prob)
-            self.rnn_noise_h[1][_d]:div(1 - prob)
+        rnn_noise_o[1]:bernoulli(1 - prob)
+        rnn_noise_o[1]:div(1 - prob)
+        for _d = 1, _hiddenLayerCnt do
+            rnn_noise_i[1][_d]:bernoulli(1 - prob)
+            rnn_noise_i[1][_d]:div(1 - prob)
+            rnn_noise_h[1][_d]:bernoulli(1 - prob)
+            rnn_noise_h[1][_d]:div(1 - prob)
         end
-        for _h=2, opt.lstmHist do
-            self.rnn_noise_o[_h] = self.rnn_noise_o[1]:clone()
-            for _d = 1, opt.rnnHdLyCnt do
-                self.rnn_noise_i[_h][_d] = self.rnn_noise_i[1][_d]:clone()
-                self.rnn_noise_h[_h][_d] = self.rnn_noise_h[1][_d]:clone()
+        for _h=2, self.opt.lstmHist do
+            rnn_noise_o[_h] = rnn_noise_o[1]:clone()
+            for _d = 1, _hiddenLayerCnt do
+                rnn_noise_i[_h][_d] = rnn_noise_i[1][_d]:clone()
+                rnn_noise_h[_h][_d] = rnn_noise_h[1][_d]:clone()
             end
         end
     else    -- prob == 0
-        for _h=1, opt.lstmHist do
-            self.rnn_noise_o[_h]:zero():add(1)
-            for _d = 1, opt.rnnHdLyCnt do
-                self.rnn_noise_i[_h][_d]:zero():add(1)
-                self.rnn_noise_h[_h][_d]:zero():add(1)
+        for _h=1, self.opt.lstmHist do
+            rnn_noise_o[_h]:zero():add(1)
+            for _d = 1, _hiddenLayerCnt do
+                rnn_noise_i[_h][_d]:zero():add(1)
+                rnn_noise_h[_h][_d]:zero():add(1)
             end
         end
     end
