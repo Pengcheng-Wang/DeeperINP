@@ -179,6 +179,12 @@ function RHN:updateOutput(input)
         -- and output should be {dropped_o, nn.Identity()(next_s)}
         output, cell = unpack(recurrentModule:updateOutput{_inputX, prevCell, _inputNoise_i, _inputNoise_h, _inputNoise_o})
     else
+        if self.step==1 then prevCell = self.zeroCellTab else prevCell = self.cell end
+        -- There was an error if prevCell is not set back to self.cell, only using value from self:getHiddenState
+        -- in evaluation mode. And this problem is due to the design of nngraph and the recurrence mechanism in rnn lib.
+        -- Simply, the invokation of updateOutput() in nngraph's gmodule will erase its input nodes, which might be the
+        -- output of the same nn from prior time step. This problem is solved following post in this link:
+        -- https://github.com/Element-Research/rnn/blob/master/recursiveUtils.lua
         output, cell = unpack(self.recurrentModule:updateOutput{_inputX, prevCell, _inputNoise_i, _inputNoise_h, _inputNoise_o})
     end
 
@@ -189,6 +195,11 @@ function RHN:updateOutput(input)
 
     self.output = output
     self.cell = cell
+    -- Get a deep copy of the cell value for its usage in evaluation mode
+    if self.train == false then 
+        self.cell = rnn.recursiveNew(cell)
+        rnn.recursiveCopy(self.cell, cell)
+    end
 
     self.step = self.step + 1
     self.gradPrevOutput = nil
@@ -273,7 +284,7 @@ end
 
 function RHN:clearState()
     self.zeroTensor:set()
-    self.zeroCellTab = {}
+    -- self.zeroCellTab = {}
     if self.userPrevOutput then self.userPrevOutput:set() end
     if self.userPrevCell then self.userPrevCell:set() end
     if self.userGradPrevOutput then self.userGradPrevOutput:set() end
@@ -286,7 +297,7 @@ function RHN:type(type, ...)
         self:forget()
         self:clearState()
         self.zeroTensor = self.zeroTensor:type(type)
-        self.zeroCellTab = {}
+        -- self.zeroCellTab = {}
     end
     return parent.type(self, type, ...)
 end

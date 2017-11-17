@@ -707,6 +707,8 @@ end
 
 -- evaluation function on test/train_validation set
 function CIUserActsPredictor:testActPredOnTestDetOneEpoch()
+    -- just in case:
+    collectgarbage()
     -- Confusion matrix for action prediction (15 class)
     --    local actPredTP = torch.Tensor(self.ciUserSimulator.CIFr.usrActInd_end):fill(1e-3)
     --    local actPredFP = torch.Tensor(self.ciUserSimulator.CIFr.usrActInd_end):fill(1e-3)
