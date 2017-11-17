@@ -439,7 +439,7 @@ function CIUserActsPredictor:trainOneEpoch()
             inputs = self.ciUserSimulator:preprocessUserStateData(inputs, self.opt.prepro)
             -- Try to add random normal noise to input features and see how it performs
             -- This should be invoked after input preprocess bcz we want to set an unique std
-            self.ciUserSimulator:UserSimDataAddRandNoise(inputs, false, 0.01)
+            --self.ciUserSimulator:UserSimDataAddRandNoise(inputs, false, 0.01)
 
             if self.opt.gpu > 0 then
                 inputs = inputs:cuda()
@@ -456,9 +456,6 @@ function CIUserActsPredictor:trainOneEpoch()
                 targets[j] = torch.Tensor(self.opt.batchSize)
                 k = 1
                 for i = lstmIter, math.min(lstmIter+self.opt.batchSize-1, #self.rnnRealUserDataStates) do
-                    --local input = self.rnnRealUserDataStates[i][j]
-                    --input = self.ciUserSimulator:preprocessUserStateData(input, self.opt.prepro)
-                    --local target = self.rnnRealUserDataActs[i][j]
                     inputs[j][k] = self.rnnRealUserDataStates[i][j]
                     targets[j][k] = self.rnnRealUserDataActs[i][j]
                     k = k + 1
@@ -470,9 +467,6 @@ function CIUserActsPredictor:trainOneEpoch()
                 while k <= self.opt.batchSize do
                     local randInd = torch.random(1, #self.rnnRealUserDataStates)
                     for j = 1, self.opt.lstmHist do
-                        --local input = self.rnnRealUserDataStates[randInd][j]
-                        --input = self.ciUserSimulator:preprocessUserStateData(input, self.opt.prepro)
-                        --local target = self.rnnRealUserDataActs[randInd][j]
                         inputs[j][k] = self.rnnRealUserDataStates[randInd][j]
                         targets[j][k] = self.rnnRealUserDataActs[randInd][j]
                     end
@@ -499,7 +493,7 @@ function CIUserActsPredictor:trainOneEpoch()
             -- Try to add random normal noise to input features and see how it performs
             -- This should be invoked after input preprocess bcz we want to set an unique std
             -- I've tried to apply adding random normal noise in rnn form of data. It seems the result is not good.
-            self.ciUserSimulator:UserSimDataAddRandNoise(inputs, true, 0.01)
+            --self.ciUserSimulator:UserSimDataAddRandNoise(inputs, true, 0.01)
 
             if opt.uppModel == 'rnn_rhn' then
                 self:sampleRNNDropoutMask(self.opt.dropoutUSim, self.rnn_noise_i, self.rnn_noise_h, self.rnn_noise_o, self.opt.rnnHdLyCnt)
