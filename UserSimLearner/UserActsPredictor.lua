@@ -159,12 +159,6 @@ function CIUserActsPredictor:_init(CIUserSimulator, opt)
             -- Recurrent Highway Network
             ------------------------------------------------------------
             if opt.rnnHdLyCnt > 1 then assert(self.inputFeatureNum==opt.rnnHdSizeL1, 'For multi-layer RHN, inputSize should equal to hiddenSize') end
-            --local _rhnReshaper = nn.ParallelTable()
-            --_rhnReshaper:add(nn.Reshape(self.inputFeatureNum))
-            --_rhnReshaper:add(nn.Reshape(self.inputFeatureNum))
-            --_rhnReshaper:add(nn.Reshape(self.inputFeatureNum))
-            --_rhnReshaper:add(nn.Reshape(self.inputFeatureNum))
-            --self.model:add(_rhnReshaper)
             local rhn
             rhn = nn.RHN(self.inputFeatureNum, opt.rnnHdSizeL1, opt.rhnReccDept, opt.rnnHdLyCnt, opt.uSimLstmBackLen) --inputSize, outputSize, recurrence_depth, rhn_layers, rho
             rhn:remember('both')
@@ -361,23 +355,6 @@ function CIUserActsPredictor:_init(CIUserSimulator, opt)
     self.rnn_noise_h = {}
     self.rnn_noise_o = {}   --transfer_data(torch.zeros(params.batch_size, params.rnn_size))
     if opt.uppModel == 'rnn_rhn' then
-        --self.rnn_noise_i[1] = {}
-        --self.rnn_noise_h[1] = {}
-        --self.rnn_noise_o[1] = torch.zeros(self.opt.batchSize, opt.rnnHdSizeL1)
-        --for _d = 1, opt.rnnHdLyCnt do
-        --    self.rnn_noise_i[1][_d] = torch.zeros(self.opt.batchSize, 2 * self.inputFeatureNum)
-        --    self.rnn_noise_h[1][_d] = torch.zeros(self.opt.batchSize, 2 * opt.rnnHdSizeL1)
-        --end
-        --
-        --for _h=2, opt.lstmHist do
-        --    self.rnn_noise_o[_h] = self.rnn_noise_o[1]:clone()
-        --    self.rnn_noise_i[_h] = {}
-        --    self.rnn_noise_h[_h] = {}
-        --    for _d = 1, opt.rnnHdLyCnt do
-        --        self.rnn_noise_i[_h][_d] = self.rnn_noise_i[1][_d]:clone()
-        --        self.rnn_noise_h[_h][_d] = self.rnn_noise_h[1][_d]:clone()
-        --    end
-        --end
         self:buildRNNDropoutMaks(self.rnn_noise_i, self.rnn_noise_h, self.rnn_noise_o, self.inputFeatureNum, opt.rnnHdSizeL1, opt.rnnHdLyCnt, self.opt.batchSize)
     end
 
@@ -511,6 +488,9 @@ function CIUserActsPredictor:trainOneEpoch()
             if self.opt.actPredDataAug > 0 then
                 -- Data augmentation
                 self.ciUserSimulator:UserSimDataAugment(inputs, targets, true)
+                if opt.uppModel == 'rnn_rhn' then
+                    self:buildRNNDropoutMaks(self.rnn_noise_i, self.rnn_noise_h, self.rnn_noise_o, self.inputFeatureNum, opt.rnnHdSizeL1, opt.rnnHdLyCnt, inputs[1]:size(1))
+                end
             end
             -- Should do input feature pre-processing after data augmentation
             for ik=1, #inputs do

@@ -184,7 +184,7 @@ function RHN:updateOutput(input)
         -- in evaluation mode. And this problem is due to the design of nngraph and the recurrence mechanism in rnn lib.
         -- Simply, the invokation of updateOutput() in nngraph's gmodule will erase its input nodes, which might be the
         -- output of the same nn from prior time step. This problem is solved following post in this link:
-        -- https://github.com/Element-Research/rnn/blob/master/recursiveUtils.lua
+        -- https://github.com/Element-Research/rnn/issues/172
         output, cell = unpack(self.recurrentModule:updateOutput{_inputX, prevCell, _inputNoise_i, _inputNoise_h, _inputNoise_o})
     end
 
