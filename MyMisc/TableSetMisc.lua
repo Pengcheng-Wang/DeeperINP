@@ -84,4 +84,65 @@ function TableSetMisc.static.fastLSTMForgetGateInit(fLstmM, dropoutRate, fLstmSi
     end
 end
 
+--- This function is used by rnn modules which utilize dropout masks from outside of the modules, e.g., rhn, BayesianLSTM
+--- An assumption here is for multi-layer RNN modules, each hidden layer has the same size (number of hidden neurons)
+--- params:
+--- rnn_noise_i, rnn_noise_h, rnn_noise_o are refs to tables of dropout mask tensor for rnn models
+--- gateNum is number of gates adopted by the model. RHN has 2 gates, LSTM has 4 gates.
+function TableSetMisc.static.buildRNNDropoutMask(rnn_noise_i, rnn_noise_h, rnn_noise_o, _inSize, _outSize, _hiddenLayerCnt, _batchSize, lstmHistLen, gateNum)
+    -- rnn_noise_i, rnn_noise_h, rnn_noise_o are dropout masks for input, hidden, and output neurons for rnn models
+    rnn_noise_i[1] = {}
+    rnn_noise_h[1] = {}
+    rnn_noise_o[1] = torch.zeros(_batchSize, _outSize)
+    for _d = 1, _hiddenLayerCnt do
+        if _d == 1 then
+            rnn_noise_i[1][_d] = torch.zeros(_batchSize, gateNum * _inSize)
+        else
+            rnn_noise_i[1][_d] = torch.zeros(_batchSize, gateNum * _outSize)  -- assumption: rnn/rhn/lstm with more than 2 hidden layers would have same size for each hidden layer
+        end
+        rnn_noise_h[1][_d] = torch.zeros(_batchSize, gateNum * _outSize)
+    end
+
+    for _h=2, lstmHistLen do
+        rnn_noise_o[_h] = rnn_noise_o[1]:clone()
+        rnn_noise_i[_h] = {}
+        rnn_noise_h[_h] = {}
+        for _d = 1, _hiddenLayerCnt do
+            rnn_noise_i[_h][_d] = rnn_noise_i[1][_d]:clone()
+            rnn_noise_h[_h][_d] = rnn_noise_h[1][_d]:clone()
+        end
+    end
+end
+
+--- This function is used by rnn modules which utilize dropout masks from outside of the modules, e.g., rhn, BayesianLSTM
+--- An assumption here is for multi-layer RNN modules, each hidden layer has the same size (number of hidden neurons)
+function TableSetMisc.static.sampleRNNDropoutMask(prob, rnn_noise_i, rnn_noise_h, rnn_noise_o, _hiddenLayerCnt, lstmHistLen)
+    assert(prob>=0 and prob<1, 'Dropout prob should be in [0,1)')
+    if prob>0 then
+        rnn_noise_o[1]:bernoulli(1 - prob)
+        rnn_noise_o[1]:div(1 - prob)
+        for _d = 1, _hiddenLayerCnt do
+            rnn_noise_i[1][_d]:bernoulli(1 - prob)
+            rnn_noise_i[1][_d]:div(1 - prob)
+            rnn_noise_h[1][_d]:bernoulli(1 - prob)
+            rnn_noise_h[1][_d]:div(1 - prob)
+        end
+        for _h=2, lstmHistLen do
+            rnn_noise_o[_h] = rnn_noise_o[1]:clone()
+            for _d = 1, _hiddenLayerCnt do
+                rnn_noise_i[_h][_d] = rnn_noise_i[1][_d]:clone()
+                rnn_noise_h[_h][_d] = rnn_noise_h[1][_d]:clone()
+            end
+        end
+    else    -- prob == 0
+        for _h=1, lstmHistLen do
+            rnn_noise_o[_h]:zero():add(1)
+            for _d = 1, _hiddenLayerCnt do
+                rnn_noise_i[_h][_d]:zero():add(1)
+                rnn_noise_h[_h][_d]:zero():add(1)
+            end
+        end
+    end
+end
+
 return TableSetMisc

@@ -54,8 +54,8 @@ function BayesianLSTM:buildBayesianLSTMUnit(x, prev_c, prev_h, noise_i, noise_h,
     local i2h, h2h         = {}, {}
     for i = 1, 4 do
         -- Use select table to fetch each gate
-        local dropped_x      = local_Dropout(x, nn.SelectTable(i)(sliced_noise_i))
-        local dropped_h      = local_Dropout(prev_h, nn.SelectTable(i)(sliced_noise_h))
+        local dropped_x      = self:local_Dropout(x, nn.SelectTable(i)(sliced_noise_i))
+        local dropped_h      = self:local_Dropout(prev_h, nn.SelectTable(i)(sliced_noise_h))
         -- assumption: for more than 1 hidden layer LSTM models, we assume each layer has the same size
         if _layerInd == 1 then
             i2h[i]           = nn.Linear(self.inputSize, self.outputSize)(dropped_x)
@@ -156,7 +156,7 @@ function BayesianLSTM:updateOutput(input)
     -- And this actually is the required input format for invoking the forward function
     -- when utilizing this multi-layer RNN module
     local _inputX, _inputNoise_i, _inputNoise_h, _inputNoise_o = unpack(input)
-    local prevCell = unpack(self:getHiddenState(self.step-1, input))
+    local prevCell = self:getHiddenState(self.step-1, _inputX)
 
     -- {output(t), cell(t)} = lstm{x, prev_s, noise_i, noise_h, noise_o}
     local output, cell

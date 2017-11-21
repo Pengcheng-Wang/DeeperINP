@@ -156,13 +156,29 @@ function CIUserActsPredictor:_init(CIUserSimulator, opt)
 
         elseif opt.uppModel == 'rnn_rhn' then
             ------------------------------------------------------------
-            -- Recurrent Highway Network
+            -- Recurrent Highway Network (dropout mask defined outside rnn model)
             ------------------------------------------------------------
-            if opt.rnnHdLyCnt > 1 then assert(self.inputFeatureNum==opt.rnnHdSizeL1, 'For multi-layer RHN, inputSize should equal to hiddenSize') end
             local rhn
             rhn = nn.RHN(self.inputFeatureNum, opt.rnnHdSizeL1, opt.rhnReccDept, opt.rnnHdLyCnt, opt.uSimLstmBackLen) --inputSize, outputSize, recurrence_depth, rhn_layers, rho
             rhn:remember('both')
             self.model:add(rhn)
+            self.model:add(nn.NormStabilizer())
+
+            self.model:add(nn.Linear(opt.rnnHdSizeL1, #classes))
+
+            self.model:add(nn.LogSoftMax())
+            self.model = nn.Sequencer(self.model)
+            ------------------------------------------------------------
+
+        elseif opt.uppModel == 'rnn_blstm' then
+            ------------------------------------------------------------
+            -- Bayesian LSTM implemented following Yarin Gal's code (dropout mask defined outside rnn model)
+            ------------------------------------------------------------
+            require 'modules.LSTMBayesianRNN'
+            local bay_lstm
+            bay_lstm = nn.BayesianLSTM(self.inputFeatureNum, opt.rnnHdSizeL1, opt.rnnHdLyCnt, opt.uSimLstmBackLen) --inputSize, outputSize, rhn_layers, rho
+            bay_lstm:remember('both')
+            self.model:add(bay_lstm)
             self.model:add(nn.NormStabilizer())
 
             self.model:add(nn.Linear(opt.rnnHdSizeL1, #classes))
@@ -354,8 +370,8 @@ function CIUserActsPredictor:_init(CIUserSimulator, opt)
     self.rnn_noise_i = {}
     self.rnn_noise_h = {}
     self.rnn_noise_o = {}   --transfer_data(torch.zeros(params.batch_size, params.rnn_size))
-    if opt.uppModel == 'rnn_rhn' then
-        self:buildRNNDropoutMaks(self.rnn_noise_i, self.rnn_noise_h, self.rnn_noise_o, self.inputFeatureNum, opt.rnnHdSizeL1, opt.rnnHdLyCnt, self.opt.batchSize)
+    if self.opt.uppModelRNNDom > 0 then
+        TableSet.buildRNNDropoutMask(self.rnn_noise_i, self.rnn_noise_h, self.rnn_noise_o, self.inputFeatureNum, opt.rnnHdSizeL1, opt.rnnHdLyCnt, self.opt.batchSize, self.opt.lstmHist, self.opt.uppModelRNNDom)
     end
 
 
@@ -482,8 +498,8 @@ function CIUserActsPredictor:trainOneEpoch()
             if self.opt.actPredDataAug > 0 then
                 -- Data augmentation
                 self.ciUserSimulator:UserSimDataAugment(inputs, targets, true)
-                if opt.uppModel == 'rnn_rhn' then
-                    self:buildRNNDropoutMaks(self.rnn_noise_i, self.rnn_noise_h, self.rnn_noise_o, self.inputFeatureNum, opt.rnnHdSizeL1, opt.rnnHdLyCnt, inputs[1]:size(1))
+                if self.opt.uppModelRNNDom > 0 then
+                    TableSet.buildRNNDropoutMask(self.rnn_noise_i, self.rnn_noise_h, self.rnn_noise_o, self.inputFeatureNum, self.opt.rnnHdSizeL1, self.opt.rnnHdLyCnt, inputs[1]:size(1), self.opt.lstmHist, self.opt.uppModelRNNDom)
                 end
             end
             -- Should do input feature pre-processing after data augmentation
@@ -495,8 +511,8 @@ function CIUserActsPredictor:trainOneEpoch()
             -- I've tried to apply adding random normal noise in rnn form of data. It seems the result is not good.
             --self.ciUserSimulator:UserSimDataAddRandNoise(inputs, true, 0.01)
 
-            if opt.uppModel == 'rnn_rhn' then
-                self:sampleRNNDropoutMask(self.opt.dropoutUSim, self.rnn_noise_i, self.rnn_noise_h, self.rnn_noise_o, self.opt.rnnHdLyCnt)
+            if self.opt.uppModelRNNDom > 0 then
+                TableSet.sampleRNNDropoutMask(self.opt.dropoutUSim, self.rnn_noise_i, self.rnn_noise_h, self.rnn_noise_o, self.opt.rnnHdLyCnt, self.opt.lstmHist)
                 for j = 1, self.opt.lstmHist do
                     inputs[j] = {inputs[j], self.rnn_noise_i[j], self.rnn_noise_h[j], self.rnn_noise_o[j]}
                 end
@@ -705,9 +721,9 @@ function CIUserActsPredictor:testActPredOnTestDetOneEpoch()
         test_rnn_noise_i = {}
         test_rnn_noise_h = {}
         test_rnn_noise_o = {}
-        if opt.uppModel == 'rnn_rhn' then
-            self:buildRNNDropoutMaks(test_rnn_noise_i, test_rnn_noise_h, test_rnn_noise_o, self.inputFeatureNum, self.opt.rnnHdSizeL1, self.opt.rnnHdLyCnt, #self.rnnRealUserDataStatesTest)
-            self:sampleRNNDropoutMask(0, test_rnn_noise_i, test_rnn_noise_h, test_rnn_noise_o, self.opt.rnnHdLyCnt)
+        if self.opt.uppModelRNNDom > 0 then
+            TableSet.buildRNNDropoutMask(test_rnn_noise_i, test_rnn_noise_h, test_rnn_noise_o, self.inputFeatureNum, self.opt.rnnHdSizeL1, self.opt.rnnHdLyCnt, #self.rnnRealUserDataStatesTest, self.opt.lstmHist, self.opt.uppModelRNNDom)
+            TableSet.sampleRNNDropoutMask(0, test_rnn_noise_i, test_rnn_noise_h, test_rnn_noise_o, self.opt.rnnHdLyCnt, self.opt.lstmHist)
             for j = 1, self.opt.lstmHist do
                 tabState[j] = {tabState[j], test_rnn_noise_i[j], test_rnn_noise_h[j], test_rnn_noise_o[j]}
             end
@@ -756,54 +772,54 @@ function CIUserActsPredictor:testActPredOnTestDetOneEpoch()
 
 end
 
-function CIUserActsPredictor:buildRNNDropoutMaks(rnn_noise_i, rnn_noise_h, rnn_noise_o, _inSize, _outSize, _hiddenLayerCnt, _batchSize)
-    -- rnn_noise_i, rnn_noise_h, rnn_noise_o should all be empty tables as input params
-    rnn_noise_i[1] = {}
-    rnn_noise_h[1] = {}
-    rnn_noise_o[1] = torch.zeros(_batchSize, _outSize)
-    for _d = 1, _hiddenLayerCnt do
-        rnn_noise_i[1][_d] = torch.zeros(_batchSize, 2 * _inSize)
-        rnn_noise_h[1][_d] = torch.zeros(_batchSize, 2 * _outSize)
-    end
-
-    for _h=2, self.opt.lstmHist do
-        rnn_noise_o[_h] = rnn_noise_o[1]:clone()
-        rnn_noise_i[_h] = {}
-        rnn_noise_h[_h] = {}
-        for _d = 1, _hiddenLayerCnt do
-            rnn_noise_i[_h][_d] = rnn_noise_i[1][_d]:clone()
-            rnn_noise_h[_h][_d] = rnn_noise_h[1][_d]:clone()
-        end
-    end
-end
-
-function CIUserActsPredictor:sampleRNNDropoutMask(prob, rnn_noise_i, rnn_noise_h, rnn_noise_o, _hiddenLayerCnt)
-    assert(prob>=0 and prob<1, 'Dropout prob should be in [0,1)')
-    if prob>0 then
-        rnn_noise_o[1]:bernoulli(1 - prob)
-        rnn_noise_o[1]:div(1 - prob)
-        for _d = 1, _hiddenLayerCnt do
-            rnn_noise_i[1][_d]:bernoulli(1 - prob)
-            rnn_noise_i[1][_d]:div(1 - prob)
-            rnn_noise_h[1][_d]:bernoulli(1 - prob)
-            rnn_noise_h[1][_d]:div(1 - prob)
-        end
-        for _h=2, self.opt.lstmHist do
-            rnn_noise_o[_h] = rnn_noise_o[1]:clone()
-            for _d = 1, _hiddenLayerCnt do
-                rnn_noise_i[_h][_d] = rnn_noise_i[1][_d]:clone()
-                rnn_noise_h[_h][_d] = rnn_noise_h[1][_d]:clone()
-            end
-        end
-    else    -- prob == 0
-        for _h=1, self.opt.lstmHist do
-            rnn_noise_o[_h]:zero():add(1)
-            for _d = 1, _hiddenLayerCnt do
-                rnn_noise_i[_h][_d]:zero():add(1)
-                rnn_noise_h[_h][_d]:zero():add(1)
-            end
-        end
-    end
-end
+--function CIUserActsPredictor:buildRNNDropoutMaks(rnn_noise_i, rnn_noise_h, rnn_noise_o, _inSize, _outSize, _hiddenLayerCnt, _batchSize)
+--    -- rnn_noise_i, rnn_noise_h, rnn_noise_o should all be empty tables as input params
+--    rnn_noise_i[1] = {}
+--    rnn_noise_h[1] = {}
+--    rnn_noise_o[1] = torch.zeros(_batchSize, _outSize)
+--    for _d = 1, _hiddenLayerCnt do
+--        rnn_noise_i[1][_d] = torch.zeros(_batchSize, 2 * _inSize)
+--        rnn_noise_h[1][_d] = torch.zeros(_batchSize, 2 * _outSize)
+--    end
+--
+--    for _h=2, self.opt.lstmHist do
+--        rnn_noise_o[_h] = rnn_noise_o[1]:clone()
+--        rnn_noise_i[_h] = {}
+--        rnn_noise_h[_h] = {}
+--        for _d = 1, _hiddenLayerCnt do
+--            rnn_noise_i[_h][_d] = rnn_noise_i[1][_d]:clone()
+--            rnn_noise_h[_h][_d] = rnn_noise_h[1][_d]:clone()
+--        end
+--    end
+--end
+--
+--function CIUserActsPredictor:sampleRNNDropoutMask(prob, rnn_noise_i, rnn_noise_h, rnn_noise_o, _hiddenLayerCnt)
+--    assert(prob>=0 and prob<1, 'Dropout prob should be in [0,1)')
+--    if prob>0 then
+--        rnn_noise_o[1]:bernoulli(1 - prob)
+--        rnn_noise_o[1]:div(1 - prob)
+--        for _d = 1, _hiddenLayerCnt do
+--            rnn_noise_i[1][_d]:bernoulli(1 - prob)
+--            rnn_noise_i[1][_d]:div(1 - prob)
+--            rnn_noise_h[1][_d]:bernoulli(1 - prob)
+--            rnn_noise_h[1][_d]:div(1 - prob)
+--        end
+--        for _h=2, self.opt.lstmHist do
+--            rnn_noise_o[_h] = rnn_noise_o[1]:clone()
+--            for _d = 1, _hiddenLayerCnt do
+--                rnn_noise_i[_h][_d] = rnn_noise_i[1][_d]:clone()
+--                rnn_noise_h[_h][_d] = rnn_noise_h[1][_d]:clone()
+--            end
+--        end
+--    else    -- prob == 0
+--        for _h=1, self.opt.lstmHist do
+--            rnn_noise_o[_h]:zero():add(1)
+--            for _d = 1, _hiddenLayerCnt do
+--                rnn_noise_i[_h][_d]:zero():add(1)
+--                rnn_noise_h[_h][_d]:zero():add(1)
+--            end
+--        end
+--    end
+--end
 
 return CIUserActsPredictor

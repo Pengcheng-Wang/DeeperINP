@@ -11,7 +11,8 @@ opt = lapp[[
        --trType           (default "rl")        training type : sc (score) | ac (action) | bg (behavior generation) | rl (implement rlenvs API) | ev (evaluation of act/score prediction)
        -s,--save          (default "upplogs")   subdirectory to save logs
        -n,--ciunet        (default "")          reload pretrained CI user simulation network
-       -m,--uppModel      (default "rnn_lstm")      type of model to train: moe | mlp | linear | rnn_lstm | rnn_rhn
+       -m,--uppModel      (default "rnn_lstm")  type of model to train: moe | mlp | linear | rnn_lstm | rnn_rhn | rnn_blstm
+       --uppModelRNNDom   (default 0)           indicator of whether the model is an RNN model and uses dropout masks from outside of the model. 0 for not using outside mask. Otherwise, this number represents the number of gates used in RNN model
        -f,--full                                use the full dataset
        -p,--plot                                plot while training
        -o,--optimization  (default "adam")       optimization: SGD | LBFGS | adam | rmsprop
@@ -27,7 +28,7 @@ opt = lapp[[
        --prepro           (default "std")       input state feature preprocessing: rsc | std
        --rnnHdSizeL1      (default 32)          lstm hidden layer size
        --rnnHdSizeL2      (default 0)           lstm hidden layer size in 2nd lstm layer
-       --rnnHdLyCnt       (default 2)           number of lstm hidden layer. Default is 2 bcz only when rnnHdSizeL2 is not 0 this opt will be examined. The RHN layer number also uses this opt param
+       --rnnHdLyCnt       (default 2)           number of lstm hidden layer. Default is 2 bcz only when rnnHdSizeL2 is not 0 this opt will be examined. The RHN and Bayesian LSTM rnn number also uses this opt param
        --rhnReccDept      (default 5)           The recurrent depth of RHN model in one layer
        --lstmHist         (default 10)          lstm hist length. This influence the rnn tensor table construction in data preparation
        --uSimGru          (default 0)           whether to substitue lstm with gru (0 for using lstm, 1 for GRU)
@@ -58,6 +59,16 @@ torch.setnumthreads(opt.threads)
 torch.setdefaulttensortype('torch.FloatTensor')
 -- Set manual seed
 torch.manualSeed(opt.seed)
+
+-- set the uppModelRNNDom indicator in opt, which indicates whether the model is an RNN model, and uses dropout mask from outside the model construction
+if opt.uppModel == 'rnn_rhn' then
+    -- right now, the rhn model, and Bayesian lstm model (following Gal's implementation) use outside dropout mask
+    opt.uppModelRNNDom = 2
+elseif opt.uppModel == 'rnn_blstm' then
+    opt.uppModelRNNDom = 4
+else
+    opt.uppModelRNNDom = 0
+end
 
 -- Read CI trace and survey data files, and do validation
 local fr = CIFileReader()

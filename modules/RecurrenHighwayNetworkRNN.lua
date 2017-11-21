@@ -39,10 +39,16 @@ end
 
 -------------------------- factory methods -----------------------------
 
-function RHN:buildRHNUnit(x, prev_h, noise_i, noise_h)
+function RHN:buildRHNUnit(x, prev_h, noise_i, noise_h, stacked_layer_ind)
     -- Reshape to (batch_size, n_gates, hid_size)
     -- Then slice the n_gates dimension, i.e dimension 2
-    local reshaped_noise_i = nn.Reshape(2, self.inputSize)(noise_i)   -- this might mean rhn has 2 gates, and this is the noise mask for input
+    -- the stacked_layer_ind param is the index of stacked (vertical) recurrent layer in the RHN model
+    local reshaped_noise_i
+    if stacked_layer_ind == 1 then
+        reshaped_noise_i = nn.Reshape(2, self.inputSize)(noise_i)   -- this might mean rhn has 2 gates, and this is the noise mask for input
+    else
+        reshaped_noise_i = nn.Reshape(2, self.outputSize)(noise_i)   -- this might mean rhn has 2 gates, and this is the noise mask for input
+    end
     local reshaped_noise_h = nn.Reshape(2, self.outputSize)(noise_h)   -- this should be the noise for prior hidden state
     local sliced_noise_i   = nn.SplitTable(2)(reshaped_noise_i)   -- SplitTable(2) means split the input tensor along the 2nd dim, which is the num of gates dim
     local sliced_noise_h   = nn.SplitTable(2)(reshaped_noise_h)   -- after SplitTable, the output is a table of tensors
@@ -61,7 +67,11 @@ function RHN:buildRHNUnit(x, prev_h, noise_i, noise_h)
                 -- Use select table to fetch each gate
                 local dropped_x         = self:local_Dropout(x, nn.SelectTable(i)(sliced_noise_i)) -- slidced_noise_i is a table of tensors. So there are 2 gates and corresponding noise mask
                 dropped_h_tab[layer_i]  = self:local_Dropout(prev_h, nn.SelectTable(i)(sliced_noise_h))  -- the 2 gates contain one gate for calc hidden state, and the other gate being the transform gate
-                i2h[i]                  = nn.Linear(self.inputSize, self.outputSize)(dropped_x)    -- there are two i2h and h2h_tab bcz in equation 7 and 8 x and hidden state_h are utilized twice (2 sets of matrix multiplication)
+                if stacked_layer_ind == 1 then
+                    i2h[i]                  = nn.Linear(self.inputSize, self.outputSize)(dropped_x)    -- there are two i2h and h2h_tab bcz in equation 7 and 8 x and hidden state_h are utilized twice (2 sets of matrix multiplication)
+                else
+                    i2h[i]                  = nn.Linear(self.outputSize, self.outputSize)(dropped_x)    -- there are two i2h and h2h_tab bcz in equation 7 and 8 x and hidden state_h are utilized twice (2 sets of matrix multiplication)
+                end
                 h2h_tab[layer_i][i]     = nn.Linear(self.outputSize, self.outputSize)(dropped_h_tab[layer_i])
             end
             t_gate_tab[layer_i]       = nn.Sigmoid()(nn.AddConstant(-2, False)(nn.CAddTable()({i2h[1], h2h_tab[layer_i][1]}))) -- this is the tranform module in equation 8 in the paper. I guess the AddConstant is an init step
@@ -117,7 +127,7 @@ function RHN:buildModel()
         local prev_h         = split[layer_idx]         -- the prev_h is the hidden state_s value from previous time step. Here it does not concern recurrent depth, which is sth studied inside rhn
         local n_i            = noise_i_split[layer_idx]     -- n_i and n_h are the dropout mask. n_i is the dropout mask for each (vertical) rhn layer's (vertical) input
         local n_h            = noise_h_split[layer_idx]     -- n_h is the dropout mask for each (horizontal) rhn unit.
-        local next_h = self:buildRHNUnit(i[layer_idx - 1], prev_h, n_i, n_h)
+        local next_h = self:buildRHNUnit(i[layer_idx - 1], prev_h, n_i, n_h, layer_idx)
         table.insert(next_s, next_h)
         i[layer_idx] = next_h   -- this next_h is the state_s value, which is the output of one rhn module (may contain multiple recurrent depth)
     end
@@ -307,4 +317,3 @@ function RHN:local_Dropout(input, noise)
     return nn.CMulTable()({input, noise})
 end
 
--- todo:pwang8. Nov 14, 2017. I guess I need a forget() to clear and reset dropout noise. Not sure if it is correct right now
