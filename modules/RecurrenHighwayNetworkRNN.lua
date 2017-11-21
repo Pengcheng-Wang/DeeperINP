@@ -196,7 +196,8 @@ function RHN:updateOutput(input)
     self.output = output
     self.cell = cell
     -- Get a deep copy of the cell value for its usage in evaluation mode
-    if self.train == false then 
+    if self.train == false then
+        self.output = output:clone()    -- newly added, hope it works correctly
         self.cell = rnn.recursiveNew(cell)
         rnn.recursiveCopy(self.cell, cell)
     end
