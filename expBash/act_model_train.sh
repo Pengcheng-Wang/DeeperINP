@@ -509,6 +509,7 @@ do
     for recD in 3 5 8
     do
         echo 'in RHN round' ${recD}
+        date +%Y,%m,%d-%H:%M:%S
         for t in `seq 1 2`;
         do
             g=0
@@ -567,13 +568,15 @@ do
             fi
         done
         wait
-        echo 'done with 4 sets in RHN'
+        echo 'done with 4 sets in RHN'  ${recD}
+        date +%Y,%m,%d-%H:%M:%S
     done
 done
 wait
 for rnnHdLc in 1 2 3 4
 do
     echo 'in Bayesian LSTM round' ${rnnHdLc}
+    date +%Y,%m,%d-%H:%M:%S
     for t in `seq 1 2`;
     do
         g=0
@@ -631,5 +634,6 @@ do
         fi
     done
     wait
-    echo 'done with 4 sets in Bayesian LSTM'
+    echo 'done with 4 sets in Bayesian LSTM' ${rnnHdLc}
+    date +%Y,%m,%d-%H:%M:%S
 done
