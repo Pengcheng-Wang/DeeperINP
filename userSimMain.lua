@@ -61,10 +61,12 @@ torch.setdefaulttensortype('torch.FloatTensor')
 torch.manualSeed(opt.seed)
 
 -- set the uppModelRNNDom indicator in opt, which indicates whether the model is an RNN model, and uses dropout mask from outside the model construction
+-- right now, the rhn model, and Bayesian lstm model (following Gal's implementation) use outside dropout mask
 if opt.uppModel == 'rnn_rhn' then
-    -- right now, the rhn model, and Bayesian lstm model (following Gal's implementation) use outside dropout mask
+    -- rnn_rhn uses double-sized dropout mask to drop out inputs of calculation of t-gate and transformed inner cell state
     opt.uppModelRNNDom = 2
 elseif opt.uppModel == 'rnn_blstm' then
+    -- lstm used quad-sized dropout mask to drop out inputs of calculation of the 3 gates and transformed inner cell state
     opt.uppModelRNNDom = 4
 else
     opt.uppModelRNNDom = 0

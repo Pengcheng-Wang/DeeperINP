@@ -84,11 +84,12 @@ function TableSetMisc.static.fastLSTMForgetGateInit(fLstmM, dropoutRate, fLstmSi
     end
 end
 
---- This function is used by rnn modules which utilize dropout masks from outside of the modules, e.g., rhn, BayesianLSTM
+--- This function is used by rnn modules which utilize variational dropout masks from outside of the modules, e.g., rhn, BayesianLSTM
+--- https://arxiv.org/pdf/1512.05287.pdf
 --- An assumption here is for multi-layer RNN modules, each hidden layer has the same size (number of hidden neurons)
 --- params:
 --- rnn_noise_i, rnn_noise_h, rnn_noise_o are refs to tables of dropout mask tensor for rnn models
---- gateNum is number of gates adopted by the model. RHN has 2 gates, LSTM has 4 gates.
+--- gateNum is number of gates adopted by the model. RHN has 2 gates, LSTM has 4 gates. (We count RNN inner cell state as a gate calculation)
 function TableSetMisc.static.buildRNNDropoutMask(rnn_noise_i, rnn_noise_h, rnn_noise_o, _inSize, _outSize, _hiddenLayerCnt, _batchSize, lstmHistLen, gateNum)
     -- rnn_noise_i, rnn_noise_h, rnn_noise_o are dropout masks for input, hidden, and output neurons for rnn models
     rnn_noise_i[1] = {}
