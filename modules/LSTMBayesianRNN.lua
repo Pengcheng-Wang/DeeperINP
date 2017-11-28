@@ -89,8 +89,8 @@ end
 function BayesianLSTM:buildModel()
     local x                = nn.Identity()()    -- input of rhn_network
     local prev_s           = nn.Identity()()    -- previous hidden state s from each lstm layer (including c and h outputs).
-    local noise_i          = nn.Identity()()    -- the dropout mask (before) entering the hidden layer. It doubles the size of rnn_size, bcz we use this input twice to calculate hidden state_s in rnn/lstm module and the t_gate.
-    local noise_h          = nn.Identity()()    -- the dropout mask for (before) the hidden layer. It doubles the size of rnn_size, bcz we use this hidden state_h twice to calculate hidden state_s in rnn/lstm module and the t_gate.
+    local noise_i          = nn.Identity()()    -- the dropout mask (before) entering the hidden layer. It quadruples the size of rnn_size, because it dropouts input with different patterns for calculation of 3 gates and in_transform
+    local noise_h          = nn.Identity()()    -- the dropout mask for (before) the hidden layer. It quadruples the size of rnn_size for the same reason
     local noise_o          = nn.Identity()()    -- dropout mask for the output of rnn/lstm (it's the output dropout mask of (after) the state_s on the highest RNN/lstm layer)
     local i                = {[0] = x}
     local next_s           = {} -- the stored state_s states for all RNN/lstm (vertical) layers
@@ -113,7 +113,7 @@ function BayesianLSTM:buildModel()
     return module
 end
 
--- In this multi-layer Baeysian LSTM model, this input param should only be the
+-- In this multi-layer Baeysian LSTM model, this input should only be the
 -- data point feature values, not including dropout mask noises.
 -- For multi-layer Bayesian lstm model, a hidden state should follow the format of
 -- {prev_c_layer1, prev_h_layer1, prev_c_layer2, prev_h_layer2, ...}
@@ -143,7 +143,7 @@ end
 function BayesianLSTM:setHiddenState(step, hiddenState)
     step = step == nil and (self.step - 1) or (step < 0) and (self.step - step - 1) or step
     assert(torch.type(hiddenState) == 'table')
-    assert(#hiddenState == 2 * self.rhn_layers)   -- it is a table for prev_c and prev_h in each layer
+    assert(#hiddenState == 2 * self.rnn_layers)   -- it is a table for prev_c and prev_h in each layer
 
     -- previous output of this module
     self.cells[step] = hiddenState
