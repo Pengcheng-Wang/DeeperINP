@@ -11,8 +11,9 @@ opt = lapp[[
        --trType           (default "rl")        training type : sc (score) | ac (action) | bg (behavior generation) | rl (implement rlenvs API) | ev (evaluation of act/score prediction)
        -s,--save          (default "upplogs")   subdirectory to save logs
        -n,--ciunet        (default "")          reload pretrained CI user simulation network
-       -m,--uppModel      (default "rnn_lstm")  type of model to train: moe | mlp | linear | rnn_lstm | rnn_rhn | rnn_blstm
+       -m,--uppModel      (default "rnn_lstm")  type of model to train: moe | mlp | linear | rnn_lstm | rnn_rhn | rnn_blstm | rnn_bGridlstm
        --uppModelRNNDom   (default 0)           indicator of whether the model is an RNN model and uses dropout masks from outside of the model. 0 for not using outside mask. Otherwise, this number represents the number of gates used in RNN model
+       --gridLstmTieWhts  (default 1)           indicator of whether the GridLSTM will have shared, tied weights along depth dimension. 1 means with shared weights, 0 means non-shared weights
        -f,--full                                use the full dataset
        -p,--plot                                plot while training
        -o,--optimization  (default "adam")       optimization: SGD | LBFGS | adam | rmsprop
@@ -61,11 +62,11 @@ torch.setdefaulttensortype('torch.FloatTensor')
 torch.manualSeed(opt.seed)
 
 -- set the uppModelRNNDom indicator in opt, which indicates whether the model is an RNN model, and uses dropout mask from outside the model construction
--- right now, the rhn model, and Bayesian lstm model (following Gal's implementation) use outside dropout mask
+-- right now, the rhn model, and Bayesian lstm model (following Gal's implementation), and GridLSTM model use outside dropout mask
 if opt.uppModel == 'rnn_rhn' then
     -- rnn_rhn uses double-sized dropout mask to drop out inputs of calculation of t-gate and transformed inner cell state
     opt.uppModelRNNDom = 2
-elseif opt.uppModel == 'rnn_blstm' then
+elseif opt.uppModel == 'rnn_blstm' or opt.uppModel == 'rnn_bGridlstm' then
     -- lstm used quad-sized dropout mask to drop out inputs of calculation of the 3 gates and transformed inner cell state
     opt.uppModelRNNDom = 4
 else

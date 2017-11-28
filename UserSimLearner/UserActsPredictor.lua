@@ -187,6 +187,23 @@ function CIUserActsPredictor:_init(CIUserSimulator, opt)
             self.model = nn.Sequencer(self.model)
             ------------------------------------------------------------
 
+        elseif opt.uppModel == 'rnn_bGridlstm' then
+            ------------------------------------------------------------
+            -- Bayesian GridLSTM implemented following Corey's GridLSTM and Yarin Gal's Bayesian code (dropout mask defined outside rnn model)
+            ------------------------------------------------------------
+            require 'modules.GridLSTMBayesianRNN'
+            local grid_lstm
+            grid_lstm = nn.BayesianGridLSTM(self.inputFeatureNum, opt.rnnHdLyCnt, opt.uSimLstmBackLen, opt.gridLstmTieWhts) -- rnn_size, rnn_layers, rho, tie_weights
+            grid_lstm:remember('both')
+            self.model:add(grid_lstm)
+            self.model:add(nn.NormStabilizer())
+
+            self.model:add(nn.Linear(self.inputFeatureNum, #classes))   -- we force GridLSTM to have hidden/cell units with the same dimension as input
+
+            self.model:add(nn.LogSoftMax())
+            self.model = nn.Sequencer(self.model)
+            ------------------------------------------------------------
+
         else
             print('Unknown model type')
             torch.CmdLine():text()

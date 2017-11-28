@@ -137,7 +137,7 @@ function BayesianLSTM:getHiddenState(step, input) -- this input param is only us
         -- previous cell of this module
         prevHidden = self.cells[step]
     end
-    return prevHidden   -- Attention: the sequence is {prev_h, prev_c}, different from lstm model input sequence
+    return prevHidden   -- the sequence is {L1_prev_c, L1_prev_h, L2_prev_c, L2_prev_h ...}
 end
 
 function BayesianLSTM:setHiddenState(step, hiddenState)
