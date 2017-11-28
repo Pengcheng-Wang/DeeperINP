@@ -52,31 +52,28 @@ end
 
 -------------------------- factory methods -----------------------------
 
-function BayesianGridLSTM:buildBayesianGridLSTMUnit(x, prev_c, prev_h, noise_i, noise_h, _layerInd)
+--- Constructing the LSTM module in a GridLSTM. In the GridLSTM structure figure,
+--- h_dep is the hidden value along depth dim (bottom), h_tem is the hidden value
+--- along temporal dim (left). So, noise_i matches with h_dep, and noise_h maps
+--- with h_tem.
+function BayesianGridLSTM:buildBayesianLSTMUnit(h_dep, h_tem, prev_c, noise_i, noise_h)
+    -- h_dep and noise_i should be a pair in dropout, h_tem and noise_h should be a pair in dropout
+    -- In this GridLSTM implementation, the LSTM unit must have same dimension as input
     -- Reshape to (batch_size, n_gates, hid_size)
     -- Then slice the n_gates dimension, i.e dimension 2
-    local reshaped_noise_i
-    local reshaped_noise_h = nn.Reshape(4, self.outputSize)(noise_h)
-    if _layerInd == 1 then
-        reshaped_noise_i = nn.Reshape(4, self.inputSize)(noise_i) -- LSTM has 3 gates and 1 inner-cell value to calculate
-    else
-        reshaped_noise_i = nn.Reshape(4, self.outputSize)(noise_i)
-    end
+    local reshaped_noise_i = nn.Reshape(4, self.rnnSize)(noise_i)   -- LSTM has 3 gates and 1 inner-cell value to calculate
+    local reshaped_noise_h = nn.Reshape(4, self.rnnSize)(noise_h)
     local sliced_noise_i   = nn.SplitTable(2)(reshaped_noise_i) -- SplitTable(2) means split the input tensor along the 2nd dim, which is the num of gates dim
     local sliced_noise_h   = nn.SplitTable(2)(reshaped_noise_h)
-    -- Calculate all four gates
-    local i2h, h2h         = {}, {}
+
+    -- Calculate all 3 gates and in_transform
+    local i2h, h2h         = {}, {} -- can be understood as calculation from depth(bottom) and temporal(left) hidden values
     for i = 1, 4 do
         -- Use select table to fetch each gate
-        local dropped_x      = self:local_Dropout(x, nn.SelectTable(i)(sliced_noise_i))
-        local dropped_h      = self:local_Dropout(prev_h, nn.SelectTable(i)(sliced_noise_h))
-        -- assumption: for more than 1 hidden layer LSTM models, we assume each layer has the same size
-        if _layerInd == 1 then
-            i2h[i]           = nn.Linear(self.inputSize, self.outputSize)(dropped_x)
-        else
-            i2h[i]           = nn.Linear(self.outputSize, self.outputSize)(dropped_x)
-        end
-        h2h[i]           = nn.Linear(self.outputSize, self.outputSize)(dropped_h)
+        local dropped_x    = self:local_Dropout(h_dep, nn.SelectTable(i)(sliced_noise_i))
+        local dropped_h    = self:local_Dropout(h_tem, nn.SelectTable(i)(sliced_noise_h))
+        i2h[i]             = nn.Linear(self.rnnSize, self.rnnSize)(dropped_x)
+        h2h[i]             = nn.Linear(self.rnnSize, self.rnnSize)(dropped_h)
     end
 
     -- Apply nonlinearity
@@ -94,36 +91,45 @@ function BayesianGridLSTM:buildBayesianGridLSTMUnit(x, prev_c, prev_h, noise_i, 
     return next_c, next_h
 end
 
--- Attention: in lstm, we need to store 2 parts of hidden state, the cell value prev_c and hidden value prev_h
--- Following the implementation pattern from Gal's and Zaremba's code, I used a single node (prev_s) to store
--- both parts. In a multi-layer Bayesian lstm, prev_s is a table stores node values in format of
--- {prev_c_layer1, prev_h_layer1, prev_c_layer2, prev_h_layer2, ...}
--- The output of this multi-layer lstm module for the next_s has the same structure
--- Accordingly, getHiddenState() and setHiddenState() should following the same pattern for storing hidden states
+--- Attention: for Dropout implemented in this GridLSTM model, we utilize dropout masks from outside of the GridLSTM model
+--- to implement the dropout in variational RNN model, as described in Gal's paper, which is different from Corey's implementation.
+--- We only do dropout on hidden unit values, not on cell unit values.
 function BayesianGridLSTM:buildModel()
-    local x                = nn.Identity()()    -- input of rhn_network
-    local prev_s           = nn.Identity()()    -- previous hidden state s from each lstm layer (including c and h outputs).
+    local x_dep            = nn.Identity()()    -- input to multi-layer GridLSTM, which is the hidden unit in 1st layer along depth dim
+    local prev_s_tem       = nn.Identity()()    -- previous hidden state s and cell unit value c along sequential dimension from each GridLSTM (depth) layer
     local noise_i          = nn.Identity()()    -- the dropout mask (before) entering the hidden layer. It doubles the size of rnn_size, bcz we use this input twice to calculate hidden state_s in rnn/lstm module and the t_gate.
     local noise_h          = nn.Identity()()    -- the dropout mask for (before) the hidden layer. It doubles the size of rnn_size, bcz we use this hidden state_h twice to calculate hidden state_s in rnn/lstm module and the t_gate.
     local noise_o          = nn.Identity()()    -- dropout mask for the output of rnn/lstm (it's the output dropout mask of (after) the state_s on the highest RNN/lstm layer)
-    local i                = {[0] = x}
-    local next_s           = {} -- the stored state_s states for all RNN/lstm (vertical) layers
-    local split            = {prev_s:split(2 * self.rnn_layers)}  -- the split function is the split() for nngraph.Node. Can be found here: https://github.com/torch/nngraph/blob/master/node.lua (This is not the split function for tensor)
+    local i                = {[0] = x_dep}
+    local next_s_tem       = {} -- the stored state_s (including hidden_tem, cell_tem) states for all depth (vertical) layers
+    local next_s_dep       = {} -- the stored state_s (including hidden_dep, cell_dep) states for all sequential (horizontal) units
+    local split            = {prev_s_tem:split(2 * self.rnn_layers)}  -- the split function is the split() for nngraph.Node. Can be found here: https://github.com/torch/nngraph/blob/master/node.lua (This is not the split function for tensor)
     local noise_i_split    = {noise_i:split(self.rnn_layers)} -- this nngraph.Node.split() function returns noutput number of new nodes that each take a single component of the output of this
     local noise_h_split    = {noise_h:split(self.rnn_layers)} -- node in the order they are returned.
     for layer_idx = 1, self.rnn_layers do     -- this self.rnn_layers is the vertical layer number of rnn/lstm, not the recurrent depth.
-        local prev_c         = split[2 * layer_idx - 1]
-        local prev_h         = split[2 * layer_idx]         -- the prev_h is the hidden state_s value from previous time step. Here it does not concern recurrent depth, which is sth studied inside rnn/lstm
+        local prev_c_tem         = split[2 * layer_idx - 1]
+        local prev_h_tem         = split[2 * layer_idx]         -- the prev_h is the hidden state_s value from previous time step. Here it does not concern recurrent depth, which is sth studied inside rnn/lstm
         local n_i            = noise_i_split[layer_idx]     -- n_i and n_h are the dropout mask. n_i is the dropout mask for each (vertical) rnn/lstm layer's (vertical) input
         local n_h            = noise_h_split[layer_idx]     -- n_h is the dropout mask for each (horizontal) rnn/lstm unit.
-        local next_c, next_h = self:buildBayesianGridLSTMUnit(i[layer_idx - 1], prev_c, prev_h, n_i, n_h, layer_idx)
+        local prev_c_dep
+        local prev_h_dep
+        if layer_idx == 1 then
+            prev_c_dep = torch.Tensor(x_dep:size()):zero()
+            prev_h_dep = x_dep
+        else
+            prev_c_dep = next_s_dep[(layer_idx-1) * 2 - 1]
+            prev_h_dep = next_s_dep[(layer_idx-1) * 2]
+        end
+
+        -- todo:pwang8. Time to edit here. I just finished editing the buildBayesianLSTMUnit()
+        local next_c, next_h = self:buildBayesianLSTMUnit(i[layer_idx - 1], prev_c, prev_h, n_i, n_h, layer_idx)
         table.insert(next_s, next_c)
         table.insert(next_s, next_h)
         i[layer_idx] = next_h   -- this next_h is the state_s value, which is the output of one rnn/lstm module
     end
     local dropped_o          = self:local_Dropout(i[self.rnn_layers], noise_o)   -- the output of the whole (probably multi-[vertical]layer) RNN/lstm module, after dropout
-    local module           = nn.gModule({x, prev_s, noise_i, noise_h, noise_o}, {dropped_o, nn.Identity()(next_s)})
-    module:getParameters():uniform(-0.04, 0.04) -- this prev_s include {prev_c, prev_h} in each lstm layer
+    local module           = nn.gModule({x_dep, prev_s_tem, noise_i, noise_h, noise_o}, {dropped_o, nn.Identity()(next_s)})
+    module:getParameters():uniform(-0.04, 0.04) -- this prev_s_tem include {prev_c, prev_h} in each lstm layer
     return module
 end
 
