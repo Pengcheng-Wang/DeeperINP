@@ -680,7 +680,7 @@ function CIUserSimulator:_PearsonCorrCalc()
     self.featOfActCorreTabSortRes, self.featOfActCorreTabRank = torch.sort(torch.abs(self.featOfActCorreTable), 2)
     self.featOfActCorreAbsTabCumsum = torch.cumsum(torch.abs(self.featOfActCorreTable), 2)
     local _lastCumsumItemTensor = self.featOfActCorreAbsTabCumsum[{{}, {self.CIFr.usrActInd_end-1}}]    -- this is a 2-d (self.CIFr.usrActInd_end-1 * 1) matrix
-    self.featOfActCorreAbsTabCumsum:cdiv(torch.repeatTensor(_lastCumsumItemTensor, 1, self.CIFr.usrActInd_end-1))    -- standardization
+    self.featOfActCorreAbsTabCumsum:cdiv(torch.repeatTensor(_lastCumsumItemTensor, 1, self.CIFr.usrActInd_end-1):add(1e-5))    -- standardization
 
 end
 
@@ -725,7 +725,7 @@ function CIUserSimulator:_actionFreqCalc()
     -- normalize prior action counting along the distance dimension
     self.actSigmoidDistPriorStep = self.actCntPriorStep:clone()
     local priorActAlongDisMean = torch.mean(self.actCntPriorStep, 2)    -- the 2nd dim is distance between two actions
-    local priorActAlongDisStd = torch.std(self.actCntPriorStep, 2)
+    local priorActAlongDisStd = torch.std(self.actCntPriorStep, 2):add(1e-5)    -- Attention: this add(1e-5) will avoid divided by 0 problem in the standardization process (cdiv() below)
     for ite=1, self.actSigmoidDistPriorStep:size(2) do
         self.actSigmoidDistPriorStep[{{}, {ite}, {}}]:csub(priorActAlongDisMean)
         self.actSigmoidDistPriorStep[{{}, {ite}, {}}]:cdiv(priorActAlongDisStd)
@@ -746,6 +746,7 @@ function CIUserSimulator:_actionFreqCalc()
             end
         end
     end
+    priorActSum:add(1e-5)   -- avoid dividing 0
     self.actFreqPriorStep = torch.cdiv(self.actCntPriorStep, priorActSum)
 
     _, self.actRankPriorStep = torch.sort(self.actFreqPriorStep, 3, true)   -- descending order
@@ -844,6 +845,7 @@ function CIUserSimulator:UserSimDataAugment(input, output, isRNNForm)
                                 -- sample a position to add an action
                                 local pertActPosPriorInRnn = 0  -- The backward distance of the perturbed action w.r.t current action (output[lstmHist][opt.batchSize+i])
                                 local actPosSampSeed = torch.uniform()
+
                                 for sp=1, valActSampDist do
                                     if actPosSampSeed <= priorActCumsum[sp] then
                                         pertActPosPriorInRnn = sp    -- This is a relative position, the backward distance w.r.t current position
@@ -858,6 +860,7 @@ function CIUserSimulator:UserSimDataAugment(input, output, isRNNForm)
                                         input[frm][self.opt.batchSize+i] = input[frm+1][self.opt.batchSize+i]
                                         output[frm][self.opt.batchSize+i] = output[frm+1][self.opt.batchSize+i]
                                     end
+
                                     input[self.opt.lstmHist - pertActPosPriorInRnn][self.opt.batchSize+i] = input[self.opt.lstmHist - pertActPosPriorInRnn + 1][self.opt.batchSize+i]
                                     output[self.opt.lstmHist - pertActPosPriorInRnn][self.opt.batchSize+i] = pai
                                     for brm=self.opt.lstmHist - pertActPosPriorInRnn + 1, self.opt.lstmHist do
