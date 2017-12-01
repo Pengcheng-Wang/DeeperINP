@@ -17,7 +17,6 @@ local _ = require 'moses'
 local class = require 'classic'
 require 'classic.torch' -- Enables serialisation
 local TableSet = require 'MyMisc.TableSetMisc'
-require 'modules.RecurrenHighwayNetworkRNN'
 
 local CIUserActsPredictor = classic.class('UserActsPredictor')
 
@@ -110,8 +109,8 @@ function CIUserActsPredictor:_init(CIUserSimulator, opt)
             --nn.FastLSTM.bn = true
             local lstm
             if opt.uSimGru == 0 then
-                lstm = nn.FastLSTM(self.inputFeatureNum, opt.rnnHdSizeL1, opt.uSimLstmBackLen, nil, nil, nil, opt.dropoutUSim) --todo:pwang8. Oct 23. Testing -- the 3rd param, [rho], the maximum amount of backpropagation steps to take back in time, default value is 9999
-                TableSet.fastLSTMForgetGateInit(lstm, opt.dropoutUSim, opt.rnnHdSizeL1, nninit) --(lstm, opt.dropoutUSim, opt.rnnHdSizeL1, nninit) --todo:pwang8. Oct 23. Testing
+                lstm = nn.FastLSTM(self.inputFeatureNum, opt.rnnHdSizeL1, opt.uSimLstmBackLen, nil, nil, nil, opt.dropoutUSim)
+                TableSet.fastLSTMForgetGateInit(lstm, opt.dropoutUSim, opt.rnnHdSizeL1, nninit) --(lstm, opt.dropoutUSim, opt.rnnHdSizeL1, nninit)
             else
                 lstm = nn.GRU(self.inputFeatureNum, opt.rnnHdSizeL1, opt.uSimLstmBackLen, opt.dropoutUSim)   -- GRU implements its RNN dropout, but does not have built-in batch normalization, as it is for FastLSTM
             end
@@ -158,6 +157,7 @@ function CIUserActsPredictor:_init(CIUserSimulator, opt)
             ------------------------------------------------------------
             -- Recurrent Highway Network (dropout mask defined outside rnn model)
             ------------------------------------------------------------
+            require 'modules.RecurrenHighwayNetworkRNN'
             local rhn
             rhn = nn.RHN(self.inputFeatureNum, opt.rnnHdSizeL1, opt.rhnReccDept, opt.rnnHdLyCnt, opt.uSimLstmBackLen) --inputSize, outputSize, recurrence_depth, rhn_layers, rho
             rhn:remember('both')
@@ -189,7 +189,7 @@ function CIUserActsPredictor:_init(CIUserSimulator, opt)
 
         elseif opt.uppModel == 'rnn_bGridlstm' then
             ------------------------------------------------------------
-            -- Bayesian GridLSTM implemented following Corey's GridLSTM and Yarin Gal's Bayesian code (dropout mask defined outside rnn model)
+            -- Bayesian GridLSTM implemented following Corey's GridLSTM and Yarin Gal's Bayesian LSTM code (dropout mask defined outside rnn model)
             ------------------------------------------------------------
             require 'modules.GridLSTMBayesianRNN'
             local grid_lstm
@@ -588,7 +588,7 @@ function CIUserActsPredictor:trainOneEpoch()
                     self.uapConfusion:add(outputs[i], targets[i])
                 end
             end
-
+            -- todo:pwang8. Need to do gradient clipping for rnn models. This is important. An example can be found in RHN code. Nov 30, 2017.
             -- return f and df/dX
             return f, self.uapDParam
         end
