@@ -703,6 +703,14 @@ function CIUserActsPredictor:trainOneEpoch()
         --torch.save(filename, self.model)
     end
 
+    if self.trainEpoch == self.opt.usimTrIte and self.opt.ciuTType == 'train' then
+        -- Save the trained model after the final epoch
+        filename = paths.concat('userModelTrained', self.opt.save, string.format('final_%d', self.trainEpoch)..'_'..string.format('%.2f', self.uapConfusion.totalValid*100)..'uap.t7')
+        os.execute('mkdir -p ' .. sys.dirname(filename))
+        print('<trainer> saving final trained action prediction ciunet to '..filename)
+        torch.save(filename, self.model)
+    end
+
     if (self.opt.ciuTType == 'train' or self.opt.ciuTType == 'train_tr') and self.trainEpoch % self.opt.testOnTestFreq == 0 then
         local testEval = self:testActPredOnTestDetOneEpoch()
         print('<Act prediction accuracy at epoch '..string.format('%d', self.trainEpoch)..' on test set > '..string.format('%.2f%%', testEval[1]*100)..
@@ -791,55 +799,5 @@ function CIUserActsPredictor:testActPredOnTestDetOneEpoch()
     end
 
 end
-
---function CIUserActsPredictor:buildRNNDropoutMaks(rnn_noise_i, rnn_noise_h, rnn_noise_o, _inSize, _outSize, _hiddenLayerCnt, _batchSize)
---    -- rnn_noise_i, rnn_noise_h, rnn_noise_o should all be empty tables as input params
---    rnn_noise_i[1] = {}
---    rnn_noise_h[1] = {}
---    rnn_noise_o[1] = torch.zeros(_batchSize, _outSize)
---    for _d = 1, _hiddenLayerCnt do
---        rnn_noise_i[1][_d] = torch.zeros(_batchSize, 2 * _inSize)
---        rnn_noise_h[1][_d] = torch.zeros(_batchSize, 2 * _outSize)
---    end
---
---    for _h=2, self.opt.lstmHist do
---        rnn_noise_o[_h] = rnn_noise_o[1]:clone()
---        rnn_noise_i[_h] = {}
---        rnn_noise_h[_h] = {}
---        for _d = 1, _hiddenLayerCnt do
---            rnn_noise_i[_h][_d] = rnn_noise_i[1][_d]:clone()
---            rnn_noise_h[_h][_d] = rnn_noise_h[1][_d]:clone()
---        end
---    end
---end
---
---function CIUserActsPredictor:sampleRNNDropoutMask(prob, rnn_noise_i, rnn_noise_h, rnn_noise_o, _hiddenLayerCnt)
---    assert(prob>=0 and prob<1, 'Dropout prob should be in [0,1)')
---    if prob>0 then
---        rnn_noise_o[1]:bernoulli(1 - prob)
---        rnn_noise_o[1]:div(1 - prob)
---        for _d = 1, _hiddenLayerCnt do
---            rnn_noise_i[1][_d]:bernoulli(1 - prob)
---            rnn_noise_i[1][_d]:div(1 - prob)
---            rnn_noise_h[1][_d]:bernoulli(1 - prob)
---            rnn_noise_h[1][_d]:div(1 - prob)
---        end
---        for _h=2, self.opt.lstmHist do
---            rnn_noise_o[_h] = rnn_noise_o[1]:clone()
---            for _d = 1, _hiddenLayerCnt do
---                rnn_noise_i[_h][_d] = rnn_noise_i[1][_d]:clone()
---                rnn_noise_h[_h][_d] = rnn_noise_h[1][_d]:clone()
---            end
---        end
---    else    -- prob == 0
---        for _h=1, self.opt.lstmHist do
---            rnn_noise_o[_h]:zero():add(1)
---            for _d = 1, _hiddenLayerCnt do
---                rnn_noise_i[_h][_d]:zero():add(1)
---                rnn_noise_h[_h][_d]:zero():add(1)
---            end
---        end
---    end
---end
 
 return CIUserActsPredictor
