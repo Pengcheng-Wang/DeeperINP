@@ -639,6 +639,7 @@
 #done
 
 ### This is a simple test for GridLSTM. I'm not going to use GPU at this time, because it seems utilizing GPU slows down calculation right now. Not sure if we can improve it by moving entire dataset onto GPU early
+s=1
 for rnnHdLc in 1 2 3 4
 do
     echo 'in Bayesian GridLSTM round(layer)' ${rnnHdLc}
@@ -686,6 +687,6 @@ do
         fi
     done
     wait
-    echo 'done with 3 sets in Bayesian LSTM' ${rnnHdLc}
+    echo 'done with 3 sets in Bayesian GridLSTM' ${rnnHdLc}
     date +%Y,%m,%d-%H:%M:%S
 done
