@@ -103,10 +103,13 @@ function CIUserActsPredictor:_init(CIUserSimulator, opt)
 
         elseif opt.uppModel == 'rnn_lstm' then
             ------------------------------------------------------------
-            -- lstm
+            -- lstm implementation from Element-Research rnn lib. The lazy dropout (variational RNN models) seems not very correct.
             ------------------------------------------------------------
             self.model:add(nn.Reshape(self.inputFeatureNum))
             --nn.FastLSTM.bn = true
+            -- Attention: This lazy dropout seems a little weird. I tried it in player action prediction, but this lazy dropout
+            -- hurts the performance of the model. Actually I tried the variational RNN model implemented following RHN and Yarin Gal's
+            -- git repo, and that dropout works well.
             local lstm
             if opt.uSimGru == 0 then
                 lstm = nn.FastLSTM(self.inputFeatureNum, opt.rnnHdSizeL1, opt.uSimLstmBackLen, nil, nil, nil, opt.dropoutUSim)
