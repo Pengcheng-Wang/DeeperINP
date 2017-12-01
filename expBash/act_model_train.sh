@@ -502,93 +502,159 @@
 #    done
 #done
 
-# Test for different multi-layer lstm models, with data augmentation, and random noise added into data points. Nov 21, 2017
-s=1
-for rnnHdLc in 1 2
-do
-    for recD in 3 5 8
-    do
-        echo 'in RHN round' ${recD}
-        date +%Y,%m,%d-%H:%M:%S
-        for t in `seq 1 2`;
-        do
-            g=0
-            if [ $t -eq 2 ]
-            then
-                g=1
-            fi
-            if [ $t -eq 1 ];
-            then
-                th userSimMain.lua -trType ac -save rhn_hdlc_${rnnHdLc}_recDp_${recD}L/rnndrop.0/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 5e-3 -rnnHdSizeL1 21 -rnnHdLyCnt $(($rnnHdLc)) -rhnReccDept $(($recD)) -ciuTType train -uppModel rnn_rhn -lstmHist 10 -usimTrIte 3500  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) > /dev/null &
-            else
-                th userSimMain.lua -trType ac -save rhn_hdlc_${rnnHdLc}_recDp_${recD}L/rnndrop.0/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 5e-3 -rnnHdSizeL1 21 -rnnHdLyCnt $(($rnnHdLc)) -rhnReccDept $(($recD)) -ciuTType train -uppModel rnn_rhn -lstmHist 10 -usimTrIte 3500  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) > /dev/null &
-            fi
-        done
-        for t in `seq 1 2`;
-        do
-            g=0
-            if [ $t -eq 2 ]
-            then
-                g=1
-            fi
-            if [ $t -eq 1 ];
-            then
-                th userSimMain.lua -trType ac -save rhn_hdlc_${rnnHdLc}_recDp_${recD}L/rnndrop.1/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 5e-3 -rnnHdSizeL1 21 -rnnHdLyCnt $(($rnnHdLc)) -rhnReccDept $(($recD)) -ciuTType train -uppModel rnn_rhn -lstmHist 10 -usimTrIte 3500  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0.1 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) > /dev/null &
-            else
-                th userSimMain.lua -trType ac -save rhn_hdlc_${rnnHdLc}_recDp_${recD}L/rnndrop.1/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 5e-3 -rnnHdSizeL1 21 -rnnHdLyCnt $(($rnnHdLc)) -rhnReccDept $(($recD)) -ciuTType train -uppModel rnn_rhn -lstmHist 10 -usimTrIte 3500  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0.1 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) > /dev/null &
-            fi
-        done
-        echo 'in round' ${recD}
-        for t in `seq 1 2`;
-        do
-            g=0
-            if [ $t -eq 2 ]
-            then
-                g=1
-            fi
-            if [ $t -eq 1 ];
-            then
-                th userSimMain.lua -trType ac -save rhn_hdlc_${rnnHdLc}_recDp_${recD}L/rnndrop.2/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 5e-3 -rnnHdSizeL1 21 -rnnHdLyCnt $(($rnnHdLc)) -rhnReccDept $(($recD)) -ciuTType train -uppModel rnn_rhn -lstmHist 10 -usimTrIte 3500  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0.2 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) > /dev/null &
-            else
-                th userSimMain.lua -trType ac -save rhn_hdlc_${rnnHdLc}_recDp_${recD}L/rnndrop.2/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 5e-3 -rnnHdSizeL1 21 -rnnHdLyCnt $(($rnnHdLc)) -rhnReccDept $(($recD)) -ciuTType train -uppModel rnn_rhn -lstmHist 10 -usimTrIte 3500  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0.2 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) > /dev/null &
-            fi
-        done
-        for t in `seq 1 2`;
-        do
-            g=0
-            if [ $t -eq 2 ]
-            then
-                g=1
-            fi
-            if [ $t -eq 1 ];
-            then
-                th userSimMain.lua -trType ac -save rhn_hdlc_${rnnHdLc}_recDp_${recD}L/rnndrop.3/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 5e-3 -rnnHdSizeL1 21 -rnnHdLyCnt $(($rnnHdLc)) -rhnReccDept $(($recD)) -ciuTType train -uppModel rnn_rhn -lstmHist 10 -usimTrIte 3500  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0.3 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) > /dev/null &
-            else
-                th userSimMain.lua -trType ac -save rhn_hdlc_${rnnHdLc}_recDp_${recD}L/rnndrop.3/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 5e-3 -rnnHdSizeL1 21 -rnnHdLyCnt $(($rnnHdLc)) -rhnReccDept $(($recD)) -ciuTType train -uppModel rnn_rhn -lstmHist 10 -usimTrIte 3500  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0.3 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) > /dev/null &
-            fi
-        done
-        wait
-        echo 'done with 4 sets in RHN'  ${recD}
-        date +%Y,%m,%d-%H:%M:%S
-    done
-done
-wait
+## Test for different multi-layer lstm models, with data augmentation, and random noise added into data points. Nov 21, 2017
+#s=1
+#for rnnHdLc in 1 2
+#do
+#    for recD in 3 5 8
+#    do
+#        echo 'in RHN round' ${recD}
+#        date +%Y,%m,%d-%H:%M:%S
+#        for t in `seq 1 2`;
+#        do
+#            g=0
+#            if [ $t -eq 2 ]
+#            then
+#                g=1
+#            fi
+#            if [ $t -eq 1 ];
+#            then
+#                th userSimMain.lua -trType ac -save rhn_hdlc_${rnnHdLc}_recDp_${recD}L/rnndrop.0/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 5e-3 -rnnHdSizeL1 21 -rnnHdLyCnt $(($rnnHdLc)) -rhnReccDept $(($recD)) -ciuTType train -uppModel rnn_rhn -lstmHist 10 -usimTrIte 3500  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) > /dev/null &
+#            else
+#                th userSimMain.lua -trType ac -save rhn_hdlc_${rnnHdLc}_recDp_${recD}L/rnndrop.0/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 5e-3 -rnnHdSizeL1 21 -rnnHdLyCnt $(($rnnHdLc)) -rhnReccDept $(($recD)) -ciuTType train -uppModel rnn_rhn -lstmHist 10 -usimTrIte 3500  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) > /dev/null &
+#            fi
+#        done
+#        for t in `seq 1 2`;
+#        do
+#            g=0
+#            if [ $t -eq 2 ]
+#            then
+#                g=1
+#            fi
+#            if [ $t -eq 1 ];
+#            then
+#                th userSimMain.lua -trType ac -save rhn_hdlc_${rnnHdLc}_recDp_${recD}L/rnndrop.1/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 5e-3 -rnnHdSizeL1 21 -rnnHdLyCnt $(($rnnHdLc)) -rhnReccDept $(($recD)) -ciuTType train -uppModel rnn_rhn -lstmHist 10 -usimTrIte 3500  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0.1 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) > /dev/null &
+#            else
+#                th userSimMain.lua -trType ac -save rhn_hdlc_${rnnHdLc}_recDp_${recD}L/rnndrop.1/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 5e-3 -rnnHdSizeL1 21 -rnnHdLyCnt $(($rnnHdLc)) -rhnReccDept $(($recD)) -ciuTType train -uppModel rnn_rhn -lstmHist 10 -usimTrIte 3500  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0.1 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) > /dev/null &
+#            fi
+#        done
+#        echo 'in round' ${recD}
+#        for t in `seq 1 2`;
+#        do
+#            g=0
+#            if [ $t -eq 2 ]
+#            then
+#                g=1
+#            fi
+#            if [ $t -eq 1 ];
+#            then
+#                th userSimMain.lua -trType ac -save rhn_hdlc_${rnnHdLc}_recDp_${recD}L/rnndrop.2/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 5e-3 -rnnHdSizeL1 21 -rnnHdLyCnt $(($rnnHdLc)) -rhnReccDept $(($recD)) -ciuTType train -uppModel rnn_rhn -lstmHist 10 -usimTrIte 3500  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0.2 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) > /dev/null &
+#            else
+#                th userSimMain.lua -trType ac -save rhn_hdlc_${rnnHdLc}_recDp_${recD}L/rnndrop.2/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 5e-3 -rnnHdSizeL1 21 -rnnHdLyCnt $(($rnnHdLc)) -rhnReccDept $(($recD)) -ciuTType train -uppModel rnn_rhn -lstmHist 10 -usimTrIte 3500  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0.2 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) > /dev/null &
+#            fi
+#        done
+#        for t in `seq 1 2`;
+#        do
+#            g=0
+#            if [ $t -eq 2 ]
+#            then
+#                g=1
+#            fi
+#            if [ $t -eq 1 ];
+#            then
+#                th userSimMain.lua -trType ac -save rhn_hdlc_${rnnHdLc}_recDp_${recD}L/rnndrop.3/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 5e-3 -rnnHdSizeL1 21 -rnnHdLyCnt $(($rnnHdLc)) -rhnReccDept $(($recD)) -ciuTType train -uppModel rnn_rhn -lstmHist 10 -usimTrIte 3500  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0.3 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) > /dev/null &
+#            else
+#                th userSimMain.lua -trType ac -save rhn_hdlc_${rnnHdLc}_recDp_${recD}L/rnndrop.3/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 5e-3 -rnnHdSizeL1 21 -rnnHdLyCnt $(($rnnHdLc)) -rhnReccDept $(($recD)) -ciuTType train -uppModel rnn_rhn -lstmHist 10 -usimTrIte 3500  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0.3 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) > /dev/null &
+#            fi
+#        done
+#        wait
+#        echo 'done with 4 sets in RHN'  ${recD}
+#        date +%Y,%m,%d-%H:%M:%S
+#    done
+#done
+#wait
+#for rnnHdLc in 1 2 3 4
+#do
+#    echo 'in Bayesian LSTM round' ${rnnHdLc}
+#    date +%Y,%m,%d-%H:%M:%S
+#    for t in `seq 1 2`;
+#    do
+#        g=0
+#        if [ $t -eq 2 ]
+#        then
+#            g=1
+#        fi
+#        if [ $t -eq 1 ];
+#        then
+#            th userSimMain.lua -trType ac -save blstm_hdlc_${rnnHdLc}/rnndrop.0/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 5e-3 -rnnHdSizeL1 21 -rnnHdLyCnt $(($rnnHdLc)) -ciuTType train -uppModel rnn_blstm -lstmHist 10 -usimTrIte 2000  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) > /dev/null &
+#        else
+#            th userSimMain.lua -trType ac -save blstm_hdlc_${rnnHdLc}/rnndrop.0/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 5e-3 -rnnHdSizeL1 21 -rnnHdLyCnt $(($rnnHdLc)) -ciuTType train -uppModel rnn_blstm -lstmHist 10 -usimTrIte 2000  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) > /dev/null &
+#        fi
+#    done
+#    for t in `seq 1 2`;
+#    do
+#        g=0
+#        if [ $t -eq 2 ]
+#        then
+#            g=1
+#        fi
+#        if [ $t -eq 1 ];
+#        then
+#            th userSimMain.lua -trType ac -save blstm_hdlc_${rnnHdLc}/rnndrop.1/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 5e-3 -rnnHdSizeL1 21 -rnnHdLyCnt $(($rnnHdLc)) -ciuTType train -uppModel rnn_blstm -lstmHist 10 -usimTrIte 2000  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0.1 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) > /dev/null &
+#        else
+#            th userSimMain.lua -trType ac -save blstm_hdlc_${rnnHdLc}/rnndrop.1/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 5e-3 -rnnHdSizeL1 21 -rnnHdLyCnt $(($rnnHdLc)) -ciuTType train -uppModel rnn_blstm -lstmHist 10 -usimTrIte 2000  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0.1 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) > /dev/null &
+#        fi
+#    done
+#    for t in `seq 1 2`;
+#    do
+#        g=0
+#        if [ $t -eq 2 ]
+#        then
+#            g=1
+#        fi
+#        if [ $t -eq 1 ];
+#        then
+#            th userSimMain.lua -trType ac -save blstm_hdlc_${rnnHdLc}/rnndrop.2/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 5e-3 -rnnHdSizeL1 21 -rnnHdLyCnt $(($rnnHdLc)) -ciuTType train -uppModel rnn_blstm -lstmHist 10 -usimTrIte 2000  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0.2 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) > /dev/null &
+#        else
+#            th userSimMain.lua -trType ac -save blstm_hdlc_${rnnHdLc}/rnndrop.2/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 5e-3 -rnnHdSizeL1 21 -rnnHdLyCnt $(($rnnHdLc)) -ciuTType train -uppModel rnn_blstm -lstmHist 10 -usimTrIte 2000  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0.2 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) > /dev/null &
+#        fi
+#    done
+#    for t in `seq 1 2`;
+#    do
+#        g=0
+#        if [ $t -eq 2 ]
+#        then
+#            g=1
+#        fi
+#        if [ $t -eq 1 ];
+#        then
+#            th userSimMain.lua -trType ac -save blstm_hdlc_${rnnHdLc}/rnndrop.3/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 5e-3 -rnnHdSizeL1 21 -rnnHdLyCnt $(($rnnHdLc)) -ciuTType train -uppModel rnn_blstm -lstmHist 10 -usimTrIte 2000  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0.3 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) > /dev/null &
+#        else
+#            th userSimMain.lua -trType ac -save blstm_hdlc_${rnnHdLc}/rnndrop.3/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 5e-3 -rnnHdSizeL1 21 -rnnHdLyCnt $(($rnnHdLc)) -ciuTType train -uppModel rnn_blstm -lstmHist 10 -usimTrIte 2000  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0.3 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) > /dev/null &
+#        fi
+#    done
+#    wait
+#    echo 'done with 4 sets in Bayesian LSTM' ${rnnHdLc}
+#    date +%Y,%m,%d-%H:%M:%S
+#done
+
+### This is a simple test for GridLSTM. I'm not going to use GPU at this time, because it seems utilizing GPU slows down calculation right now. Not sure if we can improve it by moving entire dataset onto GPU early
 for rnnHdLc in 1 2 3 4
 do
-    echo 'in Bayesian LSTM round' ${rnnHdLc}
+    echo 'in Bayesian GridLSTM round(layer)' ${rnnHdLc}
     date +%Y,%m,%d-%H:%M:%S
     for t in `seq 1 2`;
     do
         g=0
         if [ $t -eq 2 ]
         then
-            g=1
+            g=0 #1
         fi
         if [ $t -eq 1 ];
         then
-            th userSimMain.lua -trType ac -save blstm_hdlc_${rnnHdLc}/rnndrop.0/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 5e-3 -rnnHdSizeL1 21 -rnnHdLyCnt $(($rnnHdLc)) -ciuTType train -uppModel rnn_blstm -lstmHist 10 -usimTrIte 2000  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) > /dev/null &
+            th userSimMain.lua -trType ac -save gridlstm_hdlc_${rnnHdLc}/rnndrop.0/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 5e-3 -rnnHdSizeL1 21 -rnnHdLyCnt $(($rnnHdLc)) -ciuTType train -uppModel rnn_bGridlstm -lstmHist 10 -usimTrIte 4000  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) > /dev/null &
         else
-            th userSimMain.lua -trType ac -save blstm_hdlc_${rnnHdLc}/rnndrop.0/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 5e-3 -rnnHdSizeL1 21 -rnnHdLyCnt $(($rnnHdLc)) -ciuTType train -uppModel rnn_blstm -lstmHist 10 -usimTrIte 2000  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) > /dev/null &
+            th userSimMain.lua -trType ac -save gridlstm_hdlc_${rnnHdLc}/rnndrop.0/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 5e-3 -rnnHdSizeL1 21 -rnnHdLyCnt $(($rnnHdLc)) -ciuTType train -uppModel rnn_bGridlstm -lstmHist 10 -usimTrIte 4000  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) > /dev/null &
         fi
     done
     for t in `seq 1 2`;
@@ -596,13 +662,13 @@ do
         g=0
         if [ $t -eq 2 ]
         then
-            g=1
+            g=0 #1
         fi
         if [ $t -eq 1 ];
         then
-            th userSimMain.lua -trType ac -save blstm_hdlc_${rnnHdLc}/rnndrop.1/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 5e-3 -rnnHdSizeL1 21 -rnnHdLyCnt $(($rnnHdLc)) -ciuTType train -uppModel rnn_blstm -lstmHist 10 -usimTrIte 2000  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0.1 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) > /dev/null &
+            th userSimMain.lua -trType ac -save gridlstm_hdlc_${rnnHdLc}/rnndrop.1/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 5e-3 -rnnHdSizeL1 21 -rnnHdLyCnt $(($rnnHdLc)) -ciuTType train -uppModel rnn_bGridlstm -lstmHist 10 -usimTrIte 4000  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0.1 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) > /dev/null &
         else
-            th userSimMain.lua -trType ac -save blstm_hdlc_${rnnHdLc}/rnndrop.1/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 5e-3 -rnnHdSizeL1 21 -rnnHdLyCnt $(($rnnHdLc)) -ciuTType train -uppModel rnn_blstm -lstmHist 10 -usimTrIte 2000  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0.1 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) > /dev/null &
+            th userSimMain.lua -trType ac -save gridlstm_hdlc_${rnnHdLc}/rnndrop.1/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 5e-3 -rnnHdSizeL1 21 -rnnHdLyCnt $(($rnnHdLc)) -ciuTType train -uppModel rnn_bGridlstm -lstmHist 10 -usimTrIte 4000  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0.1 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) > /dev/null &
         fi
     done
     for t in `seq 1 2`;
@@ -610,30 +676,16 @@ do
         g=0
         if [ $t -eq 2 ]
         then
-            g=1
+            g=0 #1
         fi
         if [ $t -eq 1 ];
         then
-            th userSimMain.lua -trType ac -save blstm_hdlc_${rnnHdLc}/rnndrop.2/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 5e-3 -rnnHdSizeL1 21 -rnnHdLyCnt $(($rnnHdLc)) -ciuTType train -uppModel rnn_blstm -lstmHist 10 -usimTrIte 2000  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0.2 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) > /dev/null &
+            th userSimMain.lua -trType ac -save girdlstm_hdlc_${rnnHdLc}/rnndrop.2/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 5e-3 -rnnHdSizeL1 21 -rnnHdLyCnt $(($rnnHdLc)) -ciuTType train -uppModel rnn_bGridlstm -lstmHist 10 -usimTrIte 4000  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0.2 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) > /dev/null &
         else
-            th userSimMain.lua -trType ac -save blstm_hdlc_${rnnHdLc}/rnndrop.2/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 5e-3 -rnnHdSizeL1 21 -rnnHdLyCnt $(($rnnHdLc)) -ciuTType train -uppModel rnn_blstm -lstmHist 10 -usimTrIte 2000  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0.2 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) > /dev/null &
-        fi
-    done
-    for t in `seq 1 2`;
-    do
-        g=0
-        if [ $t -eq 2 ]
-        then
-            g=1
-        fi
-        if [ $t -eq 1 ];
-        then
-            th userSimMain.lua -trType ac -save blstm_hdlc_${rnnHdLc}/rnndrop.3/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 5e-3 -rnnHdSizeL1 21 -rnnHdLyCnt $(($rnnHdLc)) -ciuTType train -uppModel rnn_blstm -lstmHist 10 -usimTrIte 2000  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0.3 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) > /dev/null &
-        else
-            th userSimMain.lua -trType ac -save blstm_hdlc_${rnnHdLc}/rnndrop.3/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 5e-3 -rnnHdSizeL1 21 -rnnHdLyCnt $(($rnnHdLc)) -ciuTType train -uppModel rnn_blstm -lstmHist 10 -usimTrIte 2000  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0.3 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) > /dev/null &
+            th userSimMain.lua -trType ac -save gridlstm_hdlc_${rnnHdLc}/rnndrop.2/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 5e-3 -rnnHdSizeL1 21 -rnnHdLyCnt $(($rnnHdLc)) -ciuTType train -uppModel rnn_bGridlstm -lstmHist 10 -usimTrIte 4000  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0.2 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) > /dev/null &
         fi
     done
     wait
-    echo 'done with 4 sets in Bayesian LSTM' ${rnnHdLc}
+    echo 'done with 3 sets in Bayesian LSTM' ${rnnHdLc}
     date +%Y,%m,%d-%H:%M:%S
 done
