@@ -278,6 +278,7 @@ function CIUserActScorePredictor:_init(CIUserSimulator, opt)
         end
     end
 
+    -- todo:pwang8. Dec 2, 2017. "Prepare data for lstm in training set" has been moved to UserSimulator class. Need to modify code below
     ----------------------------------------------------------------------
     --- Prepare data for lstm in training set
     ---

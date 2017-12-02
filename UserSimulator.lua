@@ -363,7 +363,7 @@ function CIUserSimulator:_init(CIFileReader, opt)
         end
     end
 
-    -- The shortest length record has a user actoin sequence length of 2. User id is 100-0466
+    -- The shortest length record has a user action sequence length of 2. User id is 100-0466
 --    -- calc min length
 --    local minlen = 9999
 --    for i=1,#self.realUserDataStartLines-1 do
@@ -396,6 +396,134 @@ function CIUserSimulator:_init(CIFileReader, opt)
 --        i = i+1
 --        if i==3 then break end
 --    end
+
+
+    ----------------------------------------------------------------------
+    --- Prepare data for RNN models in training set
+    ---
+    self.rnnRealUserDataStates = {}
+    self.rnnRealUserDataActs = {}
+    self.rnnRealUserDataRewards = {}
+    self.rnnRealUserDataStarts = {}
+    self.rnnRealUserDataEnds = {}
+    self.rnnRealUserDataPad = torch.Tensor(#self.realUserDataStartLines):fill(0)    -- indicating whether data has padding at head (should be padded)
+    if string.sub(opt.uppModel, 1, 4) == 'rnn_' then
+        local indSeqHead = 1
+        local indSeqTail = opt.lstmHist
+        local indUserSeq = 1    -- user id ptr. Use this to get the tail of each trajectory
+        while indSeqTail <= #self.realUserDataStates do
+            if self.rnnRealUserDataPad[indUserSeq] < 1 then
+                for padi = opt.lstmHist-1, 1, -1 do
+                    self.rnnRealUserDataStates[#self.rnnRealUserDataStates + 1] = {}
+                    self.rnnRealUserDataActs[#self.rnnRealUserDataActs + 1] = {}
+                    self.rnnRealUserDataRewards[#self.rnnRealUserDataRewards + 1] = {}
+                    for i=1, padi do
+                        self.rnnRealUserDataStates[#self.rnnRealUserDataStates][i] = torch.Tensor(self.userStateFeatureCnt):fill(0)
+                        self.rnnRealUserDataActs[#self.rnnRealUserDataActs][i] = self.realUserDataActs[indSeqHead]  -- duplicate the 1st user action for padded states
+                        self.rnnRealUserDataRewards[#self.rnnRealUserDataRewards][i] = self.realUserDataRewards[indSeqHead]
+                    end
+                    for i=1, opt.lstmHist-padi do
+                        self.rnnRealUserDataStates[#self.rnnRealUserDataStates][i+padi] = self.realUserDataStates[indSeqHead+i-1]
+                        self.rnnRealUserDataActs[#self.rnnRealUserDataActs][i+padi] = self.realUserDataActs[indSeqHead+i-1]
+                        self.rnnRealUserDataRewards[#self.rnnRealUserDataRewards][i+padi] = self.realUserDataRewards[indSeqHead+i-1]
+                    end
+                    if padi == opt.lstmHist-1 then
+                        self.rnnRealUserDataStarts[#self.rnnRealUserDataStarts+1] = #self.rnnRealUserDataStates     -- This is the start of a user's record -- This is duplicated. The value should be the same as realUserDataStartLines
+                    end
+                    if indSeqHead+(opt.lstmHist-padi)-1 == self.realUserDataEndLines[indUserSeq] then
+                        self.rnnRealUserDataPad[indUserSeq] = 1
+                        break   -- if padding tail is going to outrange this user record's tail, break
+                    end
+                end
+                self.rnnRealUserDataPad[indUserSeq] = 1
+            else
+                if indSeqTail <= self.realUserDataEndLines[indUserSeq] then
+                    self.rnnRealUserDataStates[#self.rnnRealUserDataStates + 1] = {}
+                    self.rnnRealUserDataActs[#self.rnnRealUserDataActs + 1] = {}
+                    self.rnnRealUserDataRewards[#self.rnnRealUserDataRewards + 1] = {}
+                    for i=1, opt.lstmHist do
+                        self.rnnRealUserDataStates[#self.rnnRealUserDataStates][i] = self.realUserDataStates[indSeqHead+i-1]
+                        self.rnnRealUserDataActs[#self.rnnRealUserDataActs][i] = self.realUserDataActs[indSeqHead+i-1]
+                        self.rnnRealUserDataRewards[#self.rnnRealUserDataRewards][i] = self.realUserDataRewards[indSeqHead+i-1]
+                    end
+                    indSeqHead = indSeqHead + 1
+                    indSeqTail = indSeqTail + 1
+                else
+                    self.rnnRealUserDataEnds[#self.rnnRealUserDataEnds+1] = #self.rnnRealUserDataStates     -- This is the end of a user's record
+                    indUserSeq = indUserSeq + 1 -- next user's records
+                    indSeqHead = self.realUserDataStartLines[indUserSeq]
+                    indSeqTail = indSeqHead + opt.lstmHist - 1
+                end
+            end
+        end
+        self.rnnRealUserDataEnds[#self.rnnRealUserDataEnds+1] = #self.rnnRealUserDataStates     -- Set the end of the last user's record
+        -- There are in total 15509 sequences if histLen is 3. 14707 if histLen is 5. 15108 if histLen is 4. 15911 if histLen is 2.
+    end
+
+    ----------------------------------------------------------------------
+    --- Prepare data for RNN models in test/train_validation set
+    ---
+    self.rnnRealUserDataStatesTest = {}
+    self.rnnRealUserDataActsTest = {}
+    self.rnnRealUserDataRewardsTest = {}
+    self.rnnRealUserDataStartsTest = {}
+    self.rnnRealUserDataEndsTest = {}
+    self.rnnRealUserDataPadTest = torch.Tensor(#self.realUserDataStartLinesTest):fill(0)    -- indicating whether data has padding at head (should be padded)
+    if self.opt.ciuTType == 'train' or self.opt.ciuTType == 'train_tr' then
+        if string.sub(opt.uppModel, 1, 4) == 'rnn_' then
+            local indSeqHead = 1
+            local indSeqTail = opt.lstmHist
+            local indUserSeq = 1    -- user id ptr. Use this to get the tail of each trajectory
+            while indSeqTail <= #self.realUserDataStatesTest do
+                if self.rnnRealUserDataPadTest[indUserSeq] < 1 then
+                    for padi = opt.lstmHist-1, 1, -1 do
+                        self.rnnRealUserDataStatesTest[#self.rnnRealUserDataStatesTest + 1] = {}
+                        self.rnnRealUserDataActsTest[#self.rnnRealUserDataActsTest + 1] = {}
+                        self.rnnRealUserDataRewardsTest[#self.rnnRealUserDataRewardsTest + 1] = {}
+                        for i=1, padi do
+                            self.rnnRealUserDataStatesTest[#self.rnnRealUserDataStatesTest][i] = torch.Tensor(self.userStateFeatureCnt):fill(0)
+                            self.rnnRealUserDataActsTest[#self.rnnRealUserDataActsTest][i] = self.realUserDataActsTest[indSeqHead]  -- duplicate the 1st user action for padded states
+                            self.rnnRealUserDataRewardsTest[#self.rnnRealUserDataRewardsTest][i] = self.realUserDataRewardsTest[indSeqHead]
+                        end
+                        for i=1, opt.lstmHist-padi do
+                            self.rnnRealUserDataStatesTest[#self.rnnRealUserDataStatesTest][i+padi] = self.realUserDataStatesTest[indSeqHead+i-1]
+                            self.rnnRealUserDataActsTest[#self.rnnRealUserDataActsTest][i+padi] = self.realUserDataActsTest[indSeqHead+i-1]
+                            self.rnnRealUserDataRewardsTest[#self.rnnRealUserDataRewardsTest][i+padi] = self.realUserDataRewardsTest[indSeqHead+i-1]
+                        end
+                        if padi == opt.lstmHist-1 then
+                            self.rnnRealUserDataStartsTest[#self.rnnRealUserDataStartsTest+1] = #self.rnnRealUserDataStatesTest     -- This is the start of a user's record
+                        end
+                        if indSeqHead+(opt.lstmHist-padi)-1 == self.realUserDataEndLinesTest[indUserSeq] then
+                            self.rnnRealUserDataPadTest[indUserSeq] = 1
+                            break   -- if padding tail is going to outrange this user record's tail, break
+                        end
+                    end
+                    self.rnnRealUserDataPadTest[indUserSeq] = 1
+                else
+                    if indSeqTail <= self.realUserDataEndLinesTest[indUserSeq] then
+                        self.rnnRealUserDataStatesTest[#self.rnnRealUserDataStatesTest + 1] = {}
+                        self.rnnRealUserDataActsTest[#self.rnnRealUserDataActsTest + 1] = {}
+                        self.rnnRealUserDataRewardsTest[#self.rnnRealUserDataRewardsTest + 1] = {}
+                        for i=1, opt.lstmHist do
+                            self.rnnRealUserDataStatesTest[#self.rnnRealUserDataStatesTest][i] = self.realUserDataStatesTest[indSeqHead+i-1]
+                            self.rnnRealUserDataActsTest[#self.rnnRealUserDataActsTest][i] = self.realUserDataActsTest[indSeqHead+i-1]
+                            self.rnnRealUserDataRewardsTest[#self.rnnRealUserDataRewardsTest][i] = self.realUserDataRewardsTest[indSeqHead+i-1]
+                        end
+                        indSeqHead = indSeqHead + 1
+                        indSeqTail = indSeqTail + 1
+                    else
+                        self.rnnRealUserDataEndsTest[#self.rnnRealUserDataEndsTest+1] = #self.rnnRealUserDataStatesTest     -- This is the end of a user's record
+                        indUserSeq = indUserSeq + 1 -- next user's records
+                        indSeqHead = self.realUserDataStartLinesTest[indUserSeq]
+                        indSeqTail = indSeqHead + opt.lstmHist - 1
+                    end
+                end
+            end
+            self.rnnRealUserDataEndsTest[#self.rnnRealUserDataEndsTest+1] = #self.rnnRealUserDataStatesTest     -- Set the end of the last user's record
+            -- There are in total 15509 sequences if histLen is 3. 14707 if histLen is 5. 15108 if histLen is 4. 15911 if histLen is 2.
+        end
+    end
+
 
     --- The following tensors are used to calculated Pearson's correlations between state features
     --- in self.realUserDataStates
