@@ -273,21 +273,28 @@ function CIUserActsPredictor:_init(CIUserSimulator, opt)
     ---
     self.rnnRealUserDataStates = self.ciUserSimulator.rnnRealUserDataStates
     self.rnnRealUserDataActs = self.ciUserSimulator.rnnRealUserDataActs
-    self.rnnRealUserDataStarts = self.ciUserSimulator.rnnRealUserDataStarts
-    self.rnnRealUserDataEnds = self.ciUserSimulator.rnnRealUserDataEnds
-    self.rnnRealUserDataPad = self.ciUserSimulator.rnnRealUserDataPad
 
     ----------------------------------------------------------------------
     --- Prepare data for RNN models in test/train_validation set
     ---
     self.rnnRealUserDataStatesTest = self.ciUserSimulator.rnnRealUserDataStatesTest
     self.rnnRealUserDataActsTest = self.ciUserSimulator.rnnRealUserDataActsTest
-    self.rnnRealUserDataStartsTest = self.ciUserSimulator.rnnRealUserDataStartsTest
-    self.rnnRealUserDataEndsTest = self.ciUserSimulator.rnnRealUserDataEndsTest
-    self.rnnRealUserDataPadTest = self.ciUserSimulator.rnnRealUserDataPadTest
 
     ----------------------------------------------------------------------
-    --- Prepare 3 dropout masks for RHN, right now it is only used by RHN
+    --- Prepare data for CNN models in training set
+    ---
+    self.cnnRealUserDataStates = self.ciUserSimulator.cnnRealUserDataStates
+    self.cnnRealUserDataActs = self.ciUserSimulator.cnnRealUserDataActs
+
+    ----------------------------------------------------------------------
+    --- Prepare data for CNN models in test/train_validation set
+    ---
+    self.cnnRealUserDataStatesTest = self.ciUserSimulator.cnnRealUserDataStatesTest
+    self.cnnRealUserDataActsTest = self.ciUserSimulator.cnnRealUserDataActsTest
+
+    ----------------------------------------------------------------------
+    --- Prepare 3 dropout masks for RHN, right now it is used by RHN,
+    --- Bayesian LSTM and Bayesian GridLSTM
     ---
     self.rnn_noise_i = {}
     self.rnn_noise_h = {}
