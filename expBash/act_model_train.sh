@@ -638,12 +638,80 @@
 #    date +%Y,%m,%d-%H:%M:%S
 #done
 
-### This is a simple test for GridLSTM. I'm not going to use GPU at this time, because it seems utilizing GPU slows down calculation right now. Not sure if we can improve it by moving entire dataset onto GPU early
+#### This is a simple test for GridLSTM. I'm not going to use GPU at this time, because it seems utilizing GPU slows down calculation right now. Not sure if we can improve it by moving entire dataset onto GPU early
+#s=1
+#for rnnHdLc in 1 2 3 4
+#do
+#    echo 'in Bayesian GridLSTM round(layer)' ${rnnHdLc}
+#    date +%Y,%m,%d-%H:%M:%S
+#    for t in `seq 1 2`;
+#    do
+#        g=0
+#        if [ $t -eq 2 ]
+#        then
+#            g=0 #1
+#        fi
+#        if [ $t -eq 1 ];
+#        then
+#            th userSimMain.lua -trType ac -save gridlstm_hdlc_${rnnHdLc}/rnndrop.0/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 5e-3 -rnnHdSizeL1 21 -rnnHdLyCnt $(($rnnHdLc)) -ciuTType train -uppModel rnn_bGridlstm -lstmHist 10 -usimTrIte 4000  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) > /dev/null &
+#        else
+#            th userSimMain.lua -trType ac -save gridlstm_hdlc_${rnnHdLc}/rnndrop.0/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 5e-3 -rnnHdSizeL1 21 -rnnHdLyCnt $(($rnnHdLc)) -ciuTType train -uppModel rnn_bGridlstm -lstmHist 10 -usimTrIte 4000  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) > /dev/null &
+#        fi
+#    done
+#    for t in `seq 1 2`;
+#    do
+#        g=0
+#        if [ $t -eq 2 ]
+#        then
+#            g=0 #1
+#        fi
+#        if [ $t -eq 1 ];
+#        then
+#            th userSimMain.lua -trType ac -save gridlstm_hdlc_${rnnHdLc}/rnndrop.1/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 5e-3 -rnnHdSizeL1 21 -rnnHdLyCnt $(($rnnHdLc)) -ciuTType train -uppModel rnn_bGridlstm -lstmHist 10 -usimTrIte 4000  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0.1 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) > /dev/null &
+#        else
+#            th userSimMain.lua -trType ac -save gridlstm_hdlc_${rnnHdLc}/rnndrop.1/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 5e-3 -rnnHdSizeL1 21 -rnnHdLyCnt $(($rnnHdLc)) -ciuTType train -uppModel rnn_bGridlstm -lstmHist 10 -usimTrIte 4000  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0.1 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) > /dev/null &
+#        fi
+#    done
+#    for t in `seq 1 2`;
+#    do
+#        g=0
+#        if [ $t -eq 2 ]
+#        then
+#            g=0 #1
+#        fi
+#        if [ $t -eq 1 ];
+#        then
+#            th userSimMain.lua -trType ac -save girdlstm_hdlc_${rnnHdLc}/rnndrop.2/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 5e-3 -rnnHdSizeL1 21 -rnnHdLyCnt $(($rnnHdLc)) -ciuTType train -uppModel rnn_bGridlstm -lstmHist 10 -usimTrIte 4000  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0.2 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) > /dev/null &
+#        else
+#            th userSimMain.lua -trType ac -save gridlstm_hdlc_${rnnHdLc}/rnndrop.2/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 5e-3 -rnnHdSizeL1 21 -rnnHdLyCnt $(($rnnHdLc)) -ciuTType train -uppModel rnn_bGridlstm -lstmHist 10 -usimTrIte 4000  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0.2 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) > /dev/null &
+#        fi
+#    done
+#    wait
+#    echo 'done with 3 sets in Bayesian GridLSTM' ${rnnHdLc}
+#    date +%Y,%m,%d-%H:%M:%S
+#done
+
+
+### Dec 4, 2017, Rerun the prior experiment
 s=1
-for rnnHdLc in 1 2 3 4
+for rnnHdLc in 3 4
 do
     echo 'in Bayesian GridLSTM round(layer)' ${rnnHdLc}
     date +%Y,%m,%d-%H:%M:%S
+#    for t in `seq 1 2`;
+#    do
+#        g=0
+#        if [ $t -eq 2 ]
+#        then
+#            g=0 #1
+#        fi
+#        if [ $t -eq 1 ];
+#        then
+#            th userSimMain.lua -trType ac -save gridlstm_hdlc_${rnnHdLc}/rnndrop.0/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 5e-3 -rnnHdSizeL1 21 -rnnHdLyCnt $(($rnnHdLc)) -ciuTType train -uppModel rnn_bGridlstm -lstmHist 10 -usimTrIte 4000  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) > /dev/null &
+#        else
+#            th userSimMain.lua -trType ac -save gridlstm_hdlc_${rnnHdLc}/rnndrop.0/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 5e-3 -rnnHdSizeL1 21 -rnnHdLyCnt $(($rnnHdLc)) -ciuTType train -uppModel rnn_bGridlstm -lstmHist 10 -usimTrIte 4000  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) > /dev/null &
+#        fi
+#    done
     for t in `seq 1 2`;
     do
         g=0
@@ -653,9 +721,9 @@ do
         fi
         if [ $t -eq 1 ];
         then
-            th userSimMain.lua -trType ac -save gridlstm_hdlc_${rnnHdLc}/rnndrop.0/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 5e-3 -rnnHdSizeL1 21 -rnnHdLyCnt $(($rnnHdLc)) -ciuTType train -uppModel rnn_bGridlstm -lstmHist 10 -usimTrIte 4000  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) > /dev/null &
+            th userSimMain.lua -trType ac -save gridlstm_hdlc_${rnnHdLc}/rnndrop.1/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 5e-3 -rnnHdSizeL1 21 -rnnHdLyCnt $(($rnnHdLc)) -ciuTType train -uppModel rnn_bGridlstm -lstmHist 10 -usimTrIte 5000  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0.1 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) > /dev/null &
         else
-            th userSimMain.lua -trType ac -save gridlstm_hdlc_${rnnHdLc}/rnndrop.0/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 5e-3 -rnnHdSizeL1 21 -rnnHdLyCnt $(($rnnHdLc)) -ciuTType train -uppModel rnn_bGridlstm -lstmHist 10 -usimTrIte 4000  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) > /dev/null &
+            th userSimMain.lua -trType ac -save gridlstm_hdlc_${rnnHdLc}/rnndrop.1/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 5e-3 -rnnHdSizeL1 21 -rnnHdLyCnt $(($rnnHdLc)) -ciuTType train -uppModel rnn_bGridlstm -lstmHist 10 -usimTrIte 5000  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0.1 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) > /dev/null &
         fi
     done
     for t in `seq 1 2`;
@@ -667,23 +735,9 @@ do
         fi
         if [ $t -eq 1 ];
         then
-            th userSimMain.lua -trType ac -save gridlstm_hdlc_${rnnHdLc}/rnndrop.1/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 5e-3 -rnnHdSizeL1 21 -rnnHdLyCnt $(($rnnHdLc)) -ciuTType train -uppModel rnn_bGridlstm -lstmHist 10 -usimTrIte 4000  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0.1 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) > /dev/null &
+            th userSimMain.lua -trType ac -save gridlstm_hdlc_${rnnHdLc}/rnndrop.2/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 5e-3 -rnnHdSizeL1 21 -rnnHdLyCnt $(($rnnHdLc)) -ciuTType train -uppModel rnn_bGridlstm -lstmHist 10 -usimTrIte 5000  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0.2 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) > /dev/null &
         else
-            th userSimMain.lua -trType ac -save gridlstm_hdlc_${rnnHdLc}/rnndrop.1/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 5e-3 -rnnHdSizeL1 21 -rnnHdLyCnt $(($rnnHdLc)) -ciuTType train -uppModel rnn_bGridlstm -lstmHist 10 -usimTrIte 4000  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0.1 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) > /dev/null &
-        fi
-    done
-    for t in `seq 1 2`;
-    do
-        g=0
-        if [ $t -eq 2 ]
-        then
-            g=0 #1
-        fi
-        if [ $t -eq 1 ];
-        then
-            th userSimMain.lua -trType ac -save girdlstm_hdlc_${rnnHdLc}/rnndrop.2/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 5e-3 -rnnHdSizeL1 21 -rnnHdLyCnt $(($rnnHdLc)) -ciuTType train -uppModel rnn_bGridlstm -lstmHist 10 -usimTrIte 4000  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0.2 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) > /dev/null &
-        else
-            th userSimMain.lua -trType ac -save gridlstm_hdlc_${rnnHdLc}/rnndrop.2/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 5e-3 -rnnHdSizeL1 21 -rnnHdLyCnt $(($rnnHdLc)) -ciuTType train -uppModel rnn_bGridlstm -lstmHist 10 -usimTrIte 4000  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0.2 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) > /dev/null &
+            th userSimMain.lua -trType ac -save gridlstm_hdlc_${rnnHdLc}/rnndrop.2/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 5e-3 -rnnHdSizeL1 21 -rnnHdLyCnt $(($rnnHdLc)) -ciuTType train -uppModel rnn_bGridlstm -lstmHist 10 -usimTrIte 5000  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0.2 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) > /dev/null &
         fi
     done
     wait
