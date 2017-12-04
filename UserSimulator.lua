@@ -525,6 +525,121 @@ function CIUserSimulator:_init(CIFileReader, opt)
     end
 
 
+    ----------------------------------------------------------------------
+    --- Prepare data for CNN models in training set
+    ---
+    self.cnnRealUserDataStates = {}
+    self.cnnRealUserDataActs = {}
+    self.cnnRealUserDataRewards = {}
+    self.cnnRealUserDataStarts = {}
+    self.cnnRealUserDataEnds = {}
+    self.cnnRealUserDataPad = torch.Tensor(#self.realUserDataStartLines):fill(0)    -- indicating whether data has padding at head (should be padded)
+    if string.sub(opt.uppModel, 1, 4) == 'cnn_' then
+        local indSeqHead = 1
+        local indSeqTail = opt.lstmHist     -- for CNN-based player simulation models, we also use this lstmHist opt value as indicator of the history length in state representation (in CNN, it is number of frames at each time step)
+        local indUserSeq = 1    -- user id ptr. Use this to get the tail of each trajectory
+        while indSeqTail <= #self.realUserDataStates do
+            if self.cnnRealUserDataPad[indUserSeq] < 1 then
+                for padi = opt.lstmHist-1, 1, -1 do
+                    self.cnnRealUserDataStates[#self.cnnRealUserDataStates + 1] = torch.Tensor(opt.lstmHist, self.userStateFeatureCnt)  -- input into TemporalConvolution is 2d or 3d tensor
+                    self.cnnRealUserDataActs[#self.cnnRealUserDataActs + 1] = self.realUserDataActs[indSeqHead + opt.lstmHist - padi - 1]   -- act and reward were set to the value at last position in this
+                    self.cnnRealUserDataRewards[#self.cnnRealUserDataRewards + 1] = self.realUserDataRewards[indSeqHead + opt.lstmHist-padi - 1]    -- time sequence
+                    for i=1, padi do
+                        self.cnnRealUserDataStates[#self.cnnRealUserDataStates][i]:fill(0)
+                    end
+                    for i=1, opt.lstmHist-padi do
+                        self.cnnRealUserDataStates[#self.cnnRealUserDataStates][i+padi] = self.realUserDataStates[indSeqHead+i-1]
+                    end
+                    if padi == opt.lstmHist-1 then
+                        self.cnnRealUserDataStarts[#self.cnnRealUserDataStarts+1] = #self.cnnRealUserDataStates     -- This is the start of a user's record -- This is duplicated. The value should be the same as realUserDataStartLines
+                    end
+                    if indSeqHead+(opt.lstmHist-padi)-1 == self.realUserDataEndLines[indUserSeq] then
+                        self.cnnRealUserDataPad[indUserSeq] = 1
+                        break   -- if padding tail is going to outrange this user record's tail, break
+                    end
+                end
+                self.cnnRealUserDataPad[indUserSeq] = 1
+            else
+                if indSeqTail <= self.realUserDataEndLines[indUserSeq] then
+                    self.cnnRealUserDataStates[#self.cnnRealUserDataStates + 1] = torch.Tensor(opt.lstmHist, self.userStateFeatureCnt)  -- input into TemporalConvolution is 2d or 3d tensor
+                    self.cnnRealUserDataActs[#self.cnnRealUserDataActs + 1] = self.realUserDataActs[indSeqHead + opt.lstmHist - 1]
+                    self.cnnRealUserDataRewards[#self.cnnRealUserDataRewards + 1] = self.realUserDataRewards[indSeqHead + opt.lstmHist - 1]
+                    for i=1, opt.lstmHist do
+                        self.cnnRealUserDataStates[#self.cnnRealUserDataStates][i] = self.realUserDataStates[indSeqHead+i-1]
+                    end
+                    indSeqHead = indSeqHead + 1
+                    indSeqTail = indSeqTail + 1
+                else
+                    self.cnnRealUserDataEnds[#self.cnnRealUserDataEnds+1] = #self.cnnRealUserDataStates     -- This is the end of a user's record
+                    indUserSeq = indUserSeq + 1 -- next user's records
+                    indSeqHead = self.realUserDataStartLines[indUserSeq]
+                    indSeqTail = indSeqHead + opt.lstmHist - 1
+                end
+            end
+        end
+        self.cnnRealUserDataEnds[#self.cnnRealUserDataEnds+1] = #self.cnnRealUserDataStates     -- Set the end of the last user's record
+        -- There are in total 15509 sequences if histLen is 3. 14707 if histLen is 5. 15108 if histLen is 4. 15911 if histLen is 2.
+    end
+
+    ----------------------------------------------------------------------
+    --- Prepare data for CNN models in test/train_validation set
+    ---
+    self.cnnRealUserDataStatesTest = {}
+    self.cnnRealUserDataActsTest = {}
+    self.cnnRealUserDataRewardsTest = {}
+    self.cnnRealUserDataStartsTest = {}
+    self.cnnRealUserDataEndsTest = {}
+    self.cnnRealUserDataPadTest = torch.Tensor(#self.realUserDataStartLinesTest):fill(0)    -- indicating whether data has padding at head (should be padded)
+    if self.opt.ciuTType == 'train' or self.opt.ciuTType == 'train_tr' then
+        if string.sub(opt.uppModel, 1, 4) == 'cnn_' then
+            local indSeqHead = 1
+            local indSeqTail = opt.lstmHist
+            local indUserSeq = 1    -- user id ptr. Use this to get the tail of each trajectory
+            while indSeqTail <= #self.realUserDataStatesTest do
+                if self.cnnRealUserDataPadTest[indUserSeq] < 1 then
+                    for padi = opt.lstmHist-1, 1, -1 do
+                        self.cnnRealUserDataStatesTest[#self.cnnRealUserDataStatesTest + 1] = torch.Tensor(opt.lstmHist, self.userStateFeatureCnt)  -- input into TemporalConvolution is 2d or 3d tensor
+                        self.cnnRealUserDataActsTest[#self.cnnRealUserDataActsTest + 1] = self.realUserDataActsTest[indSeqHead + opt.lstmHist - padi - 1]   -- act and reward were set to the value at last position in this
+                        self.cnnRealUserDataRewardsTest[#self.cnnRealUserDataRewardsTest + 1] = self.realUserDataRewardsTest[indSeqHead + opt.lstmHist-padi - 1]    -- time sequence
+                        for i=1, padi do
+                            self.cnnRealUserDataStatesTest[#self.cnnRealUserDataStatesTest][i]:fill(0)
+                        end
+                        for i=1, opt.lstmHist-padi do
+                            self.cnnRealUserDataStatesTest[#self.cnnRealUserDataStatesTest][i+padi] = self.realUserDataStatesTest[indSeqHead+i-1]
+                        end
+                        if padi == opt.lstmHist-1 then
+                            self.cnnRealUserDataStartsTest[#self.cnnRealUserDataStartsTest+1] = #self.cnnRealUserDataStatesTest     -- This is the start of a user's record
+                        end
+                        if indSeqHead+(opt.lstmHist-padi)-1 == self.realUserDataEndLinesTest[indUserSeq] then
+                            self.cnnRealUserDataPadTest[indUserSeq] = 1
+                            break   -- if padding tail is going to outrange this user record's tail, break
+                        end
+                    end
+                    self.cnnRealUserDataPadTest[indUserSeq] = 1
+                else
+                    if indSeqTail <= self.realUserDataEndLinesTest[indUserSeq] then
+                        self.cnnRealUserDataStatesTest[#self.cnnRealUserDataStatesTest + 1] = torch.Tensor(opt.lstmHist, self.userStateFeatureCnt)  -- input into TemporalConvolution is 2d or 3d tensor
+                        self.cnnRealUserDataActsTest[#self.cnnRealUserDataActsTest + 1] = self.realUserDataActsTest[indSeqHead + opt.lstmHist - 1]
+                        self.cnnRealUserDataRewardsTest[#self.cnnRealUserDataRewardsTest + 1] = self.realUserDataRewardsTest[indSeqHead + opt.lstmHist - 1]
+                        for i=1, opt.lstmHist do
+                            self.cnnRealUserDataStatesTest[#self.cnnRealUserDataStatesTest][i] = self.realUserDataStatesTest[indSeqHead+i-1]
+                        end
+                        indSeqHead = indSeqHead + 1
+                        indSeqTail = indSeqTail + 1
+                    else
+                        self.cnnRealUserDataEndsTest[#self.cnnRealUserDataEndsTest+1] = #self.cnnRealUserDataStatesTest     -- This is the end of a user's record
+                        indUserSeq = indUserSeq + 1 -- next user's records
+                        indSeqHead = self.realUserDataStartLinesTest[indUserSeq]
+                        indSeqTail = indSeqHead + opt.lstmHist - 1
+                    end
+                end
+            end
+            self.cnnRealUserDataEndsTest[#self.cnnRealUserDataEndsTest+1] = #self.cnnRealUserDataStatesTest     -- Set the end of the last user's record
+            -- There are in total 15509 sequences if histLen is 3. 14707 if histLen is 5. 15108 if histLen is 4. 15911 if histLen is 2.
+        end
+    end
+
+
     --- The following tensors are used to calculated Pearson's correlations between state features
     --- in self.realUserDataStates
     self.featSqre = torch.Tensor(self.userStateFeatureCnt):zero()
