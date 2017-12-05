@@ -17,13 +17,16 @@ local TempConvUserSimCNN, parent = torch.class('nn.TempConvUserSimCNN')
 -------------------------------- Params --------------------------------
 --- inputSize: input size in each frame into the CNN model
 --- outputSize: output size in each frame from the CNN model
---- cnn_layers: the 'general' layer counting
+--- cnn_layers: the 'general' CNN layer counting. In v3, actually cnn layers will be doubled
 --- kenal_width: kenrel width of each CNN module. All layers here use the same sized CNN module
---- version: can be v1, v2, v3, or v4. v1 has no residual, v2 has residual connection between each layer,
---- v3 has residual connects through 2 layers, and v4 has residual connection from original input to each hidden layer.
+--- version: can be v1, v2, v3, or v4.
+--- v1 has no residual connection,
+--- v2 has residual connection for each CNN layer,
+--- v3 has residual connects through 2 hidden CNN layers,
+--- v4 has residual connection from the original input to each hidden CNN layer.
 --- We only set kernel stride to be 1.
 function TempConvUserSimCNN:__init(inputSize, outputSize, cnn_layers, kernel_width, dropout_rate, version)    -- p, mono in param list are deleted. not sure if mono is useful yet. mono is used in original lstm model to set Dropout
-    assert(version == 'v1' or version == 'v2' or version == 'v3', 'Convolution module in player simulation modeling can only be v1, v2 or v3')
+    assert(version == 'v1' or version == 'v2' or version == 'v3' or version == 'v4', 'Convolution module in player simulation modeling can only be v1, v2 or v3')
     assert(inputSize == outputSize, 'Right now we only support CNN modules with same input, output size')
     assert(dropout_rate >= 0 and dropout_rate < 1, 'Dropout rate should be in [0,1)')
 
