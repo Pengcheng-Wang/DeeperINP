@@ -25,7 +25,7 @@ local TempConvUserSimCNN, parent = torch.class('nn.TempConvUserSimCNN')
 --- v3 has residual connects through 2 hidden CNN layers,
 --- v4 has residual connection from the original input to each hidden CNN layer.
 --- We only set kernel stride to be 1.
-function TempConvUserSimCNN:__init(inputSize, outputSize, cnn_layers, kernel_width, dropout_rate, version)    -- p, mono in param list are deleted. not sure if mono is useful yet. mono is used in original lstm model to set Dropout
+function TempConvUserSimCNN:__init(inputSize, outputSize, cnn_layers, kernel_width, dropout_rate, version)
     assert(version == 'v1' or version == 'v2' or version == 'v3' or version == 'v4', 'Convolution module in player simulation modeling can only be v1, v2 v3 or v4')
     assert(inputSize == outputSize, 'Right now we only support CNN modules with same input, output size for ease of adding residual connection')
     assert(dropout_rate >= 0 and dropout_rate < 1, 'Dropout rate should be in [0,1)')

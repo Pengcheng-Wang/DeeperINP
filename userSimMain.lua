@@ -11,7 +11,7 @@ opt = lapp[[
        --trType           (default "rl")        training type : sc (score) | ac (action) | bg (behavior generation) | rl (implement rlenvs API) | ev (evaluation of act/score prediction)
        -s,--save          (default "upplogs")   subdirectory to save logs
        -n,--ciunet        (default "")          reload pretrained CI user simulation network
-       -m,--uppModel      (default "rnn_lstm")  type of model to train: moe | mlp | linear | rnn_lstm | rnn_rhn | rnn_blstm | rnn_bGridlstm
+       -m,--uppModel      (default "rnn_lstm")  type of model to train: moe | mlp | linear | rnn_lstm | rnn_rhn | rnn_blstm | rnn_bGridlstm | cnn_uSimTempCnn
        --uppModelRNNDom   (default 0)           indicator of whether the model is an RNN model and uses dropout masks from outside of the model. 0 for not using outside mask. Otherwise, this number represents the number of gates used in RNN model
        --gridLstmTieWhts  (default 1)           indicator of whether the GridLSTM will have shared, tied weights along depth dimension. 1 means with shared weights, 0 means non-shared weights
        -f,--full                                use the full dataset
@@ -27,11 +27,13 @@ opt = lapp[[
        -g,--gpu           (default 0)           gpu device id, 0 for using cpu
        --seed             (default 1)           Random seed
        --prepro           (default "std")       input state feature preprocessing: rsc | std
-       --rnnHdSizeL1      (default 32)          lstm hidden layer size
-       --rnnHdSizeL2      (default 0)           lstm hidden layer size in 2nd lstm layer
-       --rnnHdLyCnt       (default 2)           number of lstm hidden layer. Default is 2 bcz only when rnnHdSizeL2 is not 0 this opt will be examined. The RHN and Bayesian LSTM rnn number also uses this opt param
+       --rnnHdSizeL1      (default 32)          rnn hidden layer size
+       --rnnHdSizeL2      (default 0)           rnn hidden layer size in 2nd lstm layer
+       --rnnHdLyCnt       (default 2)           number of rnn/cnn hidden layer. Default is 2 bcz only when rnnHdSizeL2 is not 0 this opt will be examined. The RHN and Bayesian LSTM rnn number also uses this opt param. I'm also trying to use it for CNN hidden layer counting.
        --rhnReccDept      (default 5)           The recurrent depth of RHN model in one layer
-       --lstmHist         (default 10)          lstm hist length. This influence the rnn tensor table construction in data preparation
+       --lstmHist         (default 10)          lstm hist length. This influence the rnn tensor table construction in data preparation. Attention: we also use it as history length indicator (input frame number) in CNN models
+       --cnnKernelWidth   (default 3)           Temporal Convolution kernel width
+       --cnnConnType      (default "v2")        Residual connection type in player simulation CNN model
        --uSimGru          (default 0)           whether to substitue lstm with gru (0 for using lstm, 1 for GRU)
        --uSimLstmBackLen  (default 3)           The maximum step applied in bptt in lstm
        --ubgDir           (default "ubgModel")  directory storing uap and usp models

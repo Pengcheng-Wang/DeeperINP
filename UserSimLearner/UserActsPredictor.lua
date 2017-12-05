@@ -166,9 +166,7 @@ function CIUserActsPredictor:_init(CIUserSimulator, opt)
             rhn:remember('both')
             self.model:add(rhn)
             self.model:add(nn.NormStabilizer())
-
             self.model:add(nn.Linear(opt.rnnHdSizeL1, #classes))
-
             self.model:add(nn.LogSoftMax())
             self.model = nn.Sequencer(self.model)
             ------------------------------------------------------------
@@ -183,9 +181,7 @@ function CIUserActsPredictor:_init(CIUserSimulator, opt)
             bay_lstm:remember('both')
             self.model:add(bay_lstm)
             self.model:add(nn.NormStabilizer())
-
             self.model:add(nn.Linear(opt.rnnHdSizeL1, #classes))
-
             self.model:add(nn.LogSoftMax())
             self.model = nn.Sequencer(self.model)
             ------------------------------------------------------------
@@ -196,15 +192,25 @@ function CIUserActsPredictor:_init(CIUserSimulator, opt)
             ------------------------------------------------------------
             require 'modules.GridLSTMBayesianRNN'
             local grid_lstm
-            grid_lstm = nn.BayesianGridLSTM(self.inputFeatureNum, opt.rnnHdLyCnt, opt.uSimLstmBackLen, opt.gridLstmTieWhts) -- rnn_size, rnn_layers, rho, tie_weights
+            grid_lstm = nn.BayesianGridLSTM(self.inputFeatureNum, opt.rnnHdLyCnt, opt.uSimLstmBackLen, opt.cnnConnType) -- rnn_size, rnn_layers, rho, tie_weights
             grid_lstm:remember('both')
             self.model:add(grid_lstm)
             self.model:add(nn.NormStabilizer())
-
             self.model:add(nn.Linear(self.inputFeatureNum, #classes))   -- we force GridLSTM to have hidden/cell units with the same dimension as input
-
             self.model:add(nn.LogSoftMax())
             self.model = nn.Sequencer(self.model)
+            ------------------------------------------------------------
+
+        elseif opt.uppModel == 'cnn_uSimTempCnn' then
+            ------------------------------------------------------------
+            -- Bayesian GridLSTM implemented following Corey's GridLSTM and Yarin Gal's Bayesian LSTM code (dropout mask defined outside rnn model)
+            ------------------------------------------------------------
+            require 'modules.TempConvInUserSimCNN'
+            local tempCnn = nn.TempConvUserSimCNN(self.inputFeatureNum, self.inputFeatureNum, opt.rnnHdLyCnt, opt.cnnKernelWidth, opt.dropoutUSim) -- inputSize, outputSize, cnn_layers, kernel_width, dropout_rate, version
+            self.model:add(tempCnn)
+            self.model:add(nn.View(-1):setNumInputDims(2))  -- The input/output data should have dimensions of batch_index/frame_index/feature_index, so it's 3d, and 2d without batch index
+            self.model:add(nn.Linear(self.inputFeatureNum * opt.lstmHist, #classes))   -- opt.lstmHist is used to indicate number of frames in CNN models
+            self.model:add(nn.LogSoftMax())
             ------------------------------------------------------------
 
         else
@@ -349,49 +355,7 @@ function CIUserActsPredictor:trainOneEpoch()
     local lstmIter = 1  -- lstm iterate for each squence starts from this value
     local epochDone = false
     while not epochDone do
-        if string.sub(self.opt.uppModel, 1, 4) ~= 'rnn_' then
-            -- create mini batch
-            inputs = torch.Tensor(self.opt.batchSize, self.inputFeatureNum)
-            targets = torch.Tensor(self.opt.batchSize)
-            local k = 1
-            for i = t, math.min(t+self.opt.batchSize-1, #self.ciUserSimulator.realUserDataStates) do
-                inputs[k] = self.ciUserSimulator.realUserDataStates[i]
-                targets[k] = self.ciUserSimulator.realUserDataActs[i]
-                k = k + 1
-            end
-
-            -- at the end of dataset, if it could not be divided into full batch
-            if k ~= self.opt.batchSize + 1 then
-                while k <= self.opt.batchSize do
-                    local randInd = torch.random(1, #self.ciUserSimulator.realUserDataStates)
-                    -- I'll put input pre-process after data augmentation
-                    inputs[k] = self.ciUserSimulator.realUserDataStates[randInd]
-                    targets[k] = self.ciUserSimulator.realUserDataActs[randInd]
-                    k = k + 1
-                end
-            end
-
-            t = t + self.opt.batchSize
-            if t > #self.ciUserSimulator.realUserDataStates then
-                epochDone = true
-            end
-
-            if self.opt.actPredDataAug > 0 then
-                -- Data augmentation
-                self.ciUserSimulator:UserSimDataAugment(inputs, targets, false)
-            end
-            -- Should do input feature pre-processing after data augmentation
-            inputs = self.ciUserSimulator:preprocessUserStateData(inputs, self.opt.prepro)
-            -- Try to add random normal noise to input features and see how it performs
-            -- This should be invoked after input preprocess bcz we want to set an unique std
-            --self.ciUserSimulator:UserSimDataAddRandNoise(inputs, false, 0.01)
-
-            if self.opt.gpu > 0 then
-                inputs = inputs:cuda()
-                targets = targets:cuda()
-            end
-
-        else
+        if string.sub(self.opt.uppModel, 1, 4) == 'rnn_' then
             -- rnn models
             inputs = {}
             targets = {}
@@ -450,6 +414,110 @@ function CIUserActsPredictor:trainOneEpoch()
             if self.opt.gpu > 0 then
                 nn.utils.recursiveType(inputs, 'torch.CudaTensor')
                 nn.utils.recursiveType(targets, 'torch.CudaTensor')
+            end
+
+        elseif string.sub(self.opt.uppModel, 1, 4) == 'cnn_' then
+            -- cnn models
+            inputs = torch.Tensor(self.opt.batchSize, self.opt.lstmHist, self.inputFeatureNum)
+            targets = torch.Tensor(self.opt.batchSize)
+            -- todo:pwang8. Time to edit from here. Not sure if this data preparation should be similar with non-rnn case, because we don't need rearrange dimension
+            local k
+            for j = 1, self.opt.lstmHist do
+                inputs[j] = torch.Tensor(self.opt.batchSize, self.inputFeatureNum)
+                targets[j] = torch.Tensor(self.opt.batchSize)
+                k = 1
+                for i = lstmIter, math.min(lstmIter+self.opt.batchSize-1, #self.rnnRealUserDataStates) do
+                    inputs[j][k] = self.rnnRealUserDataStates[i][j]
+                    targets[j][k] = self.rnnRealUserDataActs[i][j]
+                    k = k + 1
+                end
+            end
+
+            -- at the end of dataset, if it could not be divided into full batch
+            if k ~= self.opt.batchSize + 1 then
+                while k <= self.opt.batchSize do
+                    local randInd = torch.random(1, #self.rnnRealUserDataStates)
+                    for j = 1, self.opt.lstmHist do
+                        inputs[j][k] = self.rnnRealUserDataStates[randInd][j]
+                        targets[j][k] = self.rnnRealUserDataActs[randInd][j]
+                    end
+                    k = k + 1
+                end
+            end
+
+            lstmIter = lstmIter + self.opt.batchSize
+            if lstmIter > #self.rnnRealUserDataStates then
+                epochDone = true
+            end
+
+            if self.opt.actPredDataAug > 0 then
+                -- Data augmentation
+                self.ciUserSimulator:UserSimDataAugment(inputs, targets, true)
+                if self.opt.uppModelRNNDom > 0 then
+                    TableSet.buildRNNDropoutMask(self.rnn_noise_i, self.rnn_noise_h, self.rnn_noise_o, self.inputFeatureNum, self.opt.rnnHdSizeL1, self.opt.rnnHdLyCnt, inputs[1]:size(1), self.opt.lstmHist, self.opt.uppModelRNNDom)
+                end
+            end
+            -- Should do input feature pre-processing after data augmentation
+            for ik=1, #inputs do
+                inputs[ik] = self.ciUserSimulator:preprocessUserStateData(inputs[ik], self.opt.prepro)
+            end
+            -- Try to add random normal noise to input features and see how it performs
+            -- This should be invoked after input preprocess bcz we want to set an unique std
+            -- I've tried to apply adding random normal noise in rnn form of data. It seems the result is not good.
+            --self.ciUserSimulator:UserSimDataAddRandNoise(inputs, true, 0.01)
+
+            if self.opt.uppModelRNNDom > 0 then
+                TableSet.sampleRNNDropoutMask(self.opt.dropoutUSim, self.rnn_noise_i, self.rnn_noise_h, self.rnn_noise_o, self.opt.rnnHdLyCnt, self.opt.lstmHist)
+                for j = 1, self.opt.lstmHist do
+                    inputs[j] = {inputs[j], self.rnn_noise_i[j], self.rnn_noise_h[j], self.rnn_noise_o[j]}
+                end
+            end
+
+            if self.opt.gpu > 0 then
+                nn.utils.recursiveType(inputs, 'torch.CudaTensor')
+                nn.utils.recursiveType(targets, 'torch.CudaTensor')
+            end
+
+        else
+            -- create data mini batch for non-rnn, non-cnn models
+            inputs = torch.Tensor(self.opt.batchSize, self.inputFeatureNum)
+            targets = torch.Tensor(self.opt.batchSize)
+            local k = 1
+            for i = t, math.min(t+self.opt.batchSize-1, #self.ciUserSimulator.realUserDataStates) do
+                inputs[k] = self.ciUserSimulator.realUserDataStates[i]
+                targets[k] = self.ciUserSimulator.realUserDataActs[i]
+                k = k + 1
+            end
+
+            -- at the end of dataset, if it could not be divided into full batch
+            if k ~= self.opt.batchSize + 1 then
+                while k <= self.opt.batchSize do
+                    local randInd = torch.random(1, #self.ciUserSimulator.realUserDataStates)
+                    -- I'll put input pre-process after data augmentation
+                    inputs[k] = self.ciUserSimulator.realUserDataStates[randInd]
+                    targets[k] = self.ciUserSimulator.realUserDataActs[randInd]
+                    k = k + 1
+                end
+            end
+
+            t = t + self.opt.batchSize
+            if t > #self.ciUserSimulator.realUserDataStates then
+                epochDone = true
+            end
+
+            if self.opt.actPredDataAug > 0 then
+                -- Data augmentation
+                self.ciUserSimulator:UserSimDataAugment(inputs, targets, false)
+            end
+            -- Should do input feature pre-processing after data augmentation
+            inputs = self.ciUserSimulator:preprocessUserStateData(inputs, self.opt.prepro)
+            -- Try to add random normal noise to input features and see how it performs
+            -- This should be invoked after input preprocess bcz we want to set an unique std
+            --self.ciUserSimulator:UserSimDataAddRandNoise(inputs, false, 0.01)
+
+            if self.opt.gpu > 0 then
+                inputs = inputs:cuda()
+                targets = targets:cuda()
             end
 
         end
