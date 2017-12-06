@@ -204,11 +204,12 @@ function CIUserActsPredictor:_init(CIUserSimulator, opt)
 
         elseif opt.uppModel == 'cnn_uSimTempCnn' then
             ------------------------------------------------------------
-            -- Bayesian GridLSTM implemented following Corey's GridLSTM and Yarin Gal's Bayesian LSTM code (dropout mask defined outside rnn model)
+            -- CNN model following the implementation of OpenNMT CNNEncoder and fb.resnet
             ------------------------------------------------------------
             require 'modules.TempConvInUserSimCNN'
-            local tempCnn = nn.TempConvUserSimCNN(self.inputFeatureNum, self.inputFeatureNum, opt.rnnHdLyCnt, opt.cnnKernelWidth, opt.dropoutUSim) -- inputSize, outputSize, cnn_layers, kernel_width, dropout_rate, version
-            self.model:add(tempCnn)
+            local tempCnn = nn.TempConvUserSimCNN()         -- inputSize, outputSize, cnn_layers, kernel_width, dropout_rate, version
+            local _tempCnnLayer = tempCnn:CreateCNNModule(self.inputFeatureNum, self.inputFeatureNum, opt.rnnHdLyCnt, opt.cnnKernelWidth, opt.dropoutUSim, opt.cnnConnType)
+            self.model:add(_tempCnnLayer)
             self.model:add(nn.View(-1):setNumInputDims(2))  -- The input/output data should have dimensions of batch_index/frame_index/feature_index, so it's 3d, and 2d without batch index
             self.model:add(nn.Linear(self.inputFeatureNum * opt.lstmHist, #classes))   -- opt.lstmHist is used to indicate number of frames in CNN models
             self.model:add(nn.LogSoftMax())
@@ -736,9 +737,32 @@ function CIUserActsPredictor:testActPredOnTestDetOneEpoch()
         self.uapConfusion:zero()
         return {tvalid, _logLoss/#self.rnnRealUserDataStatesTest}
 
-        -- todo:pwang8. time to edit this. adding evaluation on test set. Dec 5, 2017.
+    elseif string.sub(self.opt.uppModel, 1, 4) == 'cnn_' then
+        -- cnn models
+        self.model:evaluate()
+
+        local prepUserState = torch.Tensor(#self.cnnRealUserDataStatesTest, self.opt.lstmHist, self.ciUserSimulator.userStateFeatureCnt)
+        for i=1, #self.cnnRealUserDataStatesTest do
+            prepUserState[i] = self.ciUserSimulator:preprocessUserStateData(self.cnnRealUserDataStatesTest[i], self.opt.prepro)
+        end
+        if self.opt.gpu > 0 then
+            prepUserState = prepUserState:cuda()
+        end
+        local nll_acts = self.model:forward(prepUserState)
+
+        self.uapConfusion:zero()
+        nll_acts:float()     -- set nll_rewards back to cpu mode (in main memory)
+        for i=1, #self.cnnRealUserDataStatesTest do
+            self.uapConfusion:add(nll_acts[i], self.cnnRealUserDataActsTest[i])
+            _logLoss = _logLoss + -1 * nll_acts[i][self.cnnRealUserDataActsTest[i]]
+        end
+        self.uapConfusion:updateValids()
+        local tvalid = self.uapConfusion.totalValid
+        self.uapConfusion:zero()
+        return {tvalid, _logLoss/#self.cnnRealUserDataStatesTest}
+
     else
-        -- uSimShLayer == 0 and not lstm models
+        -- uSimShLayer == 0 and non-rnn, non-cnn models
         self.model:evaluate()
 
         local prepUserState = torch.Tensor(#self.ciUserSimulator.realUserDataStatesTest, self.ciUserSimulator.userStateFeatureCnt)
