@@ -738,13 +738,26 @@ function CIUserSimulator:preprocessUserStateData(obvUserData, ppType)
         _stateFeatMean = self.stateFeatureMeanEachFeature
         _stateFeatStd = self.stateFeatureStdEachFeature
         _stateFeatRescale = self.stateFeatureRescaleFactor
-    else
+    elseif obvUserData:dim() == 2 then
         -- If input tensor is 2-d (each row contains one data point)
         -- Duplicate mean and std tensors and make them fit the dim of input tensor
         -- We assume the 1st dim is batch index
+        -- Right now, RNN model uses this format
+        -- non-sequential model in batch also uses this format
         _stateFeatMean = torch.repeatTensor(self.stateFeatureMeanEachFeature, obvUserData:size(1), 1)
         _stateFeatStd = torch.repeatTensor(self.stateFeatureStdEachFeature, obvUserData:size(1), 1)
         _stateFeatRescale = torch.repeatTensor(self.stateFeatureRescaleFactor, obvUserData:size(1), 1)
+    elseif obvUserData:dim() == 3 then
+        -- Right now, CNN model uses this format
+        -- Input tensor is 3-d. 1st dim is batch index,
+        -- 2nd dim is frame index (history index, with total length of opt.lstmHist)
+        -- 3rd dim is feature index
+        _stateFeatMean = torch.repeatTensor(self.stateFeatureMeanEachFeature, obvUserData:size(1), obvUserData:size(2), 1)
+        _stateFeatStd = torch.repeatTensor(self.stateFeatureStdEachFeature, obvUserData:size(1), obvUserData:size(2), 1)
+        _stateFeatRescale = torch.repeatTensor(self.stateFeatureRescaleFactor, obvUserData:size(1), obvUserData:size(2), 1)
+    else
+        print('Size of input data does not fit in preprocessing')
+        os.exit()
     end
 
     if ppType == 'rsc' then
@@ -1027,10 +1040,11 @@ function CIUserSimulator:calcOneStepActPertCounting(p_act_cnt, p_act_ind, _dual_
 end
 
 --- Augment data in training corpus using the proteties we extract here
-function CIUserSimulator:UserSimDataAugment(input, output, isRNNForm)
-    if isRNNForm then
-        -- If the model is in RNN form, which means the model is a sequencer, and requires input
-        -- to be a table of tensors in which the 1st dim (of the table) is time step
+function CIUserSimulator:UserSimActDataAugment(input, output, uppModelForm)
+    -- todo:pwang8. Data augmentation for score prediction is not implemented yet. I'm considering maybe I should use one function to do both. Dec 5, 2017.
+    if string.sub(uppModelForm, 1, 4) == 'rnn_' then
+        -- If the player simulation model is an RNN model, which means the model is a sequencer,
+        -- and requires input to be a table of tensors in which the 1st dim (of the table) is time step
         for j = 1, self.opt.lstmHist do
             input[j]:resize(self.opt.batchSize * 2, self.userStateFeatureCnt)
             output[j]:resize(self.opt.batchSize * 2)
@@ -1118,7 +1132,7 @@ function CIUserSimulator:UserSimDataAugment(input, output, isRNNForm)
                             else
                                 --- delete an existed action (if possible) in this sequence
                                 local _delActInSeqWithinSeq = function ()
-                                    -- This function is used to try to delete an action from a RNN sequence in which the delted action should appear in the sequence
+                                    -- This function is used to try to delete an action from a RNN sequence in which the deleted action should appear in the sequence
                                     local pActAppPos = {}
                                     for _paap=1, math.min(actStepCntTotal, self.opt.lstmHist-1) do
                                         if output[self.opt.lstmHist - _paap][self.opt.batchSize+i] == pai then
@@ -1131,7 +1145,9 @@ function CIUserSimulator:UserSimDataAugment(input, output, isRNNForm)
                                         for _obvAct=1, #pActAppPos do
                                             pActSigmDistT[_obvAct] = self.actSigmoidDistPriorStep[{output[self.opt.lstmHist][self.opt.batchSize+i], pActAppPos[_obvAct], pai}]
                                         end
+                                        pActSigmDistT:add(1e-5)     -- avoid divide by zero
                                         pActSigmDistT:cumsum()
+                                        pActSigmDistT:div(pActSigmDistT[#pActAppPos])   -- standardization
                                         -- Sample that position of action "pai" to delete
                                         local _dltSampSeed = torch.uniform()
                                         for dltPos=1, #pActAppPos do
@@ -1165,7 +1181,7 @@ function CIUserSimulator:UserSimDataAugment(input, output, isRNNForm)
                                     -- is in a long range, which means it does not appear in the state representation, and we just delete
                                     -- that action counting
                                     local priorActCumsum = self.actSigmoidDistPriorStepCumsum[{output[self.opt.lstmHist][self.opt.batchSize+i], {}, pai}]:clone() -- clone() should be necessary, since we change its value later
-                                    -- valActSampDist is the valid number of time steps we can count backwards to add an extra player action.
+                                    -- valActSampDist is the valid number of time steps we can count backwards to delete an existed player action.
                                     -- Attention: actStepCntTotal is 1 step less than the current time, bcz it is calculated from input features, which contain cumsum of prior actions
                                     local valActSampDist = math.min(actStepCntTotal, self.priorActStatThres)
                                     priorActCumsum:div(priorActCumsum[valActSampDist])  -- standardization
@@ -1195,8 +1211,174 @@ function CIUserSimulator:UserSimDataAugment(input, output, isRNNForm)
             end
         end
 
+    elseif string.sub(uppModelForm, 1, 4) == 'cnn_' then
+        -- If this player simulation model is in CNN form, meaning its input may contain multiple
+        -- frames of features, and action prediction output only contains one value. For data augmentation,
+        -- the data is processed similar as it is for RNN models
+        assert(input:dim()==3 and output:dim()==1, 'Input for CNN models in player simulator should be 3d')
+        input:resize(self.opt.batchSize * 2, input:size(2), input:size(3))
+        output:resize(self.opt.batchSize * 2)
+
+        for i=1, self.opt.batchSize do
+            -- clone from original
+            input[self.opt.batchSize+i] = input[i]
+            output[self.opt.batchSize+i] = output[i]
+
+            local actStepCntTotal = torch.cumsum(input[self.opt.batchSize+i][self.opt.lstmHist])[self.CIFr.usrActInd_end-1]    -- the counting of all actions the player took till now
+            local freqActPertProb
+            if actStepCntTotal < 3 then
+                freqActPertProb = {}
+            elseif actStepCntTotal < 6 then
+                -- For action 4-6, the standard deviations are not that large, so try to perturb slightly
+                freqActPertProb = {0.3}--{0.3}
+            elseif actStepCntTotal <= 20 then
+                freqActPertProb = {0.7, 0.5, 0.3, 0.2, 0.1}--{0.7, 0.35}
+            elseif actStepCntTotal <= 35 then
+                freqActPertProb = {0.8, 0.7, 0.6, 0.45, 0.25, 0.1}--{0.8, 0.5, 0.3}
+            else
+                freqActPertProb = {0.9, 0.8, 0.7, 0.5, 0.35, 0.25, 0.1}--{0.9, 0.7, 0.35}
+            end
+
+            assert(self.priorActStatThres >= self.opt.lstmHist)     -- I think in ideal case self.priorActStatThres should be much larger than opt.lstmHist
+            local _pertActCandidateList = self.actFreqSigmoidCum    -- It is set up in this way bcz we cannot sample actions w.r.t correlation for game-ending action
+            if output[self.opt.batchSize+i] ~= self.CIFr.usrActInd_end then  -- if current action is not ending action, then use correlation, otherwise use action freq
+                _pertActCandidateList = self.featOfActCorreAbsTabCumsum[output[self.opt.batchSize+i]]
+            end
+
+            for k=1, #freqActPertProb do
+                assert(actStepCntTotal >= 2 )
+                if torch.uniform() < freqActPertProb[k] then
+                    -- Sample an perturbed action according to correlation or action frequency
+                    local freqActSmpSeed = torch.uniform()
+                    for pai=1, self.featOfActCorreAbsTabCumsum:size(2) do --self.actFreqSigmoidCum:size()[1] do
+                        if freqActSmpSeed <= _pertActCandidateList[pai] then    --self.actFreqSigmoidCum[pai] then
+                            -- This is designed differently from the correlation based perturbation method for mlp data augmentation
+                            -- So, each time we only perturb one action, and this action can be repeatedly perturbed
+                            -- If the program enters here, that means the action "pai" is the chosen one to be perturbed
+                            -- Right now, we determine where this action perturbation should be.
+                            -- The following cumsum calculates the cumsum of appearances of action pai being priorly k steps to action output[self.opt.batchSize+i]
+
+                            if torch.uniform() < 0.5 then
+                                --- Add an extra action into this sequence
+                                local priorActCumsum = self.actSigmoidDistPriorStepCumsum[{output[self.opt.batchSize+i], {}, pai}]:clone() -- clone() should be necessary, since we change its value later
+                                -- valActSampDist is the valid number of time steps we can count backwards to add an extra player action.
+                                -- Attention: actStepCntTotal is 1 step less than the current time, bcz it is calculated from input features, which contain cumsum of prior actions
+                                local valActSampDist = math.min(actStepCntTotal, self.priorActStatThres)
+                                priorActCumsum:div(priorActCumsum[valActSampDist])  -- standardization
+
+                                -- sample a position to add an action
+                                local pertActPosPriorInCnn = 0  -- The backward distance of the perturbed action w.r.t current action (output[lstmHist][opt.batchSize+i])
+                                local actPosSampSeed = torch.uniform()
+
+                                for sp=1, valActSampDist do
+                                    if actPosSampSeed <= priorActCumsum[sp] then
+                                        pertActPosPriorInCnn = sp    -- This is a relative position, the backward distance w.r.t current position
+                                        break
+                                    end
+                                end
+
+                                -- Now, we try to add extra actions
+                                if pertActPosPriorInCnn < self.opt.lstmHist then
+                                    -- For actions prior to the newly added action, move them front
+                                    for frm=1, self.opt.lstmHist - pertActPosPriorInCnn - 1 do
+                                        input[self.opt.batchSize+i][frm] = input[self.opt.batchSize+i][frm+1]
+                                    end
+
+                                    input[self.opt.batchSize+i][self.opt.lstmHist - pertActPosPriorInCnn] = input[self.opt.batchSize+i][self.opt.lstmHist - pertActPosPriorInCnn + 1]
+                                    for brm=self.opt.lstmHist - pertActPosPriorInCnn + 1, self.opt.lstmHist do
+                                        input[self.opt.batchSize+i][brm][pai] = input[self.opt.batchSize+i][brm][pai] + 1
+                                    end
+                                else
+                                    -- the newly added action should be long ago, longer than the input lstm sequence length
+                                    for brm=1, self.opt.lstmHist do
+                                        input[self.opt.batchSize+i][brm][pai] = input[self.opt.batchSize+i][brm][pai] + 1
+                                    end
+                                end
+                            else
+                                --- delete an existed action (if possible) in this sequence
+                                local _delActInSeqWithinSeq = function ()
+                                    -- This function is used to try to delete an action from a RNN sequence in which the deleted action should appear in the sequence
+                                    local pActAppPos = {}
+                                    for _paap=1, math.min(actStepCntTotal, self.opt.lstmHist-1) do
+                                        -- what is different from rnn data structure is that, cnn data only has one output, so we can only use input difference
+                                        -- to check what action the player took from one time step ago
+                                        if input[self.opt.batchSize+i][self.opt.lstmHist-_paap+1][pai] == input[self.opt.batchSize+i][self.opt.lstmHist-_paap][pai]+1 then
+                                            pActAppPos[#pActAppPos+1] = _paap   -- _paap is a distance from lastest action to the sampled action
+                                        end
+                                    end
+                                    -- If there are actions "pai" in this sequence that can be deleted, then try to find this action with a proper place (if there are multiple "pai"s)
+                                    if #pActAppPos > 0 then
+                                        local pActSigmDistT = torch.Tensor(#pActAppPos)
+                                        for _obvAct=1, #pActAppPos do
+                                            pActSigmDistT[_obvAct] = self.actSigmoidDistPriorStep[{output[self.opt.batchSize+i], pActAppPos[_obvAct], pai}]
+                                        end
+                                        pActSigmDistT:add(1e-5)     -- avoid divide by zero
+                                        pActSigmDistT:cumsum()
+                                        pActSigmDistT:div(pActSigmDistT[#pActAppPos])   -- standardization
+                                        -- Sample that position of action "pai" to delete
+                                        local _dltSampSeed = torch.uniform()
+                                        for dltPos=1, #pActAppPos do
+                                            if _dltSampSeed <= pActSigmDistT[dltPos] then
+                                                -- delete action "pai" at this sampled position
+                                                for fra=self.opt.lstmHist-pActAppPos[dltPos], 2, -1 do
+                                                    input[self.opt.batchSize+i][fra] = input[self.opt.batchSize+i][fra-1]
+                                                end
+                                                input[self.opt.batchSize+i][1]:zero()
+                                                for bra=self.opt.lstmHist-pActAppPos[dltPos] + 1, self.opt.lstmHist do
+                                                    input[self.opt.batchSize+i][bra][pai] = input[self.opt.batchSize+i][bra][pai] - 1
+                                                    if input[self.opt.batchSize+i][bra][pai] < 0 then
+                                                        input[self.opt.batchSize+i][bra][pai] = 0
+                                                    end
+                                                end
+                                                -- Done from action deletion in a sequence, in which case the sequence is shorter than opt.lstmHist. Break out of for-loop
+                                                break
+                                            end
+                                        end
+                                    end
+                                end -- end of the function _delActInSeqWithinSeq definition
+
+                                if actStepCntTotal < self.opt.lstmHist then
+                                    ---- In this case, all previous actions are in the rnn sequence representation
+                                    _delActInSeqWithinSeq()
+                                else
+                                    -- In this case, there were prior actions (at so early time) not recorded in the output list
+                                    -- We first tell is the deleted "pai" action should be in a short range (in range of opt.lstmHist),
+                                    -- in which case we need to sample that action in the squence we've had, or the deleted "pai" action
+                                    -- is in a long range, which means it does not appear in the state representation, and we just delete
+                                    -- that action counting
+                                    local priorActCumsum = self.actSigmoidDistPriorStepCumsum[{output[self.opt.batchSize+i], {}, pai}]:clone() -- clone() should be necessary, since we change its value later
+                                    -- valActSampDist is the valid number of time steps we can count backwards to delete an existed player action.
+                                    -- Attention: actStepCntTotal is 1 step less than the current time, bcz it is calculated from input features, which contain cumsum of prior actions
+                                    local valActSampDist = math.min(actStepCntTotal, self.priorActStatThres)
+                                    priorActCumsum:div(priorActCumsum[valActSampDist])  -- standardization
+                                    local _rndActPosRangeSeed = torch.uniform()
+                                    if _rndActPosRangeSeed <= priorActCumsum[self.opt.lstmHist-1] then
+                                        -- This case is that the deleted action should appear in the current state representation (distance from lastest action is smaller than opt.lstmHist)
+                                        -- Then what we do here is pretty similar to the action deletion up there (if actStepCntTotal < self.opt.lstmHist)
+                                        _delActInSeqWithinSeq()
+                                    else
+                                        -- This case is that the deleted action should NOT appear in the current rnn state sequence representation (the deleted action is not recorded in the input sequence)
+                                        for _bapit=1, self.opt.lstmHist do
+                                            input[self.opt.batchSize+i][_bapit][pai] = input[self.opt.batchSize+i][_bapit][pai] - 1
+                                            if input[self.opt.batchSize+i][_bapit][pai] < 0 then
+                                                input[self.opt.batchSize+i][_bapit][pai] = 0
+                                            end
+                                        end
+                                    end
+
+                                end
+                            end
+
+                            --- We've found an action to perturb its counting, so break from the for-loop
+                            break
+                        end
+                    end
+                end
+            end
+        end
+
     else
-        -- If the model is not in RNN form, which means each input just contains feature values
+        -- If the model is not in RNN or CNN form, which means each input just contains feature values
         -- at the current time step. Right now, the strategy is using original data points and
         -- augmented data points in ratio of 1:1
         input:resize(self.opt.batchSize * 2, self.userStateFeatureCnt)

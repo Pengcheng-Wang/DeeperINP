@@ -17,6 +17,7 @@ local _ = require 'moses'
 local class = require 'classic'
 require 'classic.torch' -- Enables serialisation
 local TableSet = require 'MyMisc.TableSetMisc'
+local OptimMisc = require 'MyMisc.OptimMisc'
 
 local CIUserActsPredictor = classic.class('UserActsPredictor')
 
@@ -390,7 +391,7 @@ function CIUserActsPredictor:trainOneEpoch()
 
             if self.opt.actPredDataAug > 0 then
                 -- Data augmentation
-                self.ciUserSimulator:UserSimDataAugment(inputs, targets, true)
+                self.ciUserSimulator:UserSimActDataAugment(inputs, targets, self.opt.uppModel)
                 if self.opt.uppModelRNNDom > 0 then
                     TableSet.buildRNNDropoutMask(self.rnn_noise_i, self.rnn_noise_h, self.rnn_noise_o, self.inputFeatureNum, self.opt.rnnHdSizeL1, self.opt.rnnHdLyCnt, inputs[1]:size(1), self.opt.lstmHist, self.opt.uppModelRNNDom)
                 end
@@ -420,66 +421,47 @@ function CIUserActsPredictor:trainOneEpoch()
             -- cnn models
             inputs = torch.Tensor(self.opt.batchSize, self.opt.lstmHist, self.inputFeatureNum)
             targets = torch.Tensor(self.opt.batchSize)
-            -- todo:pwang8. Time to edit from here. Not sure if this data preparation should be similar with non-rnn case, because we don't need rearrange dimension
-            local k
-            for j = 1, self.opt.lstmHist do
-                inputs[j] = torch.Tensor(self.opt.batchSize, self.inputFeatureNum)
-                targets[j] = torch.Tensor(self.opt.batchSize)
-                k = 1
-                for i = lstmIter, math.min(lstmIter+self.opt.batchSize-1, #self.rnnRealUserDataStates) do
-                    inputs[j][k] = self.rnnRealUserDataStates[i][j]
-                    targets[j][k] = self.rnnRealUserDataActs[i][j]
-                    k = k + 1
-                end
+
+            local k = 1
+            for i = t, math.min(t+self.opt.batchSize-1, #self.cnnRealUserDataStates) do
+                inputs[k] = self.cnnRealUserDataStates[i]
+                targets[k] = self.cnnRealUserDataActs[i]
+                k = k + 1
             end
 
             -- at the end of dataset, if it could not be divided into full batch
             if k ~= self.opt.batchSize + 1 then
                 while k <= self.opt.batchSize do
-                    local randInd = torch.random(1, #self.rnnRealUserDataStates)
-                    for j = 1, self.opt.lstmHist do
-                        inputs[j][k] = self.rnnRealUserDataStates[randInd][j]
-                        targets[j][k] = self.rnnRealUserDataActs[randInd][j]
-                    end
+                    local randInd = torch.random(1, #self.cnnRealUserDataStates)
+                    -- I'll put input pre-process after data augmentation
+                    inputs[k] = self.cnnRealUserDataStates[randInd]
+                    targets[k] = self.cnnRealUserDataActs[randInd]
                     k = k + 1
                 end
             end
 
-            lstmIter = lstmIter + self.opt.batchSize
-            if lstmIter > #self.rnnRealUserDataStates then
+            t = t + self.opt.batchSize
+            if t > #self.cnnRealUserDataStates then
                 epochDone = true
             end
 
             if self.opt.actPredDataAug > 0 then
                 -- Data augmentation
-                self.ciUserSimulator:UserSimDataAugment(inputs, targets, true)
-                if self.opt.uppModelRNNDom > 0 then
-                    TableSet.buildRNNDropoutMask(self.rnn_noise_i, self.rnn_noise_h, self.rnn_noise_o, self.inputFeatureNum, self.opt.rnnHdSizeL1, self.opt.rnnHdLyCnt, inputs[1]:size(1), self.opt.lstmHist, self.opt.uppModelRNNDom)
-                end
+                self.ciUserSimulator:UserSimActDataAugment(inputs, targets, self.opt.uppModel)
             end
             -- Should do input feature pre-processing after data augmentation
-            for ik=1, #inputs do
-                inputs[ik] = self.ciUserSimulator:preprocessUserStateData(inputs[ik], self.opt.prepro)
-            end
+            inputs = self.ciUserSimulator:preprocessUserStateData(inputs, self.opt.prepro)
             -- Try to add random normal noise to input features and see how it performs
             -- This should be invoked after input preprocess bcz we want to set an unique std
-            -- I've tried to apply adding random normal noise in rnn form of data. It seems the result is not good.
-            --self.ciUserSimulator:UserSimDataAddRandNoise(inputs, true, 0.01)
-
-            if self.opt.uppModelRNNDom > 0 then
-                TableSet.sampleRNNDropoutMask(self.opt.dropoutUSim, self.rnn_noise_i, self.rnn_noise_h, self.rnn_noise_o, self.opt.rnnHdLyCnt, self.opt.lstmHist)
-                for j = 1, self.opt.lstmHist do
-                    inputs[j] = {inputs[j], self.rnn_noise_i[j], self.rnn_noise_h[j], self.rnn_noise_o[j]}
-                end
-            end
+            --self.ciUserSimulator:UserSimDataAddRandNoise(inputs, false, 0.01)
 
             if self.opt.gpu > 0 then
-                nn.utils.recursiveType(inputs, 'torch.CudaTensor')
-                nn.utils.recursiveType(targets, 'torch.CudaTensor')
+                inputs = inputs:cuda()
+                targets = targets:cuda()
             end
 
         else
-            -- create data mini batch for non-rnn, non-cnn models
+            -- for non-rnn, non-cnn models, create data mini batch
             inputs = torch.Tensor(self.opt.batchSize, self.inputFeatureNum)
             targets = torch.Tensor(self.opt.batchSize)
             local k = 1
@@ -507,7 +489,7 @@ function CIUserActsPredictor:trainOneEpoch()
 
             if self.opt.actPredDataAug > 0 then
                 -- Data augmentation
-                self.ciUserSimulator:UserSimDataAugment(inputs, targets, false)
+                self.ciUserSimulator:UserSimActDataAugment(inputs, targets, self.opt.uppModel)
             end
             -- Should do input feature pre-processing after data augmentation
             inputs = self.ciUserSimulator:preprocessUserStateData(inputs, self.opt.prepro)
@@ -568,7 +550,11 @@ function CIUserActsPredictor:trainOneEpoch()
                     self.uapConfusion:add(outputs[i], targets[i])
                 end
             end
-            -- todo:pwang8. Need to do gradient clipping for rnn models. This is important. An example can be found in RHN code. Nov 30, 2017.
+
+            -- gradient clipping. It is recommended for rnn models, not sure if it is helpful to other models.
+            if string.sub(self.opt.uppModel, 1, 4) == 'rnn_' then
+                OptimMisc.clipGradByNorm(self.uapDParam, 10)    -- right now 10 is used constantly as clipping norm
+            end
             -- return f and df/dX
             return f, self.uapDParam
         end
@@ -750,6 +736,7 @@ function CIUserActsPredictor:testActPredOnTestDetOneEpoch()
         self.uapConfusion:zero()
         return {tvalid, _logLoss/#self.rnnRealUserDataStatesTest}
 
+        -- todo:pwang8. time to edit this. adding evaluation on test set. Dec 5, 2017.
     else
         -- uSimShLayer == 0 and not lstm models
         self.model:evaluate()
