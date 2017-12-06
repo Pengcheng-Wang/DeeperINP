@@ -23,7 +23,6 @@ local CIUserActsPredictor = classic.class('UserActsPredictor')
 
 function CIUserActsPredictor:_init(CIUserSimulator, opt)
 
-    -- batch size?
     if opt.optimization == 'LBFGS' and opt.batchSize < 100 then
         error('LBFGS should not be used with small mini-batches; 1000 is recommended')
     end
@@ -193,7 +192,7 @@ function CIUserActsPredictor:_init(CIUserSimulator, opt)
             ------------------------------------------------------------
             require 'modules.GridLSTMBayesianRNN'
             local grid_lstm
-            grid_lstm = nn.BayesianGridLSTM(self.inputFeatureNum, opt.rnnHdLyCnt, opt.uSimLstmBackLen, opt.cnnConnType) -- rnn_size, rnn_layers, rho, tie_weights
+            grid_lstm = nn.BayesianGridLSTM(self.inputFeatureNum, opt.rnnHdLyCnt, opt.uSimLstmBackLen, opt.gridLstmTieWhts) -- rnn_size, rnn_layers, rho, tie_weights
             grid_lstm:remember('both')
             self.model:add(grid_lstm)
             self.model:add(nn.NormStabilizer())

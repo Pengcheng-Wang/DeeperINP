@@ -35,7 +35,7 @@ function BayesianLSTM:__init(inputSize, outputSize, rnn_layers, rho)    -- p, mo
     self.cells = {}
     self.gradCells = {}
 end
-
+-- todo:pwang8. Consider to add residual connection in BayesianLSTM, RHN and GridLSTM. Dec 6, 2017.
 -------------------------- factory methods -----------------------------
 
 function BayesianLSTM:buildBayesianLSTMUnit(x, prev_c, prev_h, noise_i, noise_h, _layerInd)
