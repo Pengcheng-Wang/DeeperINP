@@ -12,6 +12,7 @@
 ------------------------------------------------------------------------
 assert(not nn.TempConvUserSimCNN, "update nnx package : luarocks install nnx")
 local TempConvUserSimCNN, parent = torch.class('nn.TempConvUserSimCNN', 'nn.Module')
+require 'modules.TemporalBatchNormalizationW'
 
 ------------------------------------------------------------------------
 -------------------------------- Params --------------------------------
@@ -19,6 +20,7 @@ local TempConvUserSimCNN, parent = torch.class('nn.TempConvUserSimCNN', 'nn.Modu
 --- outputSize: output size in each frame from the CNN model
 --- cnn_layers: the 'general' CNN layer counting. In v3, actually cnn layers will be doubled
 --- kenal_width: kenrel width of each CNN module. All layers here use the same sized CNN module
+--- frame_cnt: number of frames of input (and output, because we don't change it from input to output)
 --- version: can be v1, v2, v3, or v4.
 --- v1 has no residual connection,
 --- v2 has residual connection for each CNN layer,
@@ -29,7 +31,7 @@ function TempConvUserSimCNN:__init()
     parent.__init(self)
 end
 
-function TempConvUserSimCNN:CreateCNNModule(inputSize, outputSize, cnn_layers, kernel_width, dropout_rate, version)
+function TempConvUserSimCNN:CreateCNNModule(inputSize, outputSize, cnn_layers, kernel_width, dropout_rate, frame_cnt, version)
     assert(version == 'v1' or version == 'v2' or version == 'v3' or version == 'v4', 'Convolution module in player simulation modeling can only be v1, v2 v3 or v4')
     assert(inputSize == outputSize, 'Right now we only support CNN modules with same input, output size for ease of adding residual connection')
     assert(dropout_rate >= 0 and dropout_rate < 1, 'Dropout rate should be in [0,1)')
@@ -45,19 +47,22 @@ function TempConvUserSimCNN:CreateCNNModule(inputSize, outputSize, cnn_layers, k
         if dropout_rate > 0 then _input = nn.Dropout(dropout_rate)(_input) end
         local _pad = nn.Padding(1, kernel_width-1, 2)(_input) -- we set nInputDim of nn.Padding to be 2 dims(frame number, frame size), so input of 3-d will be treated as 1st dim being batch index
         local _conv = nn.TemporalConvolution(inputSize, outputSize, kernel_width)(_pad)
+        local _batchNorm = nn.TemporalBatchNormalizationW(frame_cnt)(_conv)
+        local _outConv = _batchNorm     -- v1
         if version == 'v2' then
-            _conv = nn.CAddTable()({_conv, _input}) -- residual connection added for each convolution layer for version v2: added with value before convolution
+            _outConv = nn.CAddTable()({_batchNorm, _input}) -- residual connection added for each convolution layer for version v2: added with value before convolution
         elseif version == 'v3' then
-            local _nonlinear_1 = nn.Tanh()(_conv)
+            local _nonlinear_1 = nn.ReLU()(_batchNorm)
             inputSize = outputSize  -- reset inputSize to make it usable in next layer construction
             if dropout_rate > 0 then _nonlinear_1 = nn.Dropout(dropout_rate)(_nonlinear_1) end
             local _pad_2 = nn.Padding(1, kernel_width-1, 2)(_nonlinear_1) -- we set nInputDim of nn.Padding to be 2 dims(frame number, frame size), so input of 3-d will be treated as 1st dim being batch index
             local _conv_2 = nn.TemporalConvolution(inputSize, outputSize, kernel_width)(_pad_2)
-            _conv = nn.CAddTable()({_conv_2, _input}) -- residual connection added for each convolution layer for version v2
+            local _batchNorm_2 = nn.TemporalBatchNormalizationW(frame_cnt)(_conv_2)
+            _outConv = nn.CAddTable()({_batchNorm_2, _input}) -- residual connection added for each convolution layer for version v2
         elseif version == 'v4' then
-            _conv = nn.CAddTable()({_conv, _dropped_in}) -- residual connection added for each convolution layer for version v4: direct adding with original input
+            _outConv = nn.CAddTable()({_batchNorm, _dropped_in}) -- residual connection added for each convolution layer for version v4: direct adding with original input
         end
-        local _output = nn.Tanh()(_conv)
+        local _output = nn.ReLU()(_outConv)
         table.insert(outputs, _output)
         inputSize = outputSize      -- reset inputSize to make it usable in next layer construction
     end
