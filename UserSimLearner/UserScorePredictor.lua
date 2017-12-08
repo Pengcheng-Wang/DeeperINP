@@ -251,8 +251,8 @@ function CIUserScorePredictor:_init(CIUserSimulator, opt)
     self.uspConfusion = optim.ConfusionMatrix(self.classes)
 
     -- log results to files
-    self.uspTrainLogger = optim.Logger(paths.concat('userModelTrained', opt.save, 'train.log'))
-    self.uspTestLogger = optim.Logger(paths.concat('userModelTrained', opt.save, 'test.log'))
+    self.uspTrainLogger = optim.Logger(paths.concat('userModelTrained', opt.save, 'scr_train.log'))
+    self.uspTestLogger = optim.Logger(paths.concat('userModelTrained', opt.save, 'scr_test.log'))
     self.uspTestLogger:setNames{'Epoch', 'Score Test acc.', 'Score Test LogLoss'}
 
     ----------------------------------------------------------------------
@@ -284,6 +284,7 @@ function CIUserScorePredictor:_init(CIUserSimulator, opt)
     self.rnnRealUserDataStates = self.ciUserSimulator.rnnRealUserDataStates
     self.rnnRealUserDataActs = self.ciUserSimulator.rnnRealUserDataActs
     self.rnnRealUserDataRewards = self.ciUserSimulator.rnnRealUserDataRewards
+    self.rnnRealUserDataEnds = self.ciUserSimulator.rnnRealUserDataEnds
 
     ----------------------------------------------------------------------
     --- Prepare data for RNN models in test/train_validation set
@@ -291,6 +292,7 @@ function CIUserScorePredictor:_init(CIUserSimulator, opt)
     self.rnnRealUserDataStatesTest = self.ciUserSimulator.rnnRealUserDataStatesTest
     self.rnnRealUserDataActsTest = self.ciUserSimulator.rnnRealUserDataActsTest
     self.rnnRealUserDataRewardsTest = self.ciUserSimulator.rnnRealUserDataRewardsTest
+    self.rnnRealUserDataEndsTest = self.ciUserSimulator.rnnRealUserDataEndsTest
 
     ----------------------------------------------------------------------
     --- Prepare data for CNN models in training set
@@ -305,6 +307,7 @@ function CIUserScorePredictor:_init(CIUserSimulator, opt)
     self.cnnRealUserDataStatesTest = self.ciUserSimulator.cnnRealUserDataStatesTest
     self.cnnRealUserDataActsTest = self.ciUserSimulator.cnnRealUserDataActsTest
     self.cnnRealUserDataRewardsTest = self.ciUserSimulator.cnnRealUserDataRewardsTest
+    self.cnnRealUserDataEndsTest = self.ciUserSimulator.cnnRealUserDataEndsTest
 
     ----------------------------------------------------------------------
     --- Prepare 3 dropout masks for RNN models. Right now
@@ -332,7 +335,8 @@ function CIUserScorePredictor:trainOneEpoch()
     print('<trainer> on training set:')
     print("<trainer> online epoch # " .. self.trainEpoch .. ' [batchSize = ' .. self.opt.batchSize .. ']')
     local inputs
-    local targets
+    local targets   -- targets are player score labels in this script
+    local plh_acts  -- place holder for player action label.
     local closeToEnd
     local t = 1
     local lstmIter = 1  -- lstm iterate for each squence starts from this value
@@ -342,15 +346,18 @@ function CIUserScorePredictor:trainOneEpoch()
             -- rnn models
             inputs = {}
             targets = {}
+            plh_acts = {}
             closeToEnd = torch.Tensor(self.opt.batchSize):fill(0)
             local k
             for j = 1, self.opt.lstmHist do
                 inputs[j] = torch.Tensor(self.opt.batchSize, self.inputFeatureNum)
                 targets[j] = torch.Tensor(self.opt.batchSize)
+                plh_acts[j] = torch.Tensor(self.opt.batchSize)
                 k = 1
                 for i = lstmIter, math.min(lstmIter+self.opt.batchSize-1, #self.rnnRealUserDataStates) do
                     inputs[j][k] = self.rnnRealUserDataStates[i][j]
                     targets[j][k] = self.rnnRealUserDataRewards[i][j]
+                    plh_acts[j][k] = self.rnnRealUserDataActs[i][j]
                     if j == self.opt.lstmHist then
                         for dis=0, self.opt.scorePredStateScope-1 do
                             if (i+dis) <= #self.rnnRealUserDataStates and TableSet.tableContainsValue(self.rnnRealUserDataEnds, i+dis) then
@@ -372,6 +379,7 @@ function CIUserScorePredictor:trainOneEpoch()
                     for j = 1, self.opt.lstmHist do
                         inputs[j][k] = self.rnnRealUserDataStates[randInd][j]
                         targets[j][k] = self.rnnRealUserDataRewards[randInd][j]
+                        plh_acts[j][k] = self.rnnRealUserDataActs[randInd][j]
                         if j == self.opt.lstmHist then
                             for dis=0, self.opt.scorePredStateScope-1 do
                                 if (randInd+dis) <= #self.rnnRealUserDataStates and TableSet.tableContainsValue(self.rnnRealUserDataEnds, randInd+dis) then
@@ -392,29 +400,111 @@ function CIUserScorePredictor:trainOneEpoch()
                 epochDone = true
             end
 
-            -- todo:pwang8. Time to add data augmentation for score prediction. Dec 6, 2017.
+            if self.opt.actPredDataAug > 0 then
+                -- Data augmentation
+                self.ciUserSimulator:UserSimActDataAugment(inputs, plh_acts, targets, self.opt.uppModel)
+                if self.opt.uppModelRNNDom > 0 then
+                    TableSet.buildRNNDropoutMask(self.rnn_noise_i, self.rnn_noise_h, self.rnn_noise_o, self.inputFeatureNum, self.opt.rnnHdSizeL1, self.opt.rnnHdLyCnt, inputs[1]:size(1), self.opt.lstmHist, self.opt.uppModelRNNDom)
+                end
+            end
+            -- Should do input feature pre-processing after data augmentation
+            for ik=1, #inputs do
+                inputs[ik] = self.ciUserSimulator:preprocessUserStateData(inputs[ik], self.opt.prepro)
+            end
+            -- Try to add random normal noise to input features and see how it performs
+            -- This should be invoked after input preprocess bcz we want to set an unique std
+            -- I've tried to apply adding random normal noise in rnn form of data. It seems the result is not good.
+            --self.ciUserSimulator:UserSimDataAddRandNoise(inputs, true, 0.01)
+
+            if self.opt.uppModelRNNDom > 0 then
+                TableSet.sampleRNNDropoutMask(self.opt.dropoutUSim, self.rnn_noise_i, self.rnn_noise_h, self.rnn_noise_o, self.opt.rnnHdLyCnt, self.opt.lstmHist)
+                for j = 1, self.opt.lstmHist do
+                    inputs[j] = {inputs[j], self.rnn_noise_i[j], self.rnn_noise_h[j], self.rnn_noise_o[j]}
+                end
+            end
 
             if self.opt.gpu > 0 then
                 nn.utils.recursiveType(inputs, 'torch.CudaTensor')
                 nn.utils.recursiveType(targets, 'torch.CudaTensor')
                 closeToEnd = closeToEnd:cuda()
+                -- do not need to transform plh_acts into cudaTensor because it is not actually used in training. It is used in data augmentation.
             end
 
+        elseif string.sub(self.opt.uppModel, 1, 4) == 'cnn_' then
+            -- cnn models
+            inputs = torch.Tensor(self.opt.batchSize, self.opt.lstmHist, self.inputFeatureNum)
+            targets = torch.Tensor(self.opt.batchSize)  -- labels for score
+            plh_acts = torch.Tensor(self.opt.batchSize) -- labels for player action
+            closeToEnd = torch.Tensor(self.opt.batchSize):fill(0)
+
+            local k = 1
+            for i = t, math.min(t+self.opt.batchSize-1, #self.cnnRealUserDataStates) do
+                inputs[k] = self.cnnRealUserDataStates[i]
+                targets[k] = self.cnnRealUserDataRewards[i]
+                plh_acts[k] = self.cnnRealUserDataActs[i]
+                for dis=0, self.opt.scorePredStateScope-1 do
+                    if (i+dis) <= #self.cnnRealUserDataActs and self.cnnRealUserDataActs[i+dis] == self.ciUserSimulator.CIFr.usrActInd_end then
+                        -- If current state is close enough to the end of this sequence, mark it.
+                        -- This is for marking near end state, with which the score prediction should be more accurate and be utilized in score pred training
+                        closeToEnd[k] = 1
+                        break
+                    end
+                end
+                k = k + 1
+            end
+
+            -- at the end of dataset, if it could not be divided into full batch
+            if k ~= self.opt.batchSize + 1 then
+                while k <= self.opt.batchSize do
+                    local randInd = torch.random(1, #self.cnnRealUserDataStates)
+                    -- I'll put input pre-process after data augmentation
+                    inputs[k] = self.cnnRealUserDataStates[randInd]
+                    targets[k] = self.cnnRealUserDataRewards[randInd]
+                    plh_acts[k] = self.cnnRealUserDataActs[randInd]
+                    for dis=0, self.opt.scorePredStateScope-1 do
+                        if (randInd+dis) <= #self.cnnRealUserDataActs and self.cnnRealUserDataActs[randInd+dis] == self.ciUserSimulator.CIFr.usrActInd_end then
+                            -- If current state is close enough to the end of this sequence, mark it.
+                            -- This is for marking near end state, with which the score prediction should be more accurate and be utilized in score pred training
+                            closeToEnd[k] = 1
+                            break
+                        end
+                    end
+                    k = k + 1
+                end
+            end
+
+            t = t + self.opt.batchSize
+            if t > #self.cnnRealUserDataStates then
+                epochDone = true
+            end
+
+            if self.opt.actPredDataAug > 0 then
+                -- Data augmentation
+                self.ciUserSimulator:UserSimActDataAugment(inputs, plh_acts, targets, self.opt.uppModel)
+            end
+            -- Should do input feature pre-processing after data augmentation
+            inputs = self.ciUserSimulator:preprocessUserStateData(inputs, self.opt.prepro)
+            -- Try to add random normal noise to input features and see how it performs
+            -- This should be invoked after input preprocess bcz we want to set an unique std
+            --self.ciUserSimulator:UserSimDataAddRandNoise(inputs, false, 0.01)
+
+            if self.opt.gpu > 0 then
+                inputs = inputs:cuda()
+                targets = targets:cuda()
+                closeToEnd = closeToEnd:cuda()
+            end
 
         else
             -- non-rnn, non-cnn models, create mini batch
             inputs = torch.Tensor(self.opt.batchSize, self.inputFeatureNum)
             targets = torch.Tensor(self.opt.batchSize)
+            plh_acts = torch.Tensor(self.opt.batchSize)
             closeToEnd = torch.Tensor(self.opt.batchSize):fill(0)
             local k = 1
             for i = t, math.min(t+self.opt.batchSize-1, #self.ciUserSimulator.realUserDataStates) do
-                -- load new sample
-                local input = self.ciUserSimulator.realUserDataStates[i]    -- :clone() -- if preprocess is called, clone is not needed, I believe
-                -- need do preprocess for input features
-                input = self.ciUserSimulator:preprocessUserStateData(input, self.opt.prepro)
-                local target = self.ciUserSimulator.realUserDataRewards[i]
-                inputs[k] = input
-                targets[k] = target
+                inputs[k] = self.ciUserSimulator.realUserDataStates[i]
+                targets[k] = self.ciUserSimulator.realUserDataRewards[i]
+                plh_acts[k] = self.ciUserSimulator.realUserDataActs[i]
                 for dis=0, self.opt.scorePredStateScope-1 do
                     if (i+dis) <= #self.ciUserSimulator.realUserDataActs and self.ciUserSimulator.realUserDataActs[i+dis] == self.ciUserSimulator.CIFr.usrActInd_end then
                         -- If current state is close enough to the end of this sequence, mark it.
@@ -430,8 +520,9 @@ function CIUserScorePredictor:trainOneEpoch()
             if k ~= self.opt.batchSize + 1 then
                 while k <= self.opt.batchSize do
                     local randInd = torch.random(1, #self.ciUserSimulator.realUserDataStates)
-                    inputs[k] = self.ciUserSimulator:preprocessUserStateData(self.ciUserSimulator.realUserDataStates[randInd], self.opt.prepro)
+                    inputs[k] = self.ciUserSimulator.realUserDataStates[randInd]
                     targets[k] = self.ciUserSimulator.realUserDataRewards[randInd]
+                    plh_acts[k] = self.ciUserSimulator.realUserDataActs[randInd]
                     for dis=0, self.opt.scorePredStateScope-1 do
                         if (randInd+dis) <= #self.ciUserSimulator.realUserDataActs and self.ciUserSimulator.realUserDataActs[randInd+dis] == self.ciUserSimulator.CIFr.usrActInd_end then
                             -- If current state is close enough to the end of this sequence, mark it.
@@ -448,6 +539,16 @@ function CIUserScorePredictor:trainOneEpoch()
             if t > #self.ciUserSimulator.realUserDataStates then
                 epochDone = true
             end
+
+            if self.opt.actPredDataAug > 0 then
+                -- Data augmentation
+                self.ciUserSimulator:UserSimActDataAugment(inputs, plh_acts, targets, self.opt.uppModel)
+            end
+            -- Should do input feature pre-processing after data augmentation
+            inputs = self.ciUserSimulator:preprocessUserStateData(inputs, self.opt.prepro)
+            -- Try to add random normal noise to input features and see how it performs
+            -- This should be invoked after input preprocess bcz we want to set an unique std
+            --self.ciUserSimulator:UserSimDataAddRandNoise(inputs, false, 0.01)
 
             if self.opt.gpu > 0 then
                 inputs = inputs:cuda()
@@ -475,7 +576,7 @@ function CIUserScorePredictor:trainOneEpoch()
             -- Zero error values (change output to target) for score prediction cases far away from ending state (I don't hope these cases influence training)
             for cl=1, closeToEnd:size(1) do
                 if closeToEnd[cl] < 1 then
-                    if self.opt.uppModel == 'lstm' then
+                    if string.sub(self.opt.uppModel, 1, 4) == 'rnn_' then
                         outputs[self.opt.lstmHist][cl] = targets[self.opt.lstmHist][cl]
                     else
                         outputs[cl] = targets[cl]
@@ -485,7 +586,7 @@ function CIUserScorePredictor:trainOneEpoch()
             local f = self.uspCriterion:forward(outputs, targets)
             local df_do = self.uspCriterion:backward(outputs, targets)
 
-            if self.opt.uppModel == 'lstm' then
+            if string.sub(self.opt.uppModel, 1, 4) == 'rnn_' then
                 f = self.uspCriterion:forward(outputs[self.opt.lstmHist], targets[self.opt.lstmHist])
                 for step=1, self.opt.lstmHist-1 do
                     df_do[step]:zero()
@@ -508,27 +609,27 @@ function CIUserScorePredictor:trainOneEpoch()
             end
 
             -- update self.uspConfusion
-            if self.opt.uppModel == 'lstm' then
---                for j = 1, self.opt.lstmHist do
---                    for i = 1,self.opt.batchSize do
---                        self.uspConfusion:add(outputs[j][i], targets[j][i])
---                    end
---                end
+            if string.sub(self.opt.uppModel, 1, 4) == 'rnn_' then
                 for i = 1,self.opt.batchSize do
                     self.uspConfusion:add(outputs[self.opt.lstmHist][i], targets[self.opt.lstmHist][i])
                 end
             else
+                -- for cnn and non-rnn, non-cnn models
                 for i = 1,self.opt.batchSize do
                     self.uspConfusion:add(outputs[i], targets[i])
                 end
             end
 
+            -- gradient clipping. It is recommended for rnn models, not sure if it is helpful to other models.
+            if string.sub(self.opt.uppModel, 1, 4) == 'rnn_' then
+                OptimMisc.clipGradByNorm(self.uspDParam, 10)    -- right now 10 is used constantly as clipping norm
+            end
             -- return f and df/dX
             return f, self.uspDParam
         end
 
         self.model:training()
-        if self.opt.uppModel == 'lstm' then
+        if string.sub(self.opt.uppModel, 1, 4) == 'rnn_' then
             self.model:forget()
         end
 
@@ -559,12 +660,11 @@ function CIUserScorePredictor:trainOneEpoch()
             optim.sgd(feval, self.uspParam, sgdState)
 
             -- disp progress
-            if self.opt.uppModel ~= 'lstm' then
+            if string.sub(self.opt.uppModel, 1, 4) ~= 'rnn_' then
                 xlua.progress(t, #self.ciUserSimulator.realUserDataStates)
             else
                 xlua.progress(lstmIter, #self.rnnRealUserDataStates)
             end
-
 
         elseif self.opt.optimization == 'adam' then
 
@@ -576,7 +676,7 @@ function CIUserScorePredictor:trainOneEpoch()
             optim.adam(feval, self.uspParam, adamState)
 
             -- disp progress
-            if self.opt.uppModel ~= 'lstm' then
+            if string.sub(self.opt.uppModel, 1, 4) ~= 'rnn_' then
                 xlua.progress(t, #self.ciUserSimulator.realUserDataStates)
             else
                 xlua.progress(lstmIter, #self.rnnRealUserDataStates)
@@ -591,7 +691,7 @@ function CIUserScorePredictor:trainOneEpoch()
             optim.rmsprop(feval, self.uspParam, rmspropState)
 
             -- disp progress
-            if self.opt.uppModel ~= 'lstm' then
+            if string.sub(self.opt.uppModel, 1, 4) ~= 'rnn_' then
                 xlua.progress(t, #self.ciUserSimulator.realUserDataStates)
             else
                 xlua.progress(lstmIter, #self.rnnRealUserDataStates)
@@ -604,7 +704,7 @@ function CIUserScorePredictor:trainOneEpoch()
 
     -- time taken
     time = sys.clock() - time
---    time = time / #self.ciUserSimulator.realUserDataStates  -- This is not accurate, if lstm is used
+    --    time = time / #self.ciUserSimulator.realUserDataStates  -- This is not accurate, if lstm is used
     print("<trainer> time to learn 1 epoch = " .. (time*1000) .. 'ms')
 
     -- print self.uspConfusion matrix
@@ -620,21 +720,31 @@ function CIUserScorePredictor:trainOneEpoch()
     -- save/log current net
     local filename = paths.concat('userModelTrained', self.opt.save, 'usp.t7')
     os.execute('mkdir -p ' .. sys.dirname(filename))
---    if paths.filep(filename) then
---        os.execute('mv ' .. filename .. ' ' .. filename .. '.old')
---    end
+    --    if paths.filep(filename) then
+    --        os.execute('mv ' .. filename .. ' ' .. filename .. '.old')
+    --    end
 
     if self.trainEpoch % 10 == 0 and self.opt.ciuTType == 'train' then
-        filename = paths.concat('userModelTrained', self.opt.save, string.format('%d', self.trainEpoch)..'_'..string.format('%.2f', self.uspConfusion.totalValid*100)..'usp.t7')
+        -- todo:pwang8. Dec 7, 2017. For test purpose, this model saving func is temporarily ceased
+        --filename = paths.concat('userModelTrained', self.opt.save, string.format('%d', self.trainEpoch)..'_'..string.format('%.2f', self.uspConfusion.totalValid*100)..'_usp.t7')
+        --os.execute('mkdir -p ' .. sys.dirname(filename))
+        --print('<trainer> saving periodly trained ciunet to '..filename)
+        --torch.save(filename, self.model)
+    end
+
+    if self.trainEpoch == self.opt.usimTrIte and self.opt.ciuTType == 'train' then
+        -- Save the trained model after the final epoch
+        filename = paths.concat('userModelTrained', self.opt.save, string.format('final_%d', self.trainEpoch)..'_'..string.format('%.2f', self.uspConfusion.totalValid*100)..'_usp.t7')
         os.execute('mkdir -p ' .. sys.dirname(filename))
-        print('<trainer> saving periodly trained ciunet to '..filename)
+        print('<trainer> saving final trained action prediction ciunet to '..filename)
         torch.save(filename, self.model)
     end
 
     if (self.opt.ciuTType == 'train' or self.opt.ciuTType == 'train_tr') and self.trainEpoch % self.opt.testOnTestFreq == 0 then
-        local scoreTestAccu = self:testScorePredOnTestDetOneEpoch()
-        print('<Score prediction accuracy at epoch '..string.format('%d', self.trainEpoch)..' on test set > '..string.format('%.2f%%', scoreTestAccu*100))
-        self.uspTestLogger:add{string.format('%d', self.trainEpoch), string.format('%.5f%%', scoreTestAccu*100)}
+        local testEval = self:testScorePredOnTestDetOneEpoch()
+        print('<Score prediction accuracy at epoch '..string.format('%d', self.trainEpoch)..' on test set > '..string.format('%.2f%%', testEval[1]*100)..
+            ', and LogLoss '..string.format('%.2f', testEval[2]))
+        self.uspTestLogger:add{string.format('%d', self.trainEpoch), string.format('%.5f%%', testEval[1]*100), string.format('%.5f', testEval[2])}
     end
 
     self.uspConfusion:zero()
@@ -644,9 +754,15 @@ end
 
 -- evaluation function on test/train_validation set
 function CIUserScorePredictor:testScorePredOnTestDetOneEpoch()
-
-    if opt.uppModel == 'lstm' then
-        -- uSimShLayer == 0 and lstm model
+    -- just in case:
+    collectgarbage()
+    -- Confusion matrix for score prediction (2-class)
+    --    local scrPredTP = torch.Tensor(2):fill(1e-3)
+    --    local scrPredFP = torch.Tensor(2):fill(1e-3)
+    --    local scrPredFN = torch.Tensor(2):fill(1e-3)
+    local _logLoss = 0
+    if string.sub(self.opt.uppModel, 1, 4) == 'rnn_' then
+        -- uSimShLayer == 0 and rnn model
         self.model:evaluate()
         self.model:forget()
 
@@ -658,6 +774,18 @@ function CIUserScorePredictor:testScorePredOnTestDetOneEpoch()
             end
             tabState[j] = prepUserState
         end
+
+        local test_rnn_noise_i = {}
+        local test_rnn_noise_h = {}
+        local test_rnn_noise_o = {}
+        if self.opt.uppModelRNNDom > 0 then
+            TableSet.buildRNNDropoutMask(test_rnn_noise_i, test_rnn_noise_h, test_rnn_noise_o, self.inputFeatureNum, self.opt.rnnHdSizeL1, self.opt.rnnHdLyCnt, #self.rnnRealUserDataEndsTest, self.opt.lstmHist, self.opt.uppModelRNNDom)
+            TableSet.sampleRNNDropoutMask(0, test_rnn_noise_i, test_rnn_noise_h, test_rnn_noise_o, self.opt.rnnHdLyCnt, self.opt.lstmHist)
+            for j = 1, self.opt.lstmHist do
+                tabState[j] = {tabState[j], test_rnn_noise_i[j], test_rnn_noise_h[j], test_rnn_noise_o[j]}
+            end
+        end
+
         if self.opt.gpu > 0 then
             nn.utils.recursiveType(tabState, 'torch.CudaTensor')
         end
@@ -667,14 +795,39 @@ function CIUserScorePredictor:testScorePredOnTestDetOneEpoch()
         nn.utils.recursiveType(nll_rewards, 'torch.FloatTensor')
         for i=1, #self.rnnRealUserDataEndsTest do
             self.uspConfusion:add(nll_rewards[self.opt.lstmHist][i], self.rnnRealUserDataRewardsTest[self.rnnRealUserDataEndsTest[i]][self.opt.lstmHist])
+            _logLoss = _logLoss + -1 * nll_rewards[self.opt.lstmHist][i][self.rnnRealUserDataRewardsTest[self.rnnRealUserDataEndsTest[i]][self.opt.lstmHist]]
         end
         self.uspConfusion:updateValids()
         local tvalid = self.uspConfusion.totalValid
         self.uspConfusion:zero()
-        return tvalid
+        return {tvalid, _logLoss/#self.rnnRealUserDataEndsTest}
+
+    elseif string.sub(self.opt.uppModel, 1, 4) == 'cnn_' then
+        -- uSimShLayer == 0 and cnn models
+        self.model:evaluate()
+
+        local prepUserState = torch.Tensor(#self.cnnRealUserDataEndsTest, self.opt.lstmHist, self.ciUserSimulator.userStateFeatureCnt)
+        for i=1, #self.cnnRealUserDataEndsTest do
+            prepUserState[i] = self.ciUserSimulator:preprocessUserStateData(self.cnnRealUserDataStatesTest[self.cnnRealUserDataEndsTest[i]], self.opt.prepro)
+        end
+        if self.opt.gpu > 0 then
+            prepUserState = prepUserState:cuda()
+        end
+        local nll_rewards = self.model:forward(prepUserState)
+
+        self.uspConfusion:zero()
+        nll_rewards:float()     -- set nll_rewards back to cpu mode (in main memory)
+        for i=1, #self.cnnRealUserDataEndsTest do
+            self.uspConfusion:add(nll_rewards[i], self.cnnRealUserDataRewardsTest[self.cnnRealUserDataEndsTest[i]])
+            _logLoss = _logLoss + -1 * nll_rewards[i][self.cnnRealUserDataRewardsTest[self.cnnRealUserDataEndsTest[i]]]
+        end
+        self.uspConfusion:updateValids()
+        local tvalid = self.uspConfusion.totalValid
+        self.uspConfusion:zero()
+        return {tvalid, _logLoss/#self.cnnRealUserDataEndsTest}
 
     else
-        -- uSimShLayer == 0 and not lstm models
+        -- uSimShLayer == 0 and non-rnn, non-cnn models
         self.model:evaluate()
 
         local prepUserState = torch.Tensor(#self.ciUserSimulator.realUserDataEndLinesTest, self.ciUserSimulator.userStateFeatureCnt)
@@ -690,11 +843,12 @@ function CIUserScorePredictor:testScorePredOnTestDetOneEpoch()
         nll_rewards:float()     -- set nll_rewards back to cpu mode (in main memory)
         for i=1, #self.ciUserSimulator.realUserDataEndLinesTest do
             self.uspConfusion:add(nll_rewards[i], self.ciUserSimulator.realUserDataRewardsTest[self.ciUserSimulator.realUserDataEndLinesTest[i]])
+            _logLoss = _logLoss + -1 * nll_rewards[i][self.ciUserSimulator.realUserDataRewardsTest[self.ciUserSimulator.realUserDataEndLinesTest[i]]]
         end
         self.uspConfusion:updateValids()
         local tvalid = self.uspConfusion.totalValid
         self.uspConfusion:zero()
-        return tvalid
+        return {tvalid, _logLoss/#self.ciUserSimulator.realUserDataEndLinesTest}
     end
 end
 

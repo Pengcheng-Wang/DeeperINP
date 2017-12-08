@@ -248,8 +248,8 @@ function CIUserActsPredictor:_init(CIUserSimulator, opt)
     self.uapConfusion = optim.ConfusionMatrix(classes)
 
     -- log results to files
-    self.uapTrainLogger = optim.Logger(paths.concat('userModelTrained', opt.save, 'train.log'))
-    self.uapTestLogger = optim.Logger(paths.concat('userModelTrained', opt.save, 'test.log'))
+    self.uapTrainLogger = optim.Logger(paths.concat('userModelTrained', opt.save, 'act_train.log'))
+    self.uapTestLogger = optim.Logger(paths.concat('userModelTrained', opt.save, 'act_test.log'))
     self.uapTestLogger:setNames{'Epoch', 'Act Test acc.', 'Act Test LogLoss'}
 
     ----------------------------------------------------------------------
@@ -561,6 +561,7 @@ function CIUserActsPredictor:trainOneEpoch()
                     end
                 end
             else
+                -- for cnn and non-rnn, non-cnn models
                 for i = 1,self.opt.batchSize do
                     self.uapConfusion:add(outputs[i], targets[i])
                 end
@@ -612,7 +613,6 @@ function CIUserActsPredictor:trainOneEpoch()
                 xlua.progress(lstmIter, #self.rnnRealUserDataStates)
             end
 
-
         elseif self.opt.optimization == 'adam' then
 
             -- Perform Adam step:
@@ -658,8 +658,8 @@ function CIUserActsPredictor:trainOneEpoch()
     --    print(self.uapConfusion)
     self.uapConfusion:updateValids()
     local confMtxStr = 'average row correct: ' .. (self.uapConfusion.averageValid*100) .. '% \n' ..
-    'average rowUcol correct (VOC measure): ' .. (self.uapConfusion.averageUnionValid*100) .. '% \n' ..
-    ' + global correct: ' .. (self.uapConfusion.totalValid*100) .. '%'
+        'average rowUcol correct (VOC measure): ' .. (self.uapConfusion.averageUnionValid*100) .. '% \n' ..
+        ' + global correct: ' .. (self.uapConfusion.totalValid*100) .. '%'
     print(confMtxStr)
     self.uapTrainLogger:add{['% mean class accuracy (train set)'] = self.uapConfusion.totalValid * 100}
 
@@ -675,7 +675,7 @@ function CIUserActsPredictor:trainOneEpoch()
 
     if self.trainEpoch % 10 == 0 and self.opt.ciuTType == 'train' then
         -- todo: pwang8. Oct 20, 2017. For test purpose, this model saving func is temporarily ceased
-        --filename = paths.concat('userModelTrained', self.opt.save, string.format('%d', self.trainEpoch)..'_'..string.format('%.2f', self.uapConfusion.totalValid*100)..'uap.t7')
+        --filename = paths.concat('userModelTrained', self.opt.save, string.format('%d', self.trainEpoch)..'_'..string.format('%.2f', self.uapConfusion.totalValid*100)..'_uap.t7')
         --os.execute('mkdir -p ' .. sys.dirname(filename))
         --print('<trainer> saving periodly trained ciunet to '..filename)
         --torch.save(filename, self.model)
@@ -683,7 +683,7 @@ function CIUserActsPredictor:trainOneEpoch()
 
     if self.trainEpoch == self.opt.usimTrIte and self.opt.ciuTType == 'train' then
         -- Save the trained model after the final epoch
-        filename = paths.concat('userModelTrained', self.opt.save, string.format('final_%d', self.trainEpoch)..'_'..string.format('%.2f', self.uapConfusion.totalValid*100)..'uap.t7')
+        filename = paths.concat('userModelTrained', self.opt.save, string.format('final_%d', self.trainEpoch)..'_'..string.format('%.2f', self.uapConfusion.totalValid*100)..'_uap.t7')
         os.execute('mkdir -p ' .. sys.dirname(filename))
         print('<trainer> saving final trained action prediction ciunet to '..filename)
         torch.save(filename, self.model)
@@ -692,7 +692,7 @@ function CIUserActsPredictor:trainOneEpoch()
     if (self.opt.ciuTType == 'train' or self.opt.ciuTType == 'train_tr') and self.trainEpoch % self.opt.testOnTestFreq == 0 then
         local testEval = self:testActPredOnTestDetOneEpoch()
         print('<Act prediction accuracy at epoch '..string.format('%d', self.trainEpoch)..' on test set > '..string.format('%.2f%%', testEval[1]*100)..
-        ', and LogLoss '..string.format('%.2f', testEval[2]))
+            ', and LogLoss '..string.format('%.2f', testEval[2]))
         self.uapTestLogger:add{string.format('%d', self.trainEpoch), string.format('%.5f%%', testEval[1]*100), string.format('%.5f', testEval[2])}
     end
 
@@ -705,7 +705,7 @@ end
 function CIUserActsPredictor:testActPredOnTestDetOneEpoch()
     -- just in case:
     collectgarbage()
-    -- Confusion matrix for action prediction (15 class)
+    -- Confusion matrix for action prediction (15-class)
     --    local actPredTP = torch.Tensor(self.ciUserSimulator.CIFr.usrActInd_end):fill(1e-3)
     --    local actPredFP = torch.Tensor(self.ciUserSimulator.CIFr.usrActInd_end):fill(1e-3)
     --    local actPredFN = torch.Tensor(self.ciUserSimulator.CIFr.usrActInd_end):fill(1e-3)
@@ -724,9 +724,9 @@ function CIUserActsPredictor:testActPredOnTestDetOneEpoch()
             tabState[j] = prepUserState
         end
 
-        test_rnn_noise_i = {}
-        test_rnn_noise_h = {}
-        test_rnn_noise_o = {}
+        local test_rnn_noise_i = {}
+        local test_rnn_noise_h = {}
+        local test_rnn_noise_o = {}
         if self.opt.uppModelRNNDom > 0 then
             TableSet.buildRNNDropoutMask(test_rnn_noise_i, test_rnn_noise_h, test_rnn_noise_o, self.inputFeatureNum, self.opt.rnnHdSizeL1, self.opt.rnnHdLyCnt, #self.rnnRealUserDataStatesTest, self.opt.lstmHist, self.opt.uppModelRNNDom)
             TableSet.sampleRNNDropoutMask(0, test_rnn_noise_i, test_rnn_noise_h, test_rnn_noise_o, self.opt.rnnHdLyCnt, self.opt.lstmHist)
