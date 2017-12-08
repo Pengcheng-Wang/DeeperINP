@@ -17,12 +17,12 @@ local _ = require 'moses'
 local class = require 'classic'
 require 'classic.torch' -- Enables serialisation
 local TableSet = require 'MyMisc.TableSetMisc'
+local OptimMisc = require 'MyMisc.OptimMisc'    -- required to do gradient clipping for rnn modeling training
 
 local CIUserActScorePredictor = classic.class('UserActScorePredictor')
 
 function CIUserActScorePredictor:_init(CIUserSimulator, opt)
 
-    -- batch size?
     if opt.optimization == 'LBFGS' and opt.batchSize < 100 then
         error('LBFGS should not be used with small mini-batches; 1000 is recommended')
     end
@@ -48,7 +48,7 @@ function CIUserActScorePredictor:_init(CIUserSimulator, opt)
             ------------------------------------------------------------
             -- mixture of experts
             ------------------------------------------------------------
-            experts = nn.ConcatTable()
+            local experts = nn.ConcatTable()
             local numOfExp = 4
             for i = 1, numOfExp do
                 local expert = nn.Sequential()
@@ -62,11 +62,11 @@ function CIUserActScorePredictor:_init(CIUserSimulator, opt)
 
                 -- The following code creates two output modules, with one module matches
                 -- to user action prediction, and the other matches to user outcome(score) prediction
-                mulOutConcatTab = nn.ConcatTable()
-                actSeqNN = nn.Sequential()
+                local mulOutConcatTab = nn.ConcatTable()
+                local actSeqNN = nn.Sequential()
                 actSeqNN:add(nn.Linear(24, #classesActs))
                 actSeqNN:add(nn.LogSoftMax())
-                scoreSeqNN = nn.Sequential()
+                local scoreSeqNN = nn.Sequential()
                 scoreSeqNN:add(nn.Linear(24, #classesScores))
                 scoreSeqNN:add(nn.LogSoftMax())
                 mulOutConcatTab:add(actSeqNN)   -- should pay attention to the sequence of action and outcome prediction table
@@ -77,7 +77,7 @@ function CIUserActScorePredictor:_init(CIUserSimulator, opt)
                 experts:add(expert)
             end
 
-            gater = nn.Sequential()
+            local gater = nn.Sequential()
             gater:add(nn.Reshape(self.inputFeatureNum))
             gater:add(nn.Linear(self.inputFeatureNum, 24))
             gater:add(nn.Tanh())
@@ -85,7 +85,7 @@ function CIUserActScorePredictor:_init(CIUserSimulator, opt)
             gater:add(nn.Linear(24, numOfExp))
             gater:add(nn.SoftMax())
 
-            trunk = nn.ConcatTable()
+            local trunk = nn.ConcatTable()
             trunk:add(gater)
             trunk:add(experts)
 
@@ -107,11 +107,11 @@ function CIUserActScorePredictor:_init(CIUserSimulator, opt)
 
             -- The following code creates two output modules, with one module matches
             -- to user action prediction, and the other matches to user outcome(score) prediction
-            mulOutConcatTab = nn.ConcatTable()
-            actSeqNN = nn.Sequential()
+            local mulOutConcatTab = nn.ConcatTable()
+            local actSeqNN = nn.Sequential()
             actSeqNN:add(nn.Linear(24, #classesActs))
             actSeqNN:add(nn.LogSoftMax())
-            scoreSeqNN = nn.Sequential()
+            local scoreSeqNN = nn.Sequential()
             scoreSeqNN:add(nn.Linear(24, #classesScores))
             scoreSeqNN:add(nn.LogSoftMax())
             mulOutConcatTab:add(actSeqNN)   -- should pay attention to the sequence of action and outcome prediction table
@@ -132,11 +132,11 @@ function CIUserActScorePredictor:_init(CIUserSimulator, opt)
 
             -- The following code creates two output modules, with one module matches
             -- to user action prediction, and the other matches to user outcome(score) prediction
-            mulOutConcatTab = nn.ConcatTable()
-            actSeqNN = nn.Sequential()
+            local mulOutConcatTab = nn.ConcatTable()
+            local actSeqNN = nn.Sequential()
             actSeqNN:add(nn.Linear(self.inputFeatureNum, #classesActs))
             actSeqNN:add(nn.LogSoftMax())
-            scoreSeqNN = nn.Sequential()
+            local scoreSeqNN = nn.Sequential()
             scoreSeqNN:add(nn.Linear(self.inputFeatureNum, #classesScores))
             scoreSeqNN:add(nn.LogSoftMax())
             mulOutConcatTab:add(actSeqNN)   -- should pay attention to the sequence of action and outcome prediction table
@@ -145,9 +145,9 @@ function CIUserActScorePredictor:_init(CIUserSimulator, opt)
             self.model:add(mulOutConcatTab)
             ------------------------------------------------------------
 
-        elseif opt.uppModel == 'lstm' then
+        elseif opt.uppModel == 'rnn_lstm' then
             ------------------------------------------------------------
-            -- lstm
+            -- lstm implementation from Element-Research rnn lib. The lazy dropout (variational RNN models) seems not very correct.
             ------------------------------------------------------------
             self.model:add(nn.Reshape(self.inputFeatureNum))
             --nn.FastLSTM.bn = true   -- turn on batch normalization
@@ -198,18 +198,124 @@ function CIUserActScorePredictor:_init(CIUserSimulator, opt)
 
             -- The following code creates two output modules, with one module matches
             -- to user action prediction, and the other matches to user outcome(score) prediction
-            mulOutConcatTab = nn.ConcatTable()
-            actSeqNN = nn.Sequential()
+            local mulOutConcatTab = nn.ConcatTable()
+            local actSeqNN = nn.Sequential()
             actSeqNN:add(nn.Linear(lastHidNum, #classesActs))
             actSeqNN:add(nn.LogSoftMax())
-            scoreSeqNN = nn.Sequential()
+            local scoreSeqNN = nn.Sequential()
             scoreSeqNN:add(nn.Linear(lastHidNum, #classesScores))
             scoreSeqNN:add(nn.LogSoftMax())
             mulOutConcatTab:add(actSeqNN)   -- should pay attention to the sequence of action and outcome prediction table
             mulOutConcatTab:add(scoreSeqNN) -- {act, outcome(score)}
 
             self.model:add(mulOutConcatTab)
-            self.model = nn.Sequencer(self.model)   -- This is interesting! This allows input to be a sequence of observations. We can also put FastLSTM into a Sequencer to substitue SeqLSTM, since SeqLSTM does not use RNN_dropout (Gal 16)
+            self.model = nn.Sequencer(self.model)
+            ------------------------------------------------------------
+
+        elseif opt.uppModel == 'rnn_rhn' then
+            ------------------------------------------------------------
+            -- Recurrent Highway Network (dropout mask defined outside rnn model)
+            ------------------------------------------------------------
+            require 'modules.RecurrenHighwayNetworkRNN'
+            local rhn
+            rhn = nn.RHN(self.inputFeatureNum, opt.rnnHdSizeL1, opt.rhnReccDept, opt.rnnHdLyCnt, opt.uSimLstmBackLen) --inputSize, outputSize, recurrence_depth, rhn_layers, rho
+            rhn:remember('both')
+            self.model:add(rhn)
+            self.model:add(nn.NormStabilizer())
+
+            -- The following code creates two output modules, with one module matches
+            -- to user action prediction, and the other matches to user outcome(score) prediction
+            local mulOutConcatTab = nn.ConcatTable()
+            local actSeqNN = nn.Sequential()
+            actSeqNN:add(nn.Linear(opt.rnnHdSizeL1, #classesActs))
+            actSeqNN:add(nn.LogSoftMax())
+            local scoreSeqNN = nn.Sequential()
+            scoreSeqNN:add(nn.Linear(opt.rnnHdSizeL1, #classesScores))
+            scoreSeqNN:add(nn.LogSoftMax())
+            mulOutConcatTab:add(actSeqNN)   -- should pay attention to the sequence of action and outcome prediction table
+            mulOutConcatTab:add(scoreSeqNN) -- {act, outcome(score)}
+
+            self.model:add(mulOutConcatTab)
+            self.model = nn.Sequencer(self.model)
+            ------------------------------------------------------------
+
+        elseif opt.uppModel == 'rnn_blstm' then
+            ------------------------------------------------------------
+            -- Bayesian LSTM implemented following Yarin Gal's code (dropout mask defined outside rnn model)
+            ------------------------------------------------------------
+            require 'modules.LSTMBayesianRNN'
+            local bay_lstm
+            bay_lstm = nn.BayesianLSTM(self.inputFeatureNum, opt.rnnHdSizeL1, opt.rnnHdLyCnt, opt.uSimLstmBackLen) --inputSize, outputSize, rhn_layers, rho
+            bay_lstm:remember('both')
+            self.model:add(bay_lstm)
+            self.model:add(nn.NormStabilizer())
+
+            -- The following code creates two output modules, with one module matches
+            -- to user action prediction, and the other matches to user outcome(score) prediction
+            local mulOutConcatTab = nn.ConcatTable()
+            local actSeqNN = nn.Sequential()
+            actSeqNN:add(nn.Linear(opt.rnnHdSizeL1, #classesActs))
+            actSeqNN:add(nn.LogSoftMax())
+            local scoreSeqNN = nn.Sequential()
+            scoreSeqNN:add(nn.Linear(opt.rnnHdSizeL1, #classesScores))
+            scoreSeqNN:add(nn.LogSoftMax())
+            mulOutConcatTab:add(actSeqNN)   -- should pay attention to the sequence of action and outcome prediction table
+            mulOutConcatTab:add(scoreSeqNN) -- {act, outcome(score)}
+
+            self.model:add(mulOutConcatTab)
+            self.model = nn.Sequencer(self.model)
+            ------------------------------------------------------------
+
+        elseif opt.uppModel == 'rnn_bGridlstm' then
+            ------------------------------------------------------------
+            -- Bayesian GridLSTM implemented following Corey's GridLSTM and Yarin Gal's Bayesian LSTM code (dropout mask defined outside rnn model)
+            ------------------------------------------------------------
+            require 'modules.GridLSTMBayesianRNN'
+            local grid_lstm
+            grid_lstm = nn.BayesianGridLSTM(self.inputFeatureNum, opt.rnnHdLyCnt, opt.uSimLstmBackLen, opt.gridLstmTieWhts) -- rnn_size, rnn_layers, rho, tie_weights
+            grid_lstm:remember('both')
+            self.model:add(grid_lstm)
+            self.model:add(nn.NormStabilizer())
+
+            -- The following code creates two output modules, with one module matches
+            -- to user action prediction, and the other matches to user outcome(score) prediction
+            local mulOutConcatTab = nn.ConcatTable()
+            local actSeqNN = nn.Sequential()
+            actSeqNN:add(nn.Linear(self.inputFeatureNum, #classesActs))
+            actSeqNN:add(nn.LogSoftMax())
+            local scoreSeqNN = nn.Sequential()
+            scoreSeqNN:add(nn.Linear(self.inputFeatureNum, #classesScores))
+            scoreSeqNN:add(nn.LogSoftMax())
+            mulOutConcatTab:add(actSeqNN)   -- should pay attention to the sequence of action and outcome prediction table
+            mulOutConcatTab:add(scoreSeqNN) -- {act, outcome(score)}
+
+            self.model:add(mulOutConcatTab)
+            self.model = nn.Sequencer(self.model)
+            ------------------------------------------------------------
+
+        elseif opt.uppModel == 'cnn_uSimTempCnn' then
+            ------------------------------------------------------------
+            -- CNN model following the implementation of OpenNMT CNNEncoder and fb.resnet
+            ------------------------------------------------------------
+            require 'modules.TempConvInUserSimCNN'
+            local tempCnn = nn.TempConvUserSimCNN()         -- inputSize, outputSize, cnn_layers, kernel_width, dropout_rate, version
+            local _tempCnnLayer = tempCnn:CreateCNNModule(self.inputFeatureNum, self.inputFeatureNum, opt.rnnHdLyCnt, opt.cnnKernelWidth, opt.dropoutUSim, opt.cnnConnType)
+            self.model:add(_tempCnnLayer)
+            self.model:add(nn.View(-1):setNumInputDims(2))  -- The input/output data should have dimensions of batch_index/frame_index/feature_index, so it's 3d, and 2d without batch index
+
+            -- The following code creates two output modules, with one module matches
+            -- to user action prediction, and the other matches to user outcome(score) prediction
+            local mulOutConcatTab = nn.ConcatTable()
+            local actSeqNN = nn.Sequential()
+            actSeqNN:add(nn.Linear(self.inputFeatureNum * opt.lstmHist, #classesActs))
+            actSeqNN:add(nn.LogSoftMax())
+            local scoreSeqNN = nn.Sequential()
+            scoreSeqNN:add(nn.Linear(self.inputFeatureNum * opt.lstmHist, #classesScores))
+            scoreSeqNN:add(nn.LogSoftMax())
+            mulOutConcatTab:add(actSeqNN)   -- should pay attention to the sequence of action and outcome prediction table
+            mulOutConcatTab:add(scoreSeqNN) -- {act, outcome(score)}
+
+            self.model:add(mulOutConcatTab)
             ------------------------------------------------------------
 
         else
@@ -241,7 +347,7 @@ function CIUserActScorePredictor:_init(CIUserSimulator, opt)
     self.uspCriterion = nn.ClassNLLCriterion()
     self.uaspPrlCriterion:add(self.uapCriterion)   -- action prediction loss function
     self.uaspPrlCriterion:add(self.uspCriterion)   -- score (outcome) prediction loss function
-    if opt.uppModel == 'lstm' then
+    if string.sub(opt.uppModel, 1, 4) == 'rnn_' then
         self.uaspPrlCriterion = nn.SequencerCriterion(self.uaspPrlCriterion)
     end
 
@@ -253,7 +359,7 @@ function CIUserActScorePredictor:_init(CIUserSimulator, opt)
     -- log results to files
     self.uaspTrainLogger = optim.Logger(paths.concat('userModelTrained', opt.save, 'uaspTrain.log'))
     self.uaspTestLogger = optim.Logger(paths.concat('userModelTrained', opt.save, 'uaspTest.log'))
-    self.uaspTestLogger:setNames{'Epoch', 'Act Test acc.', 'Score Test acc.'}
+    self.uaspTestLogger:setNames{'Epoch', 'Act Test acc.', 'Act Test LogLoss', 'Score Test acc.', 'Score Test LogLoss'}
 
     ----------------------------------------------------------------------
     --- initialize cunn/cutorch for training on the GPU and fall back to CPU gracefully
@@ -278,131 +384,46 @@ function CIUserActScorePredictor:_init(CIUserSimulator, opt)
         end
     end
 
-    -- todo:pwang8. Dec 2, 2017. "Prepare data for lstm in training set" has been moved to UserSimulator class. Need to modify code below
     ----------------------------------------------------------------------
-    --- Prepare data for lstm in training set
+    --- Prepare data for RNN models in training set
     ---
-    self.rnnRealUserDataStates = {}
-    self.rnnRealUserDataActs = {}
-    self.rnnRealUserDataRewards = {}
-    self.rnnRealUserDataStarts = {}
-    self.rnnRealUserDataEnds = {}
-    self.rnnRealUserDataPad = torch.Tensor(#self.ciUserSimulator.realUserDataStartLines):fill(0)    -- indicating whether data has padding at head (should be padded)
-    if opt.uppModel == 'lstm' then
-        local indSeqHead = 1
-        local indSeqTail = opt.lstmHist
-        local indUserSeq = 1    -- user id ptr. Use this to get the tail of each trajectory
-        while indSeqTail <= #self.ciUserSimulator.realUserDataStates do
-            if self.rnnRealUserDataPad[indUserSeq] < 1 then
-                for padi = opt.lstmHist-1, 1, -1 do
-                    self.rnnRealUserDataStates[#self.rnnRealUserDataStates + 1] = {}
-                    self.rnnRealUserDataActs[#self.rnnRealUserDataActs + 1] = {}
-                    self.rnnRealUserDataRewards[#self.rnnRealUserDataRewards + 1] = {}
-                    for i=1, padi do
-                        self.rnnRealUserDataStates[#self.rnnRealUserDataStates][i] = torch.Tensor(self.ciUserSimulator.userStateFeatureCnt):fill(0)
-                        self.rnnRealUserDataActs[#self.rnnRealUserDataActs][i] = self.ciUserSimulator.realUserDataActs[indSeqHead]  -- duplicate the 1st user action for padded states
-                        self.rnnRealUserDataRewards[#self.rnnRealUserDataRewards][i] = self.ciUserSimulator.realUserDataRewards[indSeqHead]
-                    end
-                    for i=1, opt.lstmHist-padi do
-                        self.rnnRealUserDataStates[#self.rnnRealUserDataStates][i+padi] = self.ciUserSimulator.realUserDataStates[indSeqHead+i-1]
-                        self.rnnRealUserDataActs[#self.rnnRealUserDataActs][i+padi] = self.ciUserSimulator.realUserDataActs[indSeqHead+i-1]
-                        self.rnnRealUserDataRewards[#self.rnnRealUserDataRewards][i+padi] = self.ciUserSimulator.realUserDataRewards[indSeqHead+i-1]
-                    end
-                    if padi == opt.lstmHist-1 then
-                        self.rnnRealUserDataStarts[#self.rnnRealUserDataStarts+1] = #self.rnnRealUserDataStates     -- This is the start of a user's record -- This is duplicated. The value should be the same as realUserDataStartLines
-                    end
-                    if indSeqHead+(opt.lstmHist-padi)-1 == self.ciUserSimulator.realUserDataEndLines[indUserSeq] then
-                        self.rnnRealUserDataPad[indUserSeq] = 1
-                        break   -- if padding tail is going to outrange this user record's tail, break
-                    end
-                end
-                self.rnnRealUserDataPad[indUserSeq] = 1
-            else
-                if indSeqTail <= self.ciUserSimulator.realUserDataEndLines[indUserSeq] then
-                    self.rnnRealUserDataStates[#self.rnnRealUserDataStates + 1] = {}
-                    self.rnnRealUserDataActs[#self.rnnRealUserDataActs + 1] = {}
-                    self.rnnRealUserDataRewards[#self.rnnRealUserDataRewards + 1] = {}
-                    for i=1, opt.lstmHist do
-                        self.rnnRealUserDataStates[#self.rnnRealUserDataStates][i] = self.ciUserSimulator.realUserDataStates[indSeqHead+i-1]
-                        self.rnnRealUserDataActs[#self.rnnRealUserDataActs][i] = self.ciUserSimulator.realUserDataActs[indSeqHead+i-1]
-                        self.rnnRealUserDataRewards[#self.rnnRealUserDataRewards][i] = self.ciUserSimulator.realUserDataRewards[indSeqHead+i-1]
-                    end
-                    indSeqHead = indSeqHead + 1
-                    indSeqTail = indSeqTail + 1
-                else
-                    self.rnnRealUserDataEnds[#self.rnnRealUserDataEnds+1] = #self.rnnRealUserDataStates     -- This is the end of a user's record
-                    indUserSeq = indUserSeq + 1 -- next user's records
-                    indSeqHead = self.ciUserSimulator.realUserDataStartLines[indUserSeq]
-                    indSeqTail = indSeqHead + opt.lstmHist - 1
-                end
-            end
-        end
-        self.rnnRealUserDataEnds[#self.rnnRealUserDataEnds+1] = #self.rnnRealUserDataStates     -- Set the end of the last user's record
-        -- There are in total 15509 sequences if histLen is 3. 14707 if histLen is 5. 15108 if histLen is 4. 15911 if histLen is 2.
-    end
+    self.rnnRealUserDataStates = self.ciUserSimulator.rnnRealUserDataStates
+    self.rnnRealUserDataActs = self.ciUserSimulator.rnnRealUserDataActs
+    self.rnnRealUserDataRewards = self.ciUserSimulator.rnnRealUserDataRewards
+    self.rnnRealUserDataEnds = self.ciUserSimulator.rnnRealUserDataEnds
 
     ----------------------------------------------------------------------
-    --- Prepare data for lstm in test/train_validation set
+    --- Prepare data for RNN models in test/train_validation set
     ---
-    self.rnnRealUserDataStatesTest = {}
-    self.rnnRealUserDataActsTest = {}
-    self.rnnRealUserDataRewardsTest = {}
-    self.rnnRealUserDataStartsTest = {}
-    self.rnnRealUserDataEndsTest = {}
-    self.rnnRealUserDataPadTest = torch.Tensor(#self.ciUserSimulator.realUserDataStartLinesTest):fill(0)    -- indicating whether data has padding at head (should be padded)
-    if self.opt.ciuTType == 'train' or self.opt.ciuTType == 'train_tr' then
-        if opt.uppModel == 'lstm' then
-            local indSeqHead = 1
-            local indSeqTail = opt.lstmHist
-            local indUserSeq = 1    -- user id ptr. Use this to get the tail of each trajectory
-            while indSeqTail <= #self.ciUserSimulator.realUserDataStatesTest do
-                if self.rnnRealUserDataPadTest[indUserSeq] < 1 then
-                    for padi = opt.lstmHist-1, 1, -1 do
-                        self.rnnRealUserDataStatesTest[#self.rnnRealUserDataStatesTest + 1] = {}
-                        self.rnnRealUserDataActsTest[#self.rnnRealUserDataActsTest + 1] = {}
-                        self.rnnRealUserDataRewardsTest[#self.rnnRealUserDataRewardsTest + 1] = {}
-                        for i=1, padi do
-                            self.rnnRealUserDataStatesTest[#self.rnnRealUserDataStatesTest][i] = torch.Tensor(self.ciUserSimulator.userStateFeatureCnt):fill(0)
-                            self.rnnRealUserDataActsTest[#self.rnnRealUserDataActsTest][i] = self.ciUserSimulator.realUserDataActsTest[indSeqHead]  -- duplicate the 1st user action for padded states
-                            self.rnnRealUserDataRewardsTest[#self.rnnRealUserDataRewardsTest][i] = self.ciUserSimulator.realUserDataRewardsTest[indSeqHead]
-                        end
-                        for i=1, opt.lstmHist-padi do
-                            self.rnnRealUserDataStatesTest[#self.rnnRealUserDataStatesTest][i+padi] = self.ciUserSimulator.realUserDataStatesTest[indSeqHead+i-1]
-                            self.rnnRealUserDataActsTest[#self.rnnRealUserDataActsTest][i+padi] = self.ciUserSimulator.realUserDataActsTest[indSeqHead+i-1]
-                            self.rnnRealUserDataRewardsTest[#self.rnnRealUserDataRewardsTest][i+padi] = self.ciUserSimulator.realUserDataRewardsTest[indSeqHead+i-1]
-                        end
-                        if padi == opt.lstmHist-1 then
-                            self.rnnRealUserDataStartsTest[#self.rnnRealUserDataStartsTest+1] = #self.rnnRealUserDataStatesTest     -- This is the start of a user's record
-                        end
-                        if indSeqHead+(opt.lstmHist-padi)-1 == self.ciUserSimulator.realUserDataEndLinesTest[indUserSeq] then
-                            self.rnnRealUserDataPadTest[indUserSeq] = 1
-                            break   -- if padding tail is going to outrange this user record's tail, break
-                        end
-                    end
-                    self.rnnRealUserDataPadTest[indUserSeq] = 1
-                else
-                    if indSeqTail <= self.ciUserSimulator.realUserDataEndLinesTest[indUserSeq] then
-                        self.rnnRealUserDataStatesTest[#self.rnnRealUserDataStatesTest + 1] = {}
-                        self.rnnRealUserDataActsTest[#self.rnnRealUserDataActsTest + 1] = {}
-                        self.rnnRealUserDataRewardsTest[#self.rnnRealUserDataRewardsTest + 1] = {}
-                        for i=1, opt.lstmHist do
-                            self.rnnRealUserDataStatesTest[#self.rnnRealUserDataStatesTest][i] = self.ciUserSimulator.realUserDataStatesTest[indSeqHead+i-1]
-                            self.rnnRealUserDataActsTest[#self.rnnRealUserDataActsTest][i] = self.ciUserSimulator.realUserDataActsTest[indSeqHead+i-1]
-                            self.rnnRealUserDataRewardsTest[#self.rnnRealUserDataRewardsTest][i] = self.ciUserSimulator.realUserDataRewardsTest[indSeqHead+i-1]
-                        end
-                        indSeqHead = indSeqHead + 1
-                        indSeqTail = indSeqTail + 1
-                    else
-                        self.rnnRealUserDataEndsTest[#self.rnnRealUserDataEndsTest+1] = #self.rnnRealUserDataStatesTest     -- This is the end of a user's record
-                        indUserSeq = indUserSeq + 1 -- next user's records
-                        indSeqHead = self.ciUserSimulator.realUserDataStartLinesTest[indUserSeq]
-                        indSeqTail = indSeqHead + opt.lstmHist - 1
-                    end
-                end
-            end
-            self.rnnRealUserDataEndsTest[#self.rnnRealUserDataEndsTest+1] = #self.rnnRealUserDataStatesTest     -- Set the end of the last user's record
-            -- There are in total 15509 sequences if histLen is 3. 14707 if histLen is 5. 15108 if histLen is 4. 15911 if histLen is 2.
-        end
+    self.rnnRealUserDataStatesTest = self.ciUserSimulator.rnnRealUserDataStatesTest
+    self.rnnRealUserDataActsTest = self.ciUserSimulator.rnnRealUserDataActsTest
+    self.rnnRealUserDataRewardsTest = self.ciUserSimulator.rnnRealUserDataRewardsTest
+    self.rnnRealUserDataEndsTest = self.ciUserSimulator.rnnRealUserDataEndsTest
+
+    ----------------------------------------------------------------------
+    --- Prepare data for CNN models in training set
+    ---
+    self.cnnRealUserDataStates = self.ciUserSimulator.cnnRealUserDataStates
+    self.cnnRealUserDataActs = self.ciUserSimulator.cnnRealUserDataActs
+    self.cnnRealUserDataRewards = self.ciUserSimulator.cnnRealUserDataRewards
+
+    ----------------------------------------------------------------------
+    --- Prepare data for CNN models in test/train_validation set
+    ---
+    self.cnnRealUserDataStatesTest = self.ciUserSimulator.cnnRealUserDataStatesTest
+    self.cnnRealUserDataActsTest = self.ciUserSimulator.cnnRealUserDataActsTest
+    self.cnnRealUserDataRewardsTest = self.ciUserSimulator.cnnRealUserDataRewardsTest
+    self.cnnRealUserDataEndsTest = self.ciUserSimulator.cnnRealUserDataEndsTest
+
+    ----------------------------------------------------------------------
+    --- Prepare 3 dropout masks for RNN models. Right now
+    --- it is used by RHN, Bayesian LSTM and Bayesian GridLSTM
+    ---
+    self.rnn_noise_i = {}
+    self.rnn_noise_h = {}
+    self.rnn_noise_o = {}
+    if self.opt.uppModelRNNDom > 0 then
+        TableSet.buildRNNDropoutMask(self.rnn_noise_i, self.rnn_noise_h, self.rnn_noise_o, self.inputFeatureNum, opt.rnnHdSizeL1, opt.rnnHdLyCnt, self.opt.batchSize, self.opt.lstmHist, self.opt.uppModelRNNDom)
     end
 
     -- retrieve parameters and gradients
@@ -428,8 +449,106 @@ function CIUserActScorePredictor:trainOneEpoch()
     local lstmIter = 1  -- lstm iterate for each squence starts from this value
     local epochDone = false
     while not epochDone do
-        if self.opt.uppModel ~= 'lstm' then
-            -- create mini batch
+        if string.sub(self.opt.uppModel, 1, 4) == 'rnn_' then
+            -- rnn models
+            inputs = {}
+            targetsAct = {}
+            targetsScore = {}
+            closeToEnd = torch.Tensor(self.opt.batchSize):fill(0)
+            local k
+            for j = 1, self.opt.lstmHist do
+                inputs[j] = torch.Tensor(self.opt.batchSize, self.inputFeatureNum)
+                targetsAct[j] = torch.Tensor(self.opt.batchSize)
+                targetsScore[j] = torch.Tensor(self.opt.batchSize)
+                k = 1
+                for i = lstmIter, math.min(lstmIter+self.opt.batchSize-1, #self.rnnRealUserDataStates) do
+                    inputs[j][k] = self.rnnRealUserDataStates[i][j]
+                    targetsAct[j][k] = self.rnnRealUserDataActs[i][j]
+                    targetsScore[j][k] = self.rnnRealUserDataRewards[i][j]
+                    if j == self.opt.lstmHist then
+                        for dis=0, self.opt.scorePredStateScope-1 do
+                            if (i+dis) <= #self.rnnRealUserDataActs and self.rnnRealUserDataActs[i+dis][self.opt.lstmHist] == self.ciUserSimulator.CIFr.usrActInd_end then
+                                -- If current state is close enough to the end of this sequence, mark it.
+                                -- This is for marking near end state, with which the score prediction should be more accurate and be utilized in score pred training
+                                closeToEnd[k] = 1
+                                break
+                            end
+                        end
+                    end
+                    k = k + 1
+                end
+            end
+
+            -- at the end of dataset, if it could not be divided into full batch
+            if k ~= self.opt.batchSize + 1 then
+                while k <= self.opt.batchSize do
+                    local randInd = torch.random(1, #self.rnnRealUserDataStates)
+                    for j = 1, self.opt.lstmHist do
+                        inputs[j][k] = self.rnnRealUserDataStates[randInd][j]
+                        targetsAct[j][k] = self.rnnRealUserDataActs[randInd][j]
+                        targetsScore[j][k] = self.rnnRealUserDataRewards[randInd][j]
+                        if j == self.opt.lstmHist then
+                            for dis=0, self.opt.scorePredStateScope-1 do
+                                if (randInd+dis) <= #self.rnnRealUserDataActs and self.rnnRealUserDataActs[randInd+dis][self.opt.lstmHist] == self.ciUserSimulator.CIFr.usrActInd_end then
+                                    -- If current state is close enough to the end of this sequence, mark it.
+                                    -- This is for marking near end state, with which the score prediction should be more accurate and be utilized in score pred training
+                                    closeToEnd[k] = 1
+                                    break
+                                end
+                            end
+                        end
+                    end
+                    k = k + 1
+                end
+            end
+
+            lstmIter = lstmIter + self.opt.batchSize
+            if lstmIter > #self.rnnRealUserDataStates then
+                epochDone = true
+            end
+
+            if self.opt.actPredDataAug > 0 then
+                -- Data augmentation
+                self.ciUserSimulator:UserSimActDataAugment(inputs, targetsAct, targetsScore, self.opt.uppModel)
+                if self.opt.uppModelRNNDom > 0 then
+                    TableSet.buildRNNDropoutMask(self.rnn_noise_i, self.rnn_noise_h, self.rnn_noise_o, self.inputFeatureNum, self.opt.rnnHdSizeL1, self.opt.rnnHdLyCnt, inputs[1]:size(1), self.opt.lstmHist, self.opt.uppModelRNNDom)
+                end
+            end
+            -- Should do input feature pre-processing after data augmentation
+            for ik=1, #inputs do
+                inputs[ik] = self.ciUserSimulator:preprocessUserStateData(inputs[ik], self.opt.prepro)
+            end
+            -- Try to add random normal noise to input features and see how it performs
+            -- This should be invoked after input preprocess bcz we want to set an unique std
+            -- I've tried to apply adding random normal noise in rnn form of data. It seems the result is not good.
+            --self.ciUserSimulator:UserSimDataAddRandNoise(inputs, true, 0.01)
+
+            if self.opt.uppModelRNNDom > 0 then
+                TableSet.sampleRNNDropoutMask(self.opt.dropoutUSim, self.rnn_noise_i, self.rnn_noise_h, self.rnn_noise_o, self.opt.rnnHdLyCnt, self.opt.lstmHist)
+                for j = 1, self.opt.lstmHist do
+                    inputs[j] = {inputs[j], self.rnn_noise_i[j], self.rnn_noise_h[j], self.rnn_noise_o[j]}
+                end
+            end
+
+            if self.opt.gpu > 0 then
+                nn.utils.recursiveType(inputs, 'torch.CudaTensor')
+                nn.utils.recursiveType(targetsAct, 'torch.CudaTensor')
+                nn.utils.recursiveType(targetsScore, 'torch.CudaTensor')
+                closeToEnd = closeToEnd:cuda()
+            end
+
+            for j = 1, self.opt.lstmHist do
+                targetsActScore[j] = {}
+                targetsActScore[j][1] = targetsAct[j]
+                targetsActScore[j][2] = targetsScore[j]
+            end
+
+        elseif string.sub(self.opt.uppModel, 1, 4) == 'cnn_' then
+            -- cnn models
+            -- todo:pwang8. Edit from here. Dec 7, 2017.
+
+        else
+            -- non-rnn, non-cnn models, create mini batch
             inputs = torch.Tensor(self.opt.batchSize, self.inputFeatureNum)
             targetsAct = torch.Tensor(self.opt.batchSize)
             targetsScore = torch.Tensor(self.opt.batchSize)
@@ -488,85 +607,6 @@ function CIUserActScorePredictor:trainOneEpoch()
             end
 
             targetsActScore = {targetsAct, targetsScore}
-
-        else
-            -- lstm
-            inputs = {}
-            targetsAct = {}
-            targetsScore = {}
-            closeToEnd = torch.Tensor(self.opt.batchSize):fill(0)
-            local k
-            for j = 1, self.opt.lstmHist do
-                inputs[j] = torch.Tensor(self.opt.batchSize, self.inputFeatureNum)
-                targetsAct[j] = torch.Tensor(self.opt.batchSize)
-                targetsScore[j] = torch.Tensor(self.opt.batchSize)
-                k = 1
-                for i = lstmIter, math.min(lstmIter+self.opt.batchSize-1, #self.rnnRealUserDataStates) do
-                    local input = self.rnnRealUserDataStates[i][j]
-                    input = self.ciUserSimulator:preprocessUserStateData(input, self.opt.prepro)
-                    local singleTargetAct = self.rnnRealUserDataActs[i][j]
-                    local singleTargetScore = self.rnnRealUserDataRewards[i][j]
-                    inputs[j][k] = input
-                    targetsAct[j][k] = singleTargetAct
-                    targetsScore[j][k] = singleTargetScore
-                    if j == self.opt.lstmHist then
-                        for dis=0, self.opt.scorePredStateScope-1 do
-                            if (i+dis) <= #self.rnnRealUserDataActs and self.rnnRealUserDataActs[i+dis][self.opt.lstmHist] == self.ciUserSimulator.CIFr.usrActInd_end then
-                                -- If current state is close enough to the end of this sequence, mark it.
-                                -- This is for marking near end state, with which the score prediction should be more accurate and be utilized in score pred training
-                                closeToEnd[k] = 1
-                                break
-                            end
-                        end
-                    end
-                    k = k + 1
-                end
-            end
-
-            -- at the end of dataset, if it could not be divided into full batch
-            if k ~= self.opt.batchSize + 1 then
-                while k <= self.opt.batchSize do
-                    local randInd = torch.random(1, #self.rnnRealUserDataStates)
-                    for j = 1, self.opt.lstmHist do
-                        local input = self.rnnRealUserDataStates[randInd][j]
-                        input = self.ciUserSimulator:preprocessUserStateData(input, self.opt.prepro)
-                        local singleTargetAct = self.rnnRealUserDataActs[randInd][j]
-                        local singleTargetScore = self.rnnRealUserDataRewards[randInd][j]
-                        inputs[j][k] = input
-                        targetsAct[j][k] = singleTargetAct
-                        targetsScore[j][k] = singleTargetScore
-                        if j == self.opt.lstmHist then
-                            for dis=0, self.opt.scorePredStateScope-1 do
-                                if (randInd+dis) <= #self.rnnRealUserDataActs and self.rnnRealUserDataActs[randInd+dis][self.opt.lstmHist] == self.ciUserSimulator.CIFr.usrActInd_end then
-                                    -- If current state is close enough to the end of this sequence, mark it.
-                                    -- This is for marking near end state, with which the score prediction should be more accurate and be utilized in score pred training
-                                    closeToEnd[k] = 1
-                                    break
-                                end
-                            end
-                        end
-                    end
-                    k = k + 1
-                end
-            end
-
-            lstmIter = lstmIter + self.opt.batchSize
-            if lstmIter > #self.rnnRealUserDataStates then
-                epochDone = true
-            end
-
-            if self.opt.gpu > 0 then
-                nn.utils.recursiveType(inputs, 'torch.CudaTensor')
-                nn.utils.recursiveType(targetsAct, 'torch.CudaTensor')
-                nn.utils.recursiveType(targetsScore, 'torch.CudaTensor')
-                closeToEnd = closeToEnd:cuda()
-            end
-
-            for j = 1, self.opt.lstmHist do
-                targetsActScore[j] = {}
-                targetsActScore[j][1] = targetsAct[j]
-                targetsActScore[j][2] = targetsScore[j]
-            end
 
         end
 
