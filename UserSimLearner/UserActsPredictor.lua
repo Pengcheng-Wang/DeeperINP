@@ -711,7 +711,7 @@ function CIUserActsPredictor:testActPredOnTestDetOneEpoch()
     --    local actPredFN = torch.Tensor(self.ciUserSimulator.CIFr.usrActInd_end):fill(1e-3)
     local _logLoss = 0
     if string.sub(self.opt.uppModel, 1, 4) == 'rnn_' then
-        -- uSimShLayer == 0 and lstm model
+        -- uSimShLayer == 0 and rnn model
         self.model:evaluate()
         self.model:forget()
 

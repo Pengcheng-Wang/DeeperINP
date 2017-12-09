@@ -766,7 +766,7 @@ function CIUserActScorePredictor:trainOneEpoch()
 
             -- gradient clipping. It is recommended for rnn models, not sure if it is helpful to other models.
             if string.sub(self.opt.uppModel, 1, 4) == 'rnn_' then
-                OptimMisc.clipGradByNorm(self.uspDParam, 10)    -- right now 10 is used constantly as clipping norm
+                OptimMisc.clipGradByNorm(self.uaspDParam, 10)    -- right now 10 is used constantly as clipping norm
             end
             -- return f and df/dX
             return f, self.uaspDParam
@@ -904,15 +904,13 @@ end
 
 -- evaluation functionon test/train_validation set
 function CIUserActScorePredictor:testActScorePredOnTestDetOneEpoch()
-    local tltCnt = 0
-    local crcActCnt = 0
-    local crcRewCnt = 0
+    -- just in case:
+    collectgarbage()
 
-    -- todo:pwang8. Time to edit from here. Dec 8, 2017.
-    -- todo:pwang8. Need to calculate cross validated cross entropy (log loss in scikit-learn) for action/outcome prediction evaluation
-    if self.opt.uppModel == 'lstm' then
-        -- uSimShLayer == 1 and lstm model
-
+    local _logLoss_act = 0
+    local _logLoss_score = 0
+    if string.sub(self.opt.uppModel, 1, 4) == 'rnn_' then
+        -- uSimShLayer == 1, rnn model
         self.model:forget()
         self.model:evaluate()
 
@@ -924,6 +922,18 @@ function CIUserActScorePredictor:testActScorePredOnTestDetOneEpoch()
             end
             tabState[j] = prepUserState
         end
+
+        local test_rnn_noise_i = {}
+        local test_rnn_noise_h = {}
+        local test_rnn_noise_o = {}
+        if self.opt.uppModelRNNDom > 0 then
+            TableSet.buildRNNDropoutMask(test_rnn_noise_i, test_rnn_noise_h, test_rnn_noise_o, self.inputFeatureNum, self.opt.rnnHdSizeL1, self.opt.rnnHdLyCnt, #self.rnnRealUserDataStatesTest, self.opt.lstmHist, self.opt.uppModelRNNDom)
+            TableSet.sampleRNNDropoutMask(0, test_rnn_noise_i, test_rnn_noise_h, test_rnn_noise_o, self.opt.rnnHdLyCnt, self.opt.lstmHist)
+            for j = 1, self.opt.lstmHist do
+                tabState[j] = {tabState[j], test_rnn_noise_i[j], test_rnn_noise_h[j], test_rnn_noise_o[j]}
+            end
+        end
+
         if self.opt.gpu > 0 then
             nn.utils.recursiveType(tabState, 'torch.CudaTensor')
         end
@@ -934,6 +944,7 @@ function CIUserActScorePredictor:testActScorePredOnTestDetOneEpoch()
         self.uapConfusion:zero()
         for i=1, #self.rnnRealUserDataStatesTest do
             self.uapConfusion:add(nll_acts[self.opt.lstmHist][1][i], self.rnnRealUserDataActsTest[i][self.opt.lstmHist])
+            _logLoss_act = _logLoss_act + -1 * nll_acts[self.opt.lstmHist][1][i][self.rnnRealUserDataActsTest[i][self.opt.lstmHist]]
         end
         self.uapConfusion:updateValids()
         local tvalidAct = self.uapConfusion.totalValid
@@ -944,15 +955,57 @@ function CIUserActScorePredictor:testActScorePredOnTestDetOneEpoch()
         for i=1, #self.rnnRealUserDataEndsTest do
             self.uspConfusion:add(nll_acts[self.opt.lstmHist][2][self.rnnRealUserDataEndsTest[i]],
                                 self.rnnRealUserDataRewardsTest[self.rnnRealUserDataEndsTest[i]][self.opt.lstmHist])
+            _logLoss_score = _logLoss_score + -1 * nll_acts[self.opt.lstmHist][2][self.rnnRealUserDataEndsTest[i]][self.rnnRealUserDataRewardsTest[self.rnnRealUserDataEndsTest[i]][self.opt.lstmHist]]
         end
         self.uspConfusion:updateValids()
         local tvalidScore = self.uspConfusion.totalValid
         self.uspConfusion:zero()
 
-        return {tvalidAct, tvalidScore}
+        return {tvalidAct, _logLoss_act/#self.rnnRealUserDataStatesTest, tvalidScore, _logLoss_score/#self.rnnRealUserDataEndsTest}
+
+    elseif string.sub(self.opt.uppModel, 1, 4) == 'cnn_' then
+        -- SharedLayer == 1, cnn models
+        self.model:evaluate()
+
+        local prepUserState = torch.Tensor(#self.cnnRealUserDataStatesTest, self.opt.lstmHist, self.ciUserSimulator.userStateFeatureCnt)
+        for i=1, #self.cnnRealUserDataStatesTest do
+            prepUserState[i] = self.ciUserSimulator:preprocessUserStateData(self.cnnRealUserDataStatesTest[i], self.opt.prepro)
+        end
+        if self.opt.gpu > 0 then
+            prepUserState = prepUserState:cuda()
+        end
+        local nll_acts = self.model:forward(prepUserState)
+        nn.utils.recursiveType(nll_acts, 'torch.FloatTensor')
+
+        if self.opt.uppModel == 'moe' then
+            nll_acts = nll_acts:split(self.ciUserSimulator.CIFr.usrActInd_end, 2)  -- We assume 1st dim is batch index. Act pred is the 1st set of output, having dim of 15. Score dim 2.
+        end
+
+        --- Action prediction evaluation
+        self.uapConfusion:zero()
+        for i=1, #self.cnnRealUserDataStatesTest do
+            self.uapConfusion:add(nll_acts[1][i], self.cnnRealUserDataActsTest[i])
+            _logLoss_act = _logLoss_act + -1 * nll_acts[1][i][self.cnnRealUserDataActsTest[i]]
+        end
+        self.uapConfusion:updateValids()
+        local tvalidAct = self.uapConfusion.totalValid
+        self.uapConfusion:zero()
+
+        --- Score prediction evaluation
+        self.uspConfusion:zero()
+        for i=1, #self.cnnRealUserDataEndsTest do
+            self.uspConfusion:add(nll_acts[2][self.cnnRealUserDataEndsTest[i]],
+                                    self.cnnRealUserDataRewardsTest[self.cnnRealUserDataEndsTest[i]])
+            _logLoss_score = _logLoss_score + -1 * nll_acts[2][self.cnnRealUserDataEndsTest[i]][self.cnnRealUserDataRewardsTest[self.cnnRealUserDataEndsTest[i]]]
+        end
+        self.uspConfusion:updateValids()
+        local tvalidScore = self.uspConfusion.totalValid
+        self.uspConfusion:zero()
+
+        return {tvalidAct, _logLoss_act/#self.cnnRealUserDataStatesTest, tvalidScore, _logLoss_score/#self.cnnRealUserDataEndsTest}
 
     else
-        -- SharedLayer == 1, and not lstm models
+        -- SharedLayer == 1, non-rnn, non-cnn models
         self.model:evaluate()
 
         local prepUserState = torch.Tensor(#self.ciUserSimulator.realUserDataStatesTest, self.ciUserSimulator.userStateFeatureCnt)
@@ -973,6 +1026,7 @@ function CIUserActScorePredictor:testActScorePredOnTestDetOneEpoch()
         self.uapConfusion:zero()
         for i=1, #self.ciUserSimulator.realUserDataStatesTest do
             self.uapConfusion:add(nll_acts[1][i], self.ciUserSimulator.realUserDataActsTest[i])
+            _logLoss_act = _logLoss_act + -1 * nll_acts[1][i][self.ciUserSimulator.realUserDataActsTest[i]]
         end
         self.uapConfusion:updateValids()
         local tvalidAct = self.uapConfusion.totalValid
@@ -983,13 +1037,14 @@ function CIUserActScorePredictor:testActScorePredOnTestDetOneEpoch()
         for i=1, #self.ciUserSimulator.realUserDataEndLinesTest do
             self.uspConfusion:add(nll_acts[2][self.ciUserSimulator.realUserDataEndLinesTest[i]],
                                   self.ciUserSimulator.realUserDataRewardsTest[self.ciUserSimulator.realUserDataEndLinesTest[i]])
+            _logLoss_score = _logLoss_score + -1 * nll_acts[2][self.ciUserSimulator.realUserDataEndLinesTest[i]][self.ciUserSimulator.realUserDataRewardsTest[self.ciUserSimulator.realUserDataEndLinesTest[i]]]
         end
         self.uspConfusion:updateValids()
         local tvalidScore = self.uspConfusion.totalValid
         self.uspConfusion:zero()
 
         -- return a table, with [1] being action pred accuracy, [2] being reward pred accuracy
-        return {tvalidAct, tvalidScore}
+        return {tvalidAct, _logLoss_act/#self.ciUserSimulator.realUserDataStatesTest, tvalidScore, _logLoss_score/#self.ciUserSimulator.realUserDataEndLinesTest}
     end
 end
 
