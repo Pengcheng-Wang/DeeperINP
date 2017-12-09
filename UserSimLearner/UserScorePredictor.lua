@@ -46,7 +46,7 @@ function CIUserScorePredictor:_init(CIUserSimulator, opt)
             ------------------------------------------------------------
             -- mixture of experts
             ------------------------------------------------------------
-            experts = nn.ConcatTable()
+            local experts = nn.ConcatTable()
             local numOfExp = 4
             for i = 1, numOfExp do
                 local expert = nn.Sequential()
@@ -62,7 +62,7 @@ function CIUserScorePredictor:_init(CIUserSimulator, opt)
                 experts:add(expert)
             end
 
-            gater = nn.Sequential()
+            local gater = nn.Sequential()
             gater:add(nn.Reshape(self.inputFeatureNum))
             gater:add(nn.Linear(self.inputFeatureNum, 24))
             gater:add(nn.Tanh())
@@ -70,7 +70,7 @@ function CIUserScorePredictor:_init(CIUserSimulator, opt)
             gater:add(nn.Linear(24, numOfExp))
             gater:add(nn.SoftMax())
 
-            trunk = nn.ConcatTable()
+            local trunk = nn.ConcatTable()
             trunk:add(gater)
             trunk:add(experts)
 

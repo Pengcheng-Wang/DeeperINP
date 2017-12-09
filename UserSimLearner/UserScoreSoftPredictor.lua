@@ -1,15 +1,17 @@
---
--- Created by IntelliJ IDEA.
--- User: pwang8
--- Date: 5/6/17
--- Time: 5:23 PM
--- This script is modified from UserActsPredictor.lua and UserScorePredictor.lua
--- This script creates a NN model which combines user action and score prediction.
---
+---
+--- Created by pwang8.
+--- DateTime: 12/9/17 4:10 PM
+--- In this script, we implemented a player outcome predictor with extra soft-labels.
+--- This means we use two resources as prediction labels. One is the player outcome
+--- binary label, which is the same as the label in UserScorePredictor. The other is
+--- the real-valued normalized learning gain difference from the median split value.
+--- This script is implemented following UserScorePredictor.lua
+--- Linear model is not supported because linear models do not have shared params,
+--- so the outcome prediction regression part has no effect on classification training at all.
+---
 
 require 'torch'
 require 'nn'
-require 'nnx'
 require 'optim'
 require 'rnn'
 local nninit = require 'nninit'
@@ -19,9 +21,9 @@ require 'classic.torch' -- Enables serialisation
 local TableSet = require 'MyMisc.TableSetMisc'
 local OptimMisc = require 'MyMisc.OptimMisc'    -- required to do gradient clipping for rnn modeling training
 
-local CIUserActScorePredictor = classic.class('UserActScorePredictor')
+local CIUserScoreSoftPredictor = classic.class('UserScorePredictor')
 
-function CIUserActScorePredictor:_init(CIUserSimulator, opt)
+function CIUserScoreSoftPredictor:_init(CIUserSimulator, opt)
 
     if opt.optimization == 'LBFGS' and opt.batchSize < 100 then
         error('LBFGS should not be used with small mini-batches; 1000 is recommended')
@@ -31,16 +33,13 @@ function CIUserActScorePredictor:_init(CIUserSimulator, opt)
     self.opt = opt
     ----------------------------------------------------------------------
     -- define model to train
-    -- on the 15-class user action classification problem
-    -- and 2-class user outcome(score) classification problem
-    --
-    classesActs = {}
-    classesScores = {}
-    for i=1, CIUserSimulator.CIFr.usrActInd_end do classesActs[i] = i end   -- set action classes
-    for i=1,2 do classesScores[i] = i end   -- set score(outcome) classes. When NLG is the metric, label 1 means pos NLG, label 2 means neg NLG
-    self.inputFeatureNum = CIUserSimulator.realUserDataStates[1]:size()[1]  -- should be 18+3 now
+    -- on the 2-class (player outcomes with high/low performance) classification problem
+    -- with soft-label, which is the exact real-valued outcome score
+    self.classes = {}
+    for i=1,2 do self.classes[i] = i end
+    self.inputFeatureNum = CIUserSimulator.realUserDataStates[1]:size()[1]
 
-    if opt.ciunet == '' then    -- ciunet is the CIUserActScorePredictor model to be loaded from file
+    if opt.ciunet == '' then
         -- define model to train
         self.model = nn.Sequential()
 
@@ -59,19 +58,16 @@ function CIUserActScorePredictor:_init(CIUserSimulator, opt)
                 expert:add(nn.Linear(32, 24))
                 expert:add(nn.ReLU())
                 if opt.dropoutUSim > 0 then expert:add(nn.Dropout(opt.dropoutUSim)) end -- apply dropout, if any
-
-                -- The following code creates two output modules, with one module matches
-                -- to user action prediction, and the other matches to user outcome(score) prediction
+                -- The following code creates two output modules. One output module represents predicted
+                -- player outcome (binary) classification result, the other represents real-valued outcome
                 local mulOutConcatTab = nn.ConcatTable()
-                local actSeqNN = nn.Sequential()
-                actSeqNN:add(nn.Linear(24, #classesActs))
-                actSeqNN:add(nn.LogSoftMax())
-                local scoreSeqNN = nn.Sequential()
-                scoreSeqNN:add(nn.Linear(24, #classesScores))
-                scoreSeqNN:add(nn.LogSoftMax())
-                mulOutConcatTab:add(actSeqNN)   -- should pay attention to the sequence of action and outcome prediction table
-                mulOutConcatTab:add(scoreSeqNN) -- {act, outcome(score)}
-
+                local scoreClsNN = nn.Sequential()  -- score prediction classification module
+                scoreClsNN:add(nn.Linear(24, #self.classes))
+                scoreClsNN:add(nn.LogSoftMax())
+                local scoreRegNN = nn.Sequential()  -- score prediction regression module
+                scoreRegNN:add(nn.Linear(24, 1))
+                mulOutConcatTab:add(scoreClsNN)
+                mulOutConcatTab:add(scoreRegNN) -- {score_classification_output, score_regression_output}
                 expert:add(mulOutConcatTab)
                 expert:add(nn.JoinTable(-1))
                 experts:add(expert)
@@ -90,7 +86,7 @@ function CIUserActScorePredictor:_init(CIUserSimulator, opt)
             trunk:add(experts)
 
             self.model:add(trunk)
-            self.model:add(nn.MixtureTable())
+            self.model:add(nn.MixtureTable())   -- {gater, experts} is the form of input for MixtureTable. So, gater output should be the 1st in the output table
             ------------------------------------------------------------
 
         elseif opt.uppModel == 'mlp' then
@@ -104,44 +100,16 @@ function CIUserActScorePredictor:_init(CIUserSimulator, opt)
             self.model:add(nn.Linear(32, 24))
             self.model:add(nn.ReLU())
             if opt.dropoutUSim > 0 then self.model:add(nn.Dropout(opt.dropoutUSim)) end -- apply dropout, if any
-
-            -- The following code creates two output modules, with one module matches
-            -- to user action prediction, and the other matches to user outcome(score) prediction
+            -- The following code creates two output modules, one is score prediction classification output,
+            -- the other one is score prediction regression output.
             local mulOutConcatTab = nn.ConcatTable()
-            local actSeqNN = nn.Sequential()
-            actSeqNN:add(nn.Linear(24, #classesActs))
-            actSeqNN:add(nn.LogSoftMax())
-            local scoreSeqNN = nn.Sequential()
-            scoreSeqNN:add(nn.Linear(24, #classesScores))
-            scoreSeqNN:add(nn.LogSoftMax())
-            mulOutConcatTab:add(actSeqNN)   -- should pay attention to the sequence of action and outcome prediction table
-            mulOutConcatTab:add(scoreSeqNN) -- {act, outcome(score)}
-
-            self.model:add(mulOutConcatTab)
-            ------------------------------------------------------------
-
-        elseif opt.uppModel == 'linear' then
-            ------------------------------------------------------------
-            -- simple linear model: logistic regression
-            ------------------------------------------------------------
-            -- Attention: this implementation with ConcatTable does not have
-            -- any differences from separate act/score prediction implementation.
-            -- Because the two modules have no shared params at all.
-            -- So, should not try to use it.
-            self.model:add(nn.Reshape(self.inputFeatureNum))
-
-            -- The following code creates two output modules, with one module matches
-            -- to user action prediction, and the other matches to user outcome(score) prediction
-            local mulOutConcatTab = nn.ConcatTable()
-            local actSeqNN = nn.Sequential()
-            actSeqNN:add(nn.Linear(self.inputFeatureNum, #classesActs))
-            actSeqNN:add(nn.LogSoftMax())
-            local scoreSeqNN = nn.Sequential()
-            scoreSeqNN:add(nn.Linear(self.inputFeatureNum, #classesScores))
-            scoreSeqNN:add(nn.LogSoftMax())
-            mulOutConcatTab:add(actSeqNN)   -- should pay attention to the sequence of action and outcome prediction table
-            mulOutConcatTab:add(scoreSeqNN) -- {act, outcome(score)}
-
+            local scoreClsNN = nn.Sequential()
+            scoreClsNN:add(nn.Linear(24, #self.classes))
+            scoreClsNN:add(nn.LogSoftMax())
+            local scoreRegNN = nn.Sequential()
+            scoreRegNN:add(nn.Linear(24, 1))
+            mulOutConcatTab:add(scoreClsNN)
+            mulOutConcatTab:add(scoreRegNN) -- {score_classification_output, score_regression_output}
             self.model:add(mulOutConcatTab)
             ------------------------------------------------------------
 
@@ -150,14 +118,16 @@ function CIUserActScorePredictor:_init(CIUserSimulator, opt)
             -- lstm implementation from Element-Research rnn lib. The lazy dropout (variational RNN models) seems not very correct.
             ------------------------------------------------------------
             self.model:add(nn.Reshape(self.inputFeatureNum))
-            --nn.FastLSTM.bn = true   -- turn on batch normalization
+            --nn.FastLSTM.bn = true
+            -- Attention: This lazy dropout seems a little weird. I tried it in player action prediction, but this lazy dropout
+            -- hurts the performance of the model. Actually I tried the variational RNN model implemented following RHN and Yarin Gal's
+            -- git repo, and that dropout works well.
             local lstm
             if opt.uSimGru == 0 then
                 lstm = nn.FastLSTM(self.inputFeatureNum, opt.rnnHdSizeL1, opt.uSimLstmBackLen, nil, nil, nil, opt.dropoutUSim) -- the 3rd param, [rho], the maximum amount of backpropagation steps to take back in time, default value is 9999
                 TableSet.fastLSTMForgetGateInit(lstm, opt.dropoutUSim, opt.rnnHdSizeL1, nninit)
-                -- has not applied batch normalization for fastLSTM before, should try it.
             else
-                lstm = nn.GRU(self.inputFeatureNum, opt.rnnHdSizeL1, opt.uSimLstmBackLen, opt.dropoutUSim)   -- did not apply dropout or batchNormalization for GRU before
+                lstm = nn.GRU(self.inputFeatureNum, opt.rnnHdSizeL1, opt.uSimLstmBackLen, opt.dropoutUSim)
             end
             lstm:remember('both')
             self.model:add(lstm)
@@ -167,14 +137,13 @@ function CIUserActScorePredictor:_init(CIUserSimulator, opt)
                 local lstmL2
                 if opt.uSimGru == 0 then
                     lstmL2 = nn.FastLSTM(opt.rnnHdSizeL1, opt.rnnHdSizeL2, opt.uSimLstmBackLen, nil, nil, nil, opt.dropoutUSim) -- the 3rd param, [rho], the maximum amount of backpropagation steps to take back in time, default value is 9999
-                    TableSet.fastLSTMForgetGateInit(lstmL2, opt.dropoutUSim, opt.rnnHdSizeL2, nninit)
-                    -- has not applied batch normalization for fastLSTM before, should try it.
+                    TableSet.fastLSTMForgetGateInit(lstmL2, opt.dropoutUSim, opt.rnnHdSizeL2, nninit)  -- The current implementation is not very flexible
                 else
-                    lstmL2 = nn.GRU(opt.rnnHdSizeL1, opt.rnnHdSizeL2, opt.uSimLstmBackLen, opt.dropoutUSim)     -- did not apply dropout or batchNormalization for GRU before
+                    lstmL2 = nn.GRU(opt.rnnHdSizeL1, opt.rnnHdSizeL2, opt.uSimLstmBackLen, opt.dropoutUSim)
                 end
                 lstmL2:remember('both')
                 self.model:add(lstmL2)
-                self.model:add(nn.NormStabilizer()) -- I am not very clear if NormStabilizer should be used togeher with Dropout, especially since dropout is used on memory value, equals to change memory value distribution a little
+                self.model:add(nn.NormStabilizer())
                 -- If extra layers were needed. Right now we use the same setting for lstm layers that higher than 2
                 for _extL=3, opt.rnnHdLyCnt do
                     local _extLstmL
@@ -189,25 +158,23 @@ function CIUserActScorePredictor:_init(CIUserSimulator, opt)
                     self.model:add(nn.NormStabilizer())
                 end
             end
+
             local lastHidNum
             if opt.rnnHdSizeL2 == 0 then
                 lastHidNum = opt.rnnHdSizeL1
             else
                 lastHidNum = opt.rnnHdSizeL2
             end
-
             -- The following code creates two output modules, with one module matches
             -- to user action prediction, and the other matches to user outcome(score) prediction
             local mulOutConcatTab = nn.ConcatTable()
-            local actSeqNN = nn.Sequential()
-            actSeqNN:add(nn.Linear(lastHidNum, #classesActs))
-            actSeqNN:add(nn.LogSoftMax())
-            local scoreSeqNN = nn.Sequential()
-            scoreSeqNN:add(nn.Linear(lastHidNum, #classesScores))
-            scoreSeqNN:add(nn.LogSoftMax())
-            mulOutConcatTab:add(actSeqNN)   -- should pay attention to the sequence of action and outcome prediction table
-            mulOutConcatTab:add(scoreSeqNN) -- {act, outcome(score)}
-
+            local scoreClsNN = nn.Sequential()
+            scoreClsNN:add(nn.Linear(lastHidNum, #self.classes))
+            scoreClsNN:add(nn.LogSoftMax())
+            local scoreRegNN = nn.Sequential()
+            scoreRegNN:add(nn.Linear(lastHidNum, 1))
+            mulOutConcatTab:add(scoreClsNN)
+            mulOutConcatTab:add(scoreRegNN) -- {score_classification_output, score_regression_output}
             self.model:add(mulOutConcatTab)
             self.model = nn.Sequencer(self.model)
             ------------------------------------------------------------
@@ -222,19 +189,16 @@ function CIUserActScorePredictor:_init(CIUserSimulator, opt)
             rhn:remember('both')
             self.model:add(rhn)
             self.model:add(nn.NormStabilizer())
-
-            -- The following code creates two output modules, with one module matches
-            -- to user action prediction, and the other matches to user outcome(score) prediction
+            -- The following code creates two output modules. One module predicts score classification
+            -- result, the other module predicts score regression result
             local mulOutConcatTab = nn.ConcatTable()
-            local actSeqNN = nn.Sequential()
-            actSeqNN:add(nn.Linear(opt.rnnHdSizeL1, #classesActs))
-            actSeqNN:add(nn.LogSoftMax())
-            local scoreSeqNN = nn.Sequential()
-            scoreSeqNN:add(nn.Linear(opt.rnnHdSizeL1, #classesScores))
-            scoreSeqNN:add(nn.LogSoftMax())
-            mulOutConcatTab:add(actSeqNN)   -- should pay attention to the sequence of action and outcome prediction table
-            mulOutConcatTab:add(scoreSeqNN) -- {act, outcome(score)}
-
+            local scoreClsNN = nn.Sequential()
+            scoreClsNN:add(nn.Linear(opt.rnnHdSizeL1, #self.classes))
+            scoreClsNN:add(nn.LogSoftMax())
+            local scoreRegNN = nn.Sequential()
+            scoreRegNN:add(nn.Linear(opt.rnnHdSizeL1, 1))
+            mulOutConcatTab:add(scoreClsNN)
+            mulOutConcatTab:add(scoreRegNN) -- {score_classification_output, score_regression_output}
             self.model:add(mulOutConcatTab)
             self.model = nn.Sequencer(self.model)
             ------------------------------------------------------------
@@ -249,19 +213,16 @@ function CIUserActScorePredictor:_init(CIUserSimulator, opt)
             bay_lstm:remember('both')
             self.model:add(bay_lstm)
             self.model:add(nn.NormStabilizer())
-
-            -- The following code creates two output modules, with one module matches
-            -- to user action prediction, and the other matches to user outcome(score) prediction
+            -- The following code creates two output modules, one module for score classification,
+            -- the other for score regression
             local mulOutConcatTab = nn.ConcatTable()
-            local actSeqNN = nn.Sequential()
-            actSeqNN:add(nn.Linear(opt.rnnHdSizeL1, #classesActs))
-            actSeqNN:add(nn.LogSoftMax())
-            local scoreSeqNN = nn.Sequential()
-            scoreSeqNN:add(nn.Linear(opt.rnnHdSizeL1, #classesScores))
-            scoreSeqNN:add(nn.LogSoftMax())
-            mulOutConcatTab:add(actSeqNN)   -- should pay attention to the sequence of action and outcome prediction table
-            mulOutConcatTab:add(scoreSeqNN) -- {act, outcome(score)}
-
+            local scoreClsNN = nn.Sequential()
+            scoreClsNN:add(nn.Linear(opt.rnnHdSizeL1, #self.classes))
+            scoreClsNN:add(nn.LogSoftMax())
+            local scoreRegNN = nn.Sequential()
+            scoreRegNN:add(nn.Linear(opt.rnnHdSizeL1, 1))
+            mulOutConcatTab:add(scoreClsNN)
+            mulOutConcatTab:add(scoreRegNN) -- {score_classification_output, score_regression_output}
             self.model:add(mulOutConcatTab)
             self.model = nn.Sequencer(self.model)
             ------------------------------------------------------------
@@ -276,19 +237,16 @@ function CIUserActScorePredictor:_init(CIUserSimulator, opt)
             grid_lstm:remember('both')
             self.model:add(grid_lstm)
             self.model:add(nn.NormStabilizer())
-
             -- The following code creates two output modules, with one module matches
             -- to user action prediction, and the other matches to user outcome(score) prediction
             local mulOutConcatTab = nn.ConcatTable()
-            local actSeqNN = nn.Sequential()
-            actSeqNN:add(nn.Linear(self.inputFeatureNum, #classesActs))
-            actSeqNN:add(nn.LogSoftMax())
-            local scoreSeqNN = nn.Sequential()
-            scoreSeqNN:add(nn.Linear(self.inputFeatureNum, #classesScores))
-            scoreSeqNN:add(nn.LogSoftMax())
-            mulOutConcatTab:add(actSeqNN)   -- should pay attention to the sequence of action and outcome prediction table
-            mulOutConcatTab:add(scoreSeqNN) -- {act, outcome(score)}
-
+            local scoreClsNN = nn.Sequential()
+            scoreClsNN:add(nn.Linear(self.inputFeatureNum, #self.classes))
+            scoreClsNN:add(nn.LogSoftMax())
+            local scoreRegNN = nn.Sequential()
+            scoreRegNN:add(nn.Linear(self.inputFeatureNum, 1))
+            mulOutConcatTab:add(scoreClsNN)
+            mulOutConcatTab:add(scoreRegNN) -- {score_classification_output, score_regression_output}
             self.model:add(mulOutConcatTab)
             self.model = nn.Sequencer(self.model)
             ------------------------------------------------------------
@@ -306,31 +264,29 @@ function CIUserActScorePredictor:_init(CIUserSimulator, opt)
             -- The following code creates two output modules, with one module matches
             -- to user action prediction, and the other matches to user outcome(score) prediction
             local mulOutConcatTab = nn.ConcatTable()
-            local actSeqNN = nn.Sequential()
-            actSeqNN:add(nn.Linear(self.inputFeatureNum * opt.lstmHist, #classesActs))
-            actSeqNN:add(nn.LogSoftMax())
-            local scoreSeqNN = nn.Sequential()
-            scoreSeqNN:add(nn.Linear(self.inputFeatureNum * opt.lstmHist, #classesScores))
-            scoreSeqNN:add(nn.LogSoftMax())
-            mulOutConcatTab:add(actSeqNN)   -- should pay attention to the sequence of action and outcome prediction table
-            mulOutConcatTab:add(scoreSeqNN) -- {act, outcome(score)}
-
+            local scoreClsNN = nn.Sequential()
+            scoreClsNN:add(nn.Linear(self.inputFeatureNum * opt.lstmHist, #self.classes))
+            scoreClsNN:add(nn.LogSoftMax())
+            local scoreRegNN = nn.Sequential()
+            scoreRegNN:add(nn.Linear(self.inputFeatureNum * opt.lstmHist, 1))
+            mulOutConcatTab:add(scoreClsNN)
+            mulOutConcatTab:add(scoreRegNN) -- {score_classification_output, score_regression_output}
             self.model:add(mulOutConcatTab)
             ------------------------------------------------------------
 
         else
-            print('Unknown uppModel type'..opt.uppModel..' in UserActScorePredictor training')
+            print('Unknown uppModel type'..opt.uppModel..' in UserScoreSoftPredictor training')
             torch.CmdLine():text()
             error()
         end
 
         -- params init
-        local uapLinearLayers = self.model:findModules('nn.Linear')
-        for l = 1, #uapLinearLayers do
-            uapLinearLayers[l]:init('weight', nninit.kaiming, {dist = 'uniform', gain = 1/math.sqrt(3)}):init('bias', nninit.kaiming, {dist = 'uniform', gain = 1/math.sqrt(3)})    -- This bias initialization seems a little bit conflict with FastLSTM forget gate bias init. Maybe not, bcz it's on linear modules.
+        local uspLinearLayers = self.model:findModules('nn.Linear')
+        for l = 1, #uspLinearLayers do
+            uspLinearLayers[l]:init('weight', nninit.kaiming, {dist = 'uniform', gain = 1/math.sqrt(3)}):init('bias', nninit.kaiming, {dist = 'uniform', gain = 1/math.sqrt(3)})
         end
-    elseif opt.ciunet == 'rlLoad' then  -- If need reload a trained uasp model in the RL training/evaluation, not for training uasp anymore
-        self.model = torch.load(paths.concat(opt.ubgDir , opt.uapFile))
+    elseif opt.ciunet == 'rlLoad' then  -- If need reload a trained usp model in the RL training/evaluation, not for training usp anymore
+        self.model = torch.load(paths.concat(opt.ubgDir , opt.uspFile))
     else
         print('<trainer> reloading previously trained ciunet')
         self.model = torch.load(opt.ciunet)
@@ -340,26 +296,25 @@ function CIUserActScorePredictor:_init(CIUserSimulator, opt)
     --    print(self.model)
 
     ----------------------------------------------------------------------
-    -- loss function: negative log-likelihood
-    --
-    self.uaspPrlCriterion = nn.ParallelCriterion()
-    self.uapCriterion = nn.ClassNLLCriterion()
-    self.uspCriterion = nn.ClassNLLCriterion()
-    self.uaspPrlCriterion:add(self.uapCriterion)   -- action prediction loss function
-    self.uaspPrlCriterion:add(self.uspCriterion)   -- score (outcome) prediction loss function
+    -- loss function: negative log-likelihood for score classification
+    -- and mean squared error for score regression
+    self.uspPrlCriterion = nn.ParallelCriterion()
+    self.uspClsCriterion = nn.ClassNLLCriterion()
+    self.uspRegCriterion = nn.MSECriterion()
+    self.uspPrlCriterion:add(self.uspClsCriterion)   -- score (outcome) prediction classification loss
+    self.uspPrlCriterion:add(self.uspRegCriterion)   -- score (outcome) prediction regression loss
     if string.sub(opt.uppModel, 1, 4) == 'rnn_' then
-        self.uaspPrlCriterion = nn.SequencerCriterion(self.uaspPrlCriterion)
+        self.uspPrlCriterion = nn.SequencerCriterion(self.uspPrlCriterion)
     end
 
     self.trainEpoch = 1
-    -- these matrices records the current confusion across classesActs and classesScores
-    self.uapConfusion = optim.ConfusionMatrix(classesActs)
-    self.uspConfusion = optim.ConfusionMatrix(classesScores)
+    -- this matrix records the current confusion across classes
+    self.uspConfusion = optim.ConfusionMatrix(self.classes)
 
     -- log results to files
-    self.uaspTrainLogger = optim.Logger(paths.concat('userModelTrained', opt.save, 'uaspTrain.log'))
-    self.uaspTestLogger = optim.Logger(paths.concat('userModelTrained', opt.save, 'uaspTest.log'))
-    self.uaspTestLogger:setNames{'Epoch', 'Act Test acc.', 'Act Test LogLoss', 'Score Test acc.', 'Score Test LogLoss'}
+    self.uspTrainLogger = optim.Logger(paths.concat('userModelTrained', opt.save, 'scrSoft_train.log'))
+    self.uspTestLogger = optim.Logger(paths.concat('userModelTrained', opt.save, 'scrSoft_test.log'))
+    self.uspTestLogger:setNames{'Epoch', 'Score Test acc.', 'Score Test LogLoss'}
 
     ----------------------------------------------------------------------
     --- initialize cunn/cutorch for training on the GPU and fall back to CPU gracefully
@@ -375,7 +330,7 @@ function CIUserActScorePredictor:_init(CIUserSimulator, opt)
             cutorch.manualSeed(opt.seed)
             --- set up cuda nn
             self.model = self.model:cuda()
-            self.uaspPrlCriterion = self.uaspPrlCriterion:cuda()
+            self.uspPrlCriterion = self.uspPrlCriterion:cuda()
         else
             print('If cutorch and cunn are installed, your CUDA toolkit may be improperly configured.')
             print('Check your CUDA toolkit installation, rebuild cutorch and cunn, and try again.')
@@ -391,6 +346,7 @@ function CIUserActScorePredictor:_init(CIUserSimulator, opt)
     self.rnnRealUserDataActs = self.ciUserSimulator.rnnRealUserDataActs
     self.rnnRealUserDataRewards = self.ciUserSimulator.rnnRealUserDataRewards
     self.rnnRealUserDataEnds = self.ciUserSimulator.rnnRealUserDataEnds
+    -- todo:pwang8. Should add the real-valued score here. Dec. 9, 2017. Edit from here.
 
     ----------------------------------------------------------------------
     --- Prepare data for RNN models in test/train_validation set
@@ -428,12 +384,12 @@ function CIUserActScorePredictor:_init(CIUserSimulator, opt)
 
     -- retrieve parameters and gradients
     -- have to put these lines here below the gpu setting
-    self.uaspParam, self.uaspDParam = self.model:getParameters()
+    self.uspParam, self.uspDParam = self.model:getParameters()
 end
 
 
 -- training function
-function CIUserActScorePredictor:trainOneEpoch()
+function CIUserScoreSoftPredictor:trainOneEpoch()
     -- local vars
     local time = sys.clock()
 
@@ -441,9 +397,8 @@ function CIUserActScorePredictor:trainOneEpoch()
     print('<trainer> on training set:')
     print("<trainer> online epoch # " .. self.trainEpoch .. ' [batchSize = ' .. self.opt.batchSize .. ']')
     local inputs
-    local targetsActScore = {}
-    local targetsAct
-    local targetsScore
+    local targets   -- targets are player score labels in this script
+    local plh_acts  -- place holder for player action label.
     local closeToEnd
     local t = 1
     local lstmIter = 1  -- lstm iterate for each squence starts from this value
@@ -452,22 +407,22 @@ function CIUserActScorePredictor:trainOneEpoch()
         if string.sub(self.opt.uppModel, 1, 4) == 'rnn_' then
             -- rnn models
             inputs = {}
-            targetsAct = {}
-            targetsScore = {}
+            targets = {}
+            plh_acts = {}
             closeToEnd = torch.Tensor(self.opt.batchSize):fill(0)
             local k
             for j = 1, self.opt.lstmHist do
                 inputs[j] = torch.Tensor(self.opt.batchSize, self.inputFeatureNum)
-                targetsAct[j] = torch.Tensor(self.opt.batchSize)
-                targetsScore[j] = torch.Tensor(self.opt.batchSize)
+                targets[j] = torch.Tensor(self.opt.batchSize)
+                plh_acts[j] = torch.Tensor(self.opt.batchSize)
                 k = 1
                 for i = lstmIter, math.min(lstmIter+self.opt.batchSize-1, #self.rnnRealUserDataStates) do
                     inputs[j][k] = self.rnnRealUserDataStates[i][j]
-                    targetsAct[j][k] = self.rnnRealUserDataActs[i][j]
-                    targetsScore[j][k] = self.rnnRealUserDataRewards[i][j]
+                    targets[j][k] = self.rnnRealUserDataRewards[i][j]
+                    plh_acts[j][k] = self.rnnRealUserDataActs[i][j]
                     if j == self.opt.lstmHist then
                         for dis=0, self.opt.scorePredStateScope-1 do
-                            if (i+dis) <= #self.rnnRealUserDataActs and self.rnnRealUserDataActs[i+dis][self.opt.lstmHist] == self.ciUserSimulator.CIFr.usrActInd_end then
+                            if (i+dis) <= #self.rnnRealUserDataStates and TableSet.tableContainsValue(self.rnnRealUserDataEnds, i+dis) then
                                 -- If current state is close enough to the end of this sequence, mark it.
                                 -- This is for marking near end state, with which the score prediction should be more accurate and be utilized in score pred training
                                 closeToEnd[k] = 1
@@ -485,11 +440,11 @@ function CIUserActScorePredictor:trainOneEpoch()
                     local randInd = torch.random(1, #self.rnnRealUserDataStates)
                     for j = 1, self.opt.lstmHist do
                         inputs[j][k] = self.rnnRealUserDataStates[randInd][j]
-                        targetsAct[j][k] = self.rnnRealUserDataActs[randInd][j]
-                        targetsScore[j][k] = self.rnnRealUserDataRewards[randInd][j]
+                        targets[j][k] = self.rnnRealUserDataRewards[randInd][j]
+                        plh_acts[j][k] = self.rnnRealUserDataActs[randInd][j]
                         if j == self.opt.lstmHist then
                             for dis=0, self.opt.scorePredStateScope-1 do
-                                if (randInd+dis) <= #self.rnnRealUserDataActs and self.rnnRealUserDataActs[randInd+dis][self.opt.lstmHist] == self.ciUserSimulator.CIFr.usrActInd_end then
+                                if (randInd+dis) <= #self.rnnRealUserDataStates and TableSet.tableContainsValue(self.rnnRealUserDataEnds, randInd+dis) then
                                     -- If current state is close enough to the end of this sequence, mark it.
                                     -- This is for marking near end state, with which the score prediction should be more accurate and be utilized in score pred training
                                     closeToEnd[k] = 1
@@ -509,7 +464,7 @@ function CIUserActScorePredictor:trainOneEpoch()
 
             if self.opt.actPredDataAug > 0 then
                 -- Data augmentation
-                self.ciUserSimulator:UserSimActDataAugment(inputs, targetsAct, targetsScore, self.opt.uppModel)
+                self.ciUserSimulator:UserSimActDataAugment(inputs, plh_acts, targets, self.opt.uppModel)
                 if self.opt.uppModelRNNDom > 0 then
                     TableSet.buildRNNDropoutMask(self.rnn_noise_i, self.rnn_noise_h, self.rnn_noise_o, self.inputFeatureNum, self.opt.rnnHdSizeL1, self.opt.rnnHdLyCnt, inputs[1]:size(1), self.opt.lstmHist, self.opt.uppModelRNNDom)
                 end
@@ -532,26 +487,23 @@ function CIUserActScorePredictor:trainOneEpoch()
 
             if self.opt.gpu > 0 then
                 nn.utils.recursiveType(inputs, 'torch.CudaTensor')
-                nn.utils.recursiveType(targetsAct, 'torch.CudaTensor')
-                nn.utils.recursiveType(targetsScore, 'torch.CudaTensor')
+                nn.utils.recursiveType(targets, 'torch.CudaTensor')
                 closeToEnd = closeToEnd:cuda()
-            end
-
-            for j = 1, self.opt.lstmHist do
-                targetsActScore[j] = {targetsAct[j], targetsScore[j]}
+                -- do not need to transform plh_acts into cudaTensor because it is not actually used in training. It is used in data augmentation.
             end
 
         elseif string.sub(self.opt.uppModel, 1, 4) == 'cnn_' then
             -- cnn models
             inputs = torch.Tensor(self.opt.batchSize, self.opt.lstmHist, self.inputFeatureNum)
-            targetsAct = torch.Tensor(self.opt.batchSize)
-            targetsScore = torch.Tensor(self.opt.batchSize)
+            targets = torch.Tensor(self.opt.batchSize)  -- labels for score
+            plh_acts = torch.Tensor(self.opt.batchSize) -- labels for player action
             closeToEnd = torch.Tensor(self.opt.batchSize):fill(0)
+
             local k = 1
             for i = t, math.min(t+self.opt.batchSize-1, #self.cnnRealUserDataStates) do
                 inputs[k] = self.cnnRealUserDataStates[i]
-                targetsAct[k] = self.cnnRealUserDataActs[i]
-                targetsScore[k] = self.cnnRealUserDataRewards[i]
+                targets[k] = self.cnnRealUserDataRewards[i]
+                plh_acts[k] = self.cnnRealUserDataActs[i]
                 for dis=0, self.opt.scorePredStateScope-1 do
                     if (i+dis) <= #self.cnnRealUserDataActs and self.cnnRealUserDataActs[i+dis] == self.ciUserSimulator.CIFr.usrActInd_end then
                         -- If current state is close enough to the end of this sequence, mark it.
@@ -567,9 +519,10 @@ function CIUserActScorePredictor:trainOneEpoch()
             if k ~= self.opt.batchSize + 1 then
                 while k <= self.opt.batchSize do
                     local randInd = torch.random(1, #self.cnnRealUserDataStates)
+                    -- I'll put input pre-process after data augmentation
                     inputs[k] = self.cnnRealUserDataStates[randInd]
-                    targetsAct[k] = self.cnnRealUserDataActs[randInd]
-                    targetsScore[k] = self.cnnRealUserDataRewards[randInd]
+                    targets[k] = self.cnnRealUserDataRewards[randInd]
+                    plh_acts[k] = self.cnnRealUserDataActs[randInd]
                     for dis=0, self.opt.scorePredStateScope-1 do
                         if (randInd+dis) <= #self.cnnRealUserDataActs and self.cnnRealUserDataActs[randInd+dis] == self.ciUserSimulator.CIFr.usrActInd_end then
                             -- If current state is close enough to the end of this sequence, mark it.
@@ -589,7 +542,7 @@ function CIUserActScorePredictor:trainOneEpoch()
 
             if self.opt.actPredDataAug > 0 then
                 -- Data augmentation
-                self.ciUserSimulator:UserSimActDataAugment(inputs, targetsAct, targetsScore, self.opt.uppModel)
+                self.ciUserSimulator:UserSimActDataAugment(inputs, plh_acts, targets, self.opt.uppModel)
             end
             -- Should do input feature pre-processing after data augmentation
             inputs = self.ciUserSimulator:preprocessUserStateData(inputs, self.opt.prepro)
@@ -599,24 +552,21 @@ function CIUserActScorePredictor:trainOneEpoch()
 
             if self.opt.gpu > 0 then
                 inputs = inputs:cuda()
-                targetsAct = targetsAct:cuda()
-                targetsScore = targetsScore:cuda()
+                targets = targets:cuda()
                 closeToEnd = closeToEnd:cuda()
             end
-
-            targetsActScore = {targetsAct, targetsScore}
 
         else
             -- non-rnn, non-cnn models, create mini batch
             inputs = torch.Tensor(self.opt.batchSize, self.inputFeatureNum)
-            targetsAct = torch.Tensor(self.opt.batchSize)
-            targetsScore = torch.Tensor(self.opt.batchSize)
+            targets = torch.Tensor(self.opt.batchSize)
+            plh_acts = torch.Tensor(self.opt.batchSize)
             closeToEnd = torch.Tensor(self.opt.batchSize):fill(0)
             local k = 1
             for i = t, math.min(t+self.opt.batchSize-1, #self.ciUserSimulator.realUserDataStates) do
                 inputs[k] = self.ciUserSimulator.realUserDataStates[i]
-                targetsAct[k] = self.ciUserSimulator.realUserDataActs[i]
-                targetsScore[k] = self.ciUserSimulator.realUserDataRewards[i]
+                targets[k] = self.ciUserSimulator.realUserDataRewards[i]
+                plh_acts[k] = self.ciUserSimulator.realUserDataActs[i]
                 for dis=0, self.opt.scorePredStateScope-1 do
                     if (i+dis) <= #self.ciUserSimulator.realUserDataActs and self.ciUserSimulator.realUserDataActs[i+dis] == self.ciUserSimulator.CIFr.usrActInd_end then
                         -- If current state is close enough to the end of this sequence, mark it.
@@ -633,8 +583,8 @@ function CIUserActScorePredictor:trainOneEpoch()
                 while k <= self.opt.batchSize do
                     local randInd = torch.random(1, #self.ciUserSimulator.realUserDataStates)
                     inputs[k] = self.ciUserSimulator.realUserDataStates[randInd]
-                    targetsAct[k] = self.ciUserSimulator.realUserDataActs[randInd]
-                    targetsScore[k] = self.ciUserSimulator.realUserDataRewards[randInd]
+                    targets[k] = self.ciUserSimulator.realUserDataRewards[randInd]
+                    plh_acts[k] = self.ciUserSimulator.realUserDataActs[randInd]
                     for dis=0, self.opt.scorePredStateScope-1 do
                         if (randInd+dis) <= #self.ciUserSimulator.realUserDataActs and self.ciUserSimulator.realUserDataActs[randInd+dis] == self.ciUserSimulator.CIFr.usrActInd_end then
                             -- If current state is close enough to the end of this sequence, mark it.
@@ -654,7 +604,7 @@ function CIUserActScorePredictor:trainOneEpoch()
 
             if self.opt.actPredDataAug > 0 then
                 -- Data augmentation
-                self.ciUserSimulator:UserSimActDataAugment(inputs, targetsAct, targetsScore, self.opt.uppModel)
+                self.ciUserSimulator:UserSimActDataAugment(inputs, plh_acts, targets, self.opt.uppModel)
             end
             -- Should do input feature pre-processing after data augmentation
             inputs = self.ciUserSimulator:preprocessUserStateData(inputs, self.opt.prepro)
@@ -664,12 +614,9 @@ function CIUserActScorePredictor:trainOneEpoch()
 
             if self.opt.gpu > 0 then
                 inputs = inputs:cuda()
-                targetsAct = targetsAct:cuda()
-                targetsScore = targetsScore:cuda()
+                targets = targets:cuda()
                 closeToEnd = closeToEnd:cuda()
             end
-
-            targetsActScore = {targetsAct, targetsScore}
 
         end
 
@@ -679,56 +626,32 @@ function CIUserActScorePredictor:trainOneEpoch()
             collectgarbage()
 
             -- get new parameters
-            if x ~= self.uaspParam then
-                self.uaspParam:copy(x)
+            if x ~= self.uspParam then
+                self.uspParam:copy(x)
             end
 
             -- reset gradients
-            self.uaspDParam:zero()
+            self.uspDParam:zero()
 
             -- evaluate function for complete mini batch
             local outputs = self.model:forward(inputs)
-
-            -- Here, if moe is used with shared lower layers, it is the problem that,
-            -- due to limitation of MixtureTable module, we have to join tables together as
-            -- a single tensor as output of the whole user action and score prediction model.
-            -- So, to guarantee the compatability, we need split the tensor into two tables here,
-            -- for act prediction and score prediction respectively.
-            if self.opt.uppModel == 'moe' then
-                outputs = outputs:split(#classesActs, 2)  -- We assume 1st dim is batch index. Act pred is the 1st set of output, having dim of 15. Score dim 2.
-            end
-
             -- Zero error values (change output to target) for score prediction cases far away from ending state (I don't hope these cases influence training)
             for cl=1, closeToEnd:size(1) do
                 if closeToEnd[cl] < 1 then
                     if string.sub(self.opt.uppModel, 1, 4) == 'rnn_' then
-                        outputs[self.opt.lstmHist][2][cl] = targetsActScore[self.opt.lstmHist][2][cl]
+                        outputs[self.opt.lstmHist][cl] = targets[self.opt.lstmHist][cl]
                     else
-                        outputs[2][cl] = targetsActScore[2][cl]
+                        outputs[cl] = targets[cl]
                     end
                 end
             end
-
-            local f = self.uaspPrlCriterion:forward(outputs, targetsActScore) -- I made an experiment. The returned error value (f) from parallelCriterion is the sum of each criterion
-            local df_do = self.uaspPrlCriterion:backward(outputs, targetsActScore)
+            local f = self.uspClsCriterion:forward(outputs, targets)
+            local df_do = self.uspClsCriterion:backward(outputs, targets)
 
             if string.sub(self.opt.uppModel, 1, 4) == 'rnn_' then
-                local subTot_f = 0
-                for s=1, self.opt.lstmHist do
-                    subTot_f = subTot_f + self.uapCriterion:forward(outputs[s][1], targetsActScore[s][1])
-                end
-                f = subTot_f + self.uspCriterion:forward(outputs[self.opt.lstmHist][2], targetsActScore[self.opt.lstmHist][2])
-
+                f = self.uspClsCriterion:forward(outputs[self.opt.lstmHist], targets[self.opt.lstmHist])
                 for step=1, self.opt.lstmHist-1 do
-                    df_do[step][2]:zero()   -- Zero df_do over Score prediction from time 1 to listHist-1
-                end
-            end
-
-            -- If moe with shared lower layers, we merge the df_do before backprop. This is necessary because the network has merged act/outcome prediction output in one tensor
-            if self.opt.uppModel == 'moe' then
-                df_do = nn.JoinTable(-1):forward(df_do)  -- We assume 1st dim is batch index. Act pred is the 1st set of output, having dim of 15. Score dim 2.
-                if self.opt.gpu > 0 then
-                    df_do = df_do:cuda()  -- seems like after calling the forward function of nn.JoinTable, that output(df_do) becomes main memory object again
+                    df_do[step]:zero()
                 end
             end
 
@@ -740,36 +663,31 @@ function CIUserActScorePredictor:trainOneEpoch()
                 local norm,sign= torch.norm,torch.sign
 
                 -- Loss:
-                f = f + self.opt.coefL1 * norm(self.uaspParam,1)
-                f = f + self.opt.coefL2 * norm(self.uaspParam,2)^2/2
+                f = f + self.opt.coefL1 * norm(self.uspParam,1)
+                f = f + self.opt.coefL2 * norm(self.uspParam,2)^2/2
 
                 -- Gradients:
-                self.uaspDParam:add( sign(self.uaspParam):mul(self.opt.coefL1) + self.uaspParam:clone():mul(self.opt.coefL2) )
+                self.uspDParam:add( sign(self.uspParam):mul(self.opt.coefL1) + self.uspParam:clone():mul(self.opt.coefL2) )
             end
 
-            -- update self.uapConfusion and self.uspConfusion
+            -- update self.uspConfusion
             if string.sub(self.opt.uppModel, 1, 4) == 'rnn_' then
-                for j = 1, self.opt.lstmHist do
-                    for i = 1,self.opt.batchSize do
-                        self.uapConfusion:add(outputs[j][1][i], targetsActScore[j][1][i])
-                    end
-                end
                 for i = 1,self.opt.batchSize do
-                    self.uspConfusion:add(outputs[self.opt.lstmHist][2][i], targetsActScore[self.opt.lstmHist][2][i])
+                    self.uspConfusion:add(outputs[self.opt.lstmHist][i], targets[self.opt.lstmHist][i])
                 end
             else
+                -- for cnn and non-rnn, non-cnn models
                 for i = 1,self.opt.batchSize do
-                    self.uapConfusion:add(outputs[1][i], targetsActScore[1][i])
-                    self.uspConfusion:add(outputs[2][i], targetsActScore[2][i])
+                    self.uspConfusion:add(outputs[i], targets[i])
                 end
             end
 
             -- gradient clipping. It is recommended for rnn models, not sure if it is helpful to other models.
             if string.sub(self.opt.uppModel, 1, 4) == 'rnn_' then
-                OptimMisc.clipGradByNorm(self.uaspDParam, 10)    -- right now 10 is used constantly as clipping norm
+                OptimMisc.clipGradByNorm(self.uspDParam, 10)    -- right now 10 is used constantly as clipping norm
             end
             -- return f and df/dX
-            return f, self.uaspDParam
+            return f, self.uspDParam
         end
 
         self.model:training()
@@ -785,7 +703,7 @@ function CIUserActScorePredictor:trainOneEpoch()
                 maxIter = self.opt.maxIter,
                 lineSearch = optim.lswolfe
             }
-            optim.lbfgs(feval, self.uaspParam, lbfgsState)
+            optim.lbfgs(feval, self.uspParam, lbfgsState)
 
             -- disp report:
             print('LBFGS step')
@@ -801,7 +719,7 @@ function CIUserActScorePredictor:trainOneEpoch()
                 momentum = self.opt.momentum,
                 learningRateDecay = 5e-7
             }
-            optim.sgd(feval, self.uaspParam, sgdState)
+            optim.sgd(feval, self.uspParam, sgdState)
 
             -- disp progress
             if string.sub(self.opt.uppModel, 1, 4) ~= 'rnn_' then
@@ -810,7 +728,6 @@ function CIUserActScorePredictor:trainOneEpoch()
                 xlua.progress(lstmIter, #self.rnnRealUserDataStates)
             end
 
-
         elseif self.opt.optimization == 'adam' then
 
             -- Perform Adam step:
@@ -818,7 +735,7 @@ function CIUserActScorePredictor:trainOneEpoch()
                 learningRate = self.opt.learningRate,
                 learningRateDecay = 5e-7
             }
-            optim.adam(feval, self.uaspParam, adamState)
+            optim.adam(feval, self.uspParam, adamState)
 
             -- disp progress
             if string.sub(self.opt.uppModel, 1, 4) ~= 'rnn_' then
@@ -833,7 +750,7 @@ function CIUserActScorePredictor:trainOneEpoch()
             rmspropState = rmspropState or {
                 learningRate = self.opt.learningRate
             }
-            optim.rmsprop(feval, self.uaspParam, rmspropState)
+            optim.rmsprop(feval, self.uspParam, rmspropState)
 
             -- disp progress
             if string.sub(self.opt.uppModel, 1, 4) ~= 'rnn_' then
@@ -849,76 +766,73 @@ function CIUserActScorePredictor:trainOneEpoch()
 
     -- time taken
     time = sys.clock() - time
-    --    time = time / #self.ciUserSimulator.realUserDataStates
+    --    time = time / #self.ciUserSimulator.realUserDataStates  -- This is not accurate, if lstm is used
     print("<trainer> time to learn 1 epoch = " .. (time*1000) .. 'ms')
 
-
-    self.uapConfusion:updateValids()
-    local confMtxStr = 'Act prediction: average row correct: ' .. (self.uapConfusion.averageValid*100) .. '% \n' ..
-            'average rowUcol correct (VOC measure): ' .. (self.uapConfusion.averageUnionValid*100) .. '% \n' ..
-            ' + global correct: ' .. (self.uapConfusion.totalValid*100) .. '%'
-    print(confMtxStr)
-
+    -- print self.uspConfusion matrix
+    --    print(self.uspConfusion)
     self.uspConfusion:updateValids()
-    confMtxStr = 'Score prediction: average row correct: ' .. (self.uspConfusion.averageValid*100) .. '% \n' ..
-            'average rowUcol correct (VOC measure): ' .. (self.uspConfusion.averageUnionValid*100) .. '% \n' ..
-            ' + global correct: ' .. (self.uspConfusion.totalValid*100) .. '%'
+    local confMtxStr = 'average row correct: ' .. (self.uspConfusion.averageValid*100) .. '% \n' ..
+    'average rowUcol correct (VOC measure): ' .. (self.uspConfusion.averageUnionValid*100) .. '% \n' ..
+    ' + global correct: ' .. (self.uspConfusion.totalValid*100) .. '%'
     print(confMtxStr)
-    self.uaspTrainLogger:add{['% Act Prediction: mean class accuracy (train set)'] = self.uapConfusion.totalValid * 100,
-        ['% Score Prediction: mean class accuracy (train set)'] = self.uspConfusion.totalValid * 100}
+    self.uspTrainLogger:add{['% mean class accuracy (train set)'] = self.uspConfusion.totalValid * 100}
 
 
     -- save/log current net
-    local filename = paths.concat('userModelTrained', self.opt.save, 'uasp.t7')
+    local filename = paths.concat('userModelTrained', self.opt.save, 'usp.t7')
     os.execute('mkdir -p ' .. sys.dirname(filename))
     --    if paths.filep(filename) then
     --        os.execute('mv ' .. filename .. ' ' .. filename .. '.old')
     --    end
-    --print('<trainer> saving ciunet to '..filename)
-    --torch.save(filename, self.model)
 
     if self.trainEpoch % 10 == 0 and self.opt.ciuTType == 'train' then
-        -- todo:pwang8. Dec 8, 2017. For test purpose, this model saving func is temporarily ceased
-        --filename = paths.concat('userModelTrained', self.opt.save, string.format('%d', self.trainEpoch)..'_'..
-        --        string.format('%.2f', self.uapConfusion.totalValid*100)..'_'..string.format('%.2f', self.uspConfusion.totalValid*100)..'uasp.t7')
+        -- todo:pwang8. Dec 7, 2017. For test purpose, this model saving func is temporarily ceased
+        --filename = paths.concat('userModelTrained', self.opt.save, string.format('%d', self.trainEpoch)..'_'..string.format('%.2f', self.uspConfusion.totalValid*100)..'_usp.t7')
         --os.execute('mkdir -p ' .. sys.dirname(filename))
         --print('<trainer> saving periodly trained ciunet to '..filename)
         --torch.save(filename, self.model)
     end
 
-    if (self.opt.ciuTType == 'train' or self.opt.ciuTType == 'train_tr') and self.trainEpoch % self.opt.testOnTestFreq == 0 then
-        local actScoreTestAccu = self:testActScorePredOnTestDetOneEpoch()
-        print('<Act prediction accuracy at epoch '..string.format('%d', self.trainEpoch)..' on test set > '..string.format('%.2f%%', actScoreTestAccu[1]*100)..
-            ', and LogLoss '..string.format('%.2f', actScoreTestAccu[2]))
-        print('<Score prediction accuracy at epoch '..string.format('%d', self.trainEpoch)..' on test set > '..string.format('%.2f%%', actScoreTestAccu[3]*100)..
-            ', and LogLoss '..string.format('%.2f', actScoreTestAccu[4]))
-        self.uaspTestLogger:add{string.format('%d', self.trainEpoch), string.format('%.5f%%', actScoreTestAccu[1]*100), string.format('%.5f%%', actScoreTestAccu[2]),
-            string.format('%.5f%%', actScoreTestAccu[3]*100), string.format('%.5f%%', actScoreTestAccu[4])}
+    if self.trainEpoch == self.opt.usimTrIte and self.opt.ciuTType == 'train' then
+        -- Save the trained model after the final epoch
+        filename = paths.concat('userModelTrained', self.opt.save, string.format('final_%d', self.trainEpoch)..'_'..string.format('%.2f', self.uspConfusion.totalValid*100)..'_usp.t7')
+        os.execute('mkdir -p ' .. sys.dirname(filename))
+        print('<trainer> saving final trained action prediction ciunet to '..filename)
+        torch.save(filename, self.model)
     end
 
-    self.uapConfusion:zero()
+    if (self.opt.ciuTType == 'train' or self.opt.ciuTType == 'train_tr') and self.trainEpoch % self.opt.testOnTestFreq == 0 then
+        local testEval = self:testScorePredOnTestDetOneEpoch()
+        print('<Score prediction accuracy at epoch '..string.format('%d', self.trainEpoch)..' on test set > '..string.format('%.2f%%', testEval[1]*100)..
+        ', and LogLoss '..string.format('%.2f', testEval[2]))
+        self.uspTestLogger:add{string.format('%d', self.trainEpoch), string.format('%.5f%%', testEval[1]*100), string.format('%.5f', testEval[2])}
+    end
+
     self.uspConfusion:zero()
     -- next epoch
     self.trainEpoch = self.trainEpoch + 1
 end
 
--- evaluation functionon test/train_validation set
-function CIUserActScorePredictor:testActScorePredOnTestDetOneEpoch()
+-- evaluation function on test/train_validation set
+function CIUserScoreSoftPredictor:testScorePredOnTestDetOneEpoch()
     -- just in case:
     collectgarbage()
-
-    local _logLoss_act = 0
-    local _logLoss_score = 0
+    -- Confusion matrix for score prediction (2-class)
+    --    local scrPredTP = torch.Tensor(2):fill(1e-3)
+    --    local scrPredFP = torch.Tensor(2):fill(1e-3)
+    --    local scrPredFN = torch.Tensor(2):fill(1e-3)
+    local _logLoss = 0
     if string.sub(self.opt.uppModel, 1, 4) == 'rnn_' then
-        -- uSimShLayer == 1, rnn model
-        self.model:forget()
+        -- uSimShLayer == 0 and rnn model
         self.model:evaluate()
+        self.model:forget()
 
         local tabState = {}
         for j=1, self.opt.lstmHist do
-            local prepUserState = torch.Tensor(#self.rnnRealUserDataStatesTest, self.ciUserSimulator.userStateFeatureCnt)
-            for k=1, #self.rnnRealUserDataStatesTest do
-                prepUserState[k] = self.ciUserSimulator:preprocessUserStateData(self.rnnRealUserDataStatesTest[k][j], self.opt.prepro)
+            local prepUserState = torch.Tensor(#self.rnnRealUserDataEndsTest, self.ciUserSimulator.userStateFeatureCnt)
+            for k=1, #self.rnnRealUserDataEndsTest do
+                prepUserState[k] = self.ciUserSimulator:preprocessUserStateData(self.rnnRealUserDataStatesTest[self.rnnRealUserDataEndsTest[k]][j], self.opt.prepro)
             end
             tabState[j] = prepUserState
         end
@@ -927,7 +841,7 @@ function CIUserActScorePredictor:testActScorePredOnTestDetOneEpoch()
         local test_rnn_noise_h = {}
         local test_rnn_noise_o = {}
         if self.opt.uppModelRNNDom > 0 then
-            TableSet.buildRNNDropoutMask(test_rnn_noise_i, test_rnn_noise_h, test_rnn_noise_o, self.inputFeatureNum, self.opt.rnnHdSizeL1, self.opt.rnnHdLyCnt, #self.rnnRealUserDataStatesTest, self.opt.lstmHist, self.opt.uppModelRNNDom)
+            TableSet.buildRNNDropoutMask(test_rnn_noise_i, test_rnn_noise_h, test_rnn_noise_o, self.inputFeatureNum, self.opt.rnnHdSizeL1, self.opt.rnnHdLyCnt, #self.rnnRealUserDataEndsTest, self.opt.lstmHist, self.opt.uppModelRNNDom)
             TableSet.sampleRNNDropoutMask(0, test_rnn_noise_i, test_rnn_noise_h, test_rnn_noise_o, self.opt.rnnHdLyCnt, self.opt.lstmHist)
             for j = 1, self.opt.lstmHist do
                 tabState[j] = {tabState[j], test_rnn_noise_i[j], test_rnn_noise_h[j], test_rnn_noise_o[j]}
@@ -937,115 +851,67 @@ function CIUserActScorePredictor:testActScorePredOnTestDetOneEpoch()
         if self.opt.gpu > 0 then
             nn.utils.recursiveType(tabState, 'torch.CudaTensor')
         end
-        local nll_acts = self.model:forward(tabState)
-        nn.utils.recursiveType(nll_acts, 'torch.FloatTensor')
+        local nll_rewards = self.model:forward(tabState)
 
-        --- Action prediction evaluation
-        self.uapConfusion:zero()
-        for i=1, #self.rnnRealUserDataStatesTest do
-            self.uapConfusion:add(nll_acts[self.opt.lstmHist][1][i], self.rnnRealUserDataActsTest[i][self.opt.lstmHist])
-            _logLoss_act = _logLoss_act + -1 * nll_acts[self.opt.lstmHist][1][i][self.rnnRealUserDataActsTest[i][self.opt.lstmHist]]
-        end
-        self.uapConfusion:updateValids()
-        local tvalidAct = self.uapConfusion.totalValid
-        self.uapConfusion:zero()
-
-        --- Score prediction evaluation
         self.uspConfusion:zero()
+        nn.utils.recursiveType(nll_rewards, 'torch.FloatTensor')
         for i=1, #self.rnnRealUserDataEndsTest do
-            self.uspConfusion:add(nll_acts[self.opt.lstmHist][2][self.rnnRealUserDataEndsTest[i]],
-                                self.rnnRealUserDataRewardsTest[self.rnnRealUserDataEndsTest[i]][self.opt.lstmHist])
-            _logLoss_score = _logLoss_score + -1 * nll_acts[self.opt.lstmHist][2][self.rnnRealUserDataEndsTest[i]][self.rnnRealUserDataRewardsTest[self.rnnRealUserDataEndsTest[i]][self.opt.lstmHist]]
+            self.uspConfusion:add(nll_rewards[self.opt.lstmHist][i], self.rnnRealUserDataRewardsTest[self.rnnRealUserDataEndsTest[i]][self.opt.lstmHist])
+            _logLoss = _logLoss + -1 * nll_rewards[self.opt.lstmHist][i][self.rnnRealUserDataRewardsTest[self.rnnRealUserDataEndsTest[i]][self.opt.lstmHist]]
         end
         self.uspConfusion:updateValids()
-        local tvalidScore = self.uspConfusion.totalValid
+        local tvalid = self.uspConfusion.totalValid
         self.uspConfusion:zero()
-
-        return {tvalidAct, _logLoss_act/#self.rnnRealUserDataStatesTest, tvalidScore, _logLoss_score/#self.rnnRealUserDataEndsTest}
+        return {tvalid, _logLoss/#self.rnnRealUserDataEndsTest}
 
     elseif string.sub(self.opt.uppModel, 1, 4) == 'cnn_' then
-        -- SharedLayer == 1, cnn models
+        -- uSimShLayer == 0 and cnn models
         self.model:evaluate()
 
-        local prepUserState = torch.Tensor(#self.cnnRealUserDataStatesTest, self.opt.lstmHist, self.ciUserSimulator.userStateFeatureCnt)
-        for i=1, #self.cnnRealUserDataStatesTest do
-            prepUserState[i] = self.ciUserSimulator:preprocessUserStateData(self.cnnRealUserDataStatesTest[i], self.opt.prepro)
+        local prepUserState = torch.Tensor(#self.cnnRealUserDataEndsTest, self.opt.lstmHist, self.ciUserSimulator.userStateFeatureCnt)
+        for i=1, #self.cnnRealUserDataEndsTest do
+            prepUserState[i] = self.ciUserSimulator:preprocessUserStateData(self.cnnRealUserDataStatesTest[self.cnnRealUserDataEndsTest[i]], self.opt.prepro)
         end
         if self.opt.gpu > 0 then
             prepUserState = prepUserState:cuda()
         end
-        local nll_acts = self.model:forward(prepUserState)
-        nn.utils.recursiveType(nll_acts, 'torch.FloatTensor')
+        local nll_rewards = self.model:forward(prepUserState)
 
-        if self.opt.uppModel == 'moe' then
-            nll_acts = nll_acts:split(self.ciUserSimulator.CIFr.usrActInd_end, 2)  -- We assume 1st dim is batch index. Act pred is the 1st set of output, having dim of 15. Score dim 2.
-        end
-
-        --- Action prediction evaluation
-        self.uapConfusion:zero()
-        for i=1, #self.cnnRealUserDataStatesTest do
-            self.uapConfusion:add(nll_acts[1][i], self.cnnRealUserDataActsTest[i])
-            _logLoss_act = _logLoss_act + -1 * nll_acts[1][i][self.cnnRealUserDataActsTest[i]]
-        end
-        self.uapConfusion:updateValids()
-        local tvalidAct = self.uapConfusion.totalValid
-        self.uapConfusion:zero()
-
-        --- Score prediction evaluation
         self.uspConfusion:zero()
+        nll_rewards:float()     -- set nll_rewards back to cpu mode (in main memory)
         for i=1, #self.cnnRealUserDataEndsTest do
-            self.uspConfusion:add(nll_acts[2][self.cnnRealUserDataEndsTest[i]],
-                                    self.cnnRealUserDataRewardsTest[self.cnnRealUserDataEndsTest[i]])
-            _logLoss_score = _logLoss_score + -1 * nll_acts[2][self.cnnRealUserDataEndsTest[i]][self.cnnRealUserDataRewardsTest[self.cnnRealUserDataEndsTest[i]]]
+            self.uspConfusion:add(nll_rewards[i], self.cnnRealUserDataRewardsTest[self.cnnRealUserDataEndsTest[i]])
+            _logLoss = _logLoss + -1 * nll_rewards[i][self.cnnRealUserDataRewardsTest[self.cnnRealUserDataEndsTest[i]]]
         end
         self.uspConfusion:updateValids()
-        local tvalidScore = self.uspConfusion.totalValid
+        local tvalid = self.uspConfusion.totalValid
         self.uspConfusion:zero()
-
-        return {tvalidAct, _logLoss_act/#self.cnnRealUserDataStatesTest, tvalidScore, _logLoss_score/#self.cnnRealUserDataEndsTest}
+        return {tvalid, _logLoss/#self.cnnRealUserDataEndsTest}
 
     else
-        -- SharedLayer == 1, non-rnn, non-cnn models
+        -- uSimShLayer == 0 and non-rnn, non-cnn models
         self.model:evaluate()
 
-        local prepUserState = torch.Tensor(#self.ciUserSimulator.realUserDataStatesTest, self.ciUserSimulator.userStateFeatureCnt)
-        for i=1, #self.ciUserSimulator.realUserDataStatesTest do
-            prepUserState[i] = self.ciUserSimulator:preprocessUserStateData(self.ciUserSimulator.realUserDataStatesTest[i], self.opt.prepro)
+        local prepUserState = torch.Tensor(#self.ciUserSimulator.realUserDataEndLinesTest, self.ciUserSimulator.userStateFeatureCnt)
+        for i=1, #self.ciUserSimulator.realUserDataEndLinesTest do
+            prepUserState[i] = self.ciUserSimulator:preprocessUserStateData(self.ciUserSimulator.realUserDataStatesTest[self.ciUserSimulator.realUserDataEndLinesTest[i]], self.opt.prepro)
         end
         if self.opt.gpu > 0 then
             prepUserState = prepUserState:cuda()
         end
-        local nll_acts = self.model:forward(prepUserState)
-        nn.utils.recursiveType(nll_acts, 'torch.FloatTensor')
+        local nll_rewards = self.model:forward(prepUserState)
 
-        if self.opt.uppModel == 'moe' then
-            nll_acts = nll_acts:split(self.ciUserSimulator.CIFr.usrActInd_end, 2)  -- We assume 1st dim is batch index. Act pred is the 1st set of output, having dim of 15. Score dim 2.
-        end
-
-        --- Action prediction evaluation
-        self.uapConfusion:zero()
-        for i=1, #self.ciUserSimulator.realUserDataStatesTest do
-            self.uapConfusion:add(nll_acts[1][i], self.ciUserSimulator.realUserDataActsTest[i])
-            _logLoss_act = _logLoss_act + -1 * nll_acts[1][i][self.ciUserSimulator.realUserDataActsTest[i]]
-        end
-        self.uapConfusion:updateValids()
-        local tvalidAct = self.uapConfusion.totalValid
-        self.uapConfusion:zero()
-
-        --- Score prediction evaluation
         self.uspConfusion:zero()
+        nll_rewards:float()     -- set nll_rewards back to cpu mode (in main memory)
         for i=1, #self.ciUserSimulator.realUserDataEndLinesTest do
-            self.uspConfusion:add(nll_acts[2][self.ciUserSimulator.realUserDataEndLinesTest[i]],
-                                  self.ciUserSimulator.realUserDataRewardsTest[self.ciUserSimulator.realUserDataEndLinesTest[i]])
-            _logLoss_score = _logLoss_score + -1 * nll_acts[2][self.ciUserSimulator.realUserDataEndLinesTest[i]][self.ciUserSimulator.realUserDataRewardsTest[self.ciUserSimulator.realUserDataEndLinesTest[i]]]
+            self.uspConfusion:add(nll_rewards[i], self.ciUserSimulator.realUserDataRewardsTest[self.ciUserSimulator.realUserDataEndLinesTest[i]])
+            _logLoss = _logLoss + -1 * nll_rewards[i][self.ciUserSimulator.realUserDataRewardsTest[self.ciUserSimulator.realUserDataEndLinesTest[i]]]
         end
         self.uspConfusion:updateValids()
-        local tvalidScore = self.uspConfusion.totalValid
+        local tvalid = self.uspConfusion.totalValid
         self.uspConfusion:zero()
-
-        -- return a table, with [1] being action pred accuracy, [2] being reward pred accuracy
-        return {tvalidAct, _logLoss_act/#self.ciUserSimulator.realUserDataStatesTest, tvalidScore, _logLoss_score/#self.ciUserSimulator.realUserDataEndLinesTest}
+        return {tvalid, _logLoss/#self.ciUserSimulator.realUserDataEndLinesTest}
     end
 end
 
-return CIUserActScorePredictor
+return CIUserScoreSoftPredictor
