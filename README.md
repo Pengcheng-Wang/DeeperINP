@@ -4,3 +4,5 @@ In this repository, we implement Bayesian NN following Gal's method, also incorp
 This repository is built on the prior Ijcai DRL-INP repository, which built on Torch and related libs from Jan 2017.
 
 When this repository starts, newer Torch, RNN and other corresponding libs have been applied. (Oct 2017)
+
+Dec 9, I am trying to modify player outcome prediction as a regression problem. I think this is a good way to implement soft labeling.
