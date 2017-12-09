@@ -538,14 +538,73 @@ function CIUserActScorePredictor:trainOneEpoch()
             end
 
             for j = 1, self.opt.lstmHist do
-                targetsActScore[j] = {}
-                targetsActScore[j][1] = targetsAct[j]
-                targetsActScore[j][2] = targetsScore[j]
+                targetsActScore[j] = {targetsAct[j], targetsScore[j]}
             end
 
         elseif string.sub(self.opt.uppModel, 1, 4) == 'cnn_' then
             -- cnn models
-            -- todo:pwang8. Edit from here. Dec 7, 2017.
+            inputs = torch.Tensor(self.opt.batchSize, self.opt.lstmHist, self.inputFeatureNum)
+            targetsAct = torch.Tensor(self.opt.batchSize)
+            targetsScore = torch.Tensor(self.opt.batchSize)
+            closeToEnd = torch.Tensor(self.opt.batchSize):fill(0)
+            local k = 1
+            for i = t, math.min(t+self.opt.batchSize-1, #self.cnnRealUserDataStates) do
+                inputs[k] = self.cnnRealUserDataStates[i]
+                targetsAct[k] = self.cnnRealUserDataActs[i]
+                targetsScore[k] = self.cnnRealUserDataRewards[i]
+                for dis=0, self.opt.scorePredStateScope-1 do
+                    if (i+dis) <= #self.cnnRealUserDataActs and self.cnnRealUserDataActs[i+dis] == self.ciUserSimulator.CIFr.usrActInd_end then
+                        -- If current state is close enough to the end of this sequence, mark it.
+                        -- This is for marking near end state, with which the score prediction should be more accurate and be utilized in score pred training
+                        closeToEnd[k] = 1
+                        break
+                    end
+                end
+                k = k + 1
+            end
+
+            -- at the end of dataset, if it could not be divided into full batch
+            if k ~= self.opt.batchSize + 1 then
+                while k <= self.opt.batchSize do
+                    local randInd = torch.random(1, #self.cnnRealUserDataStates)
+                    inputs[k] = self.cnnRealUserDataStates[randInd]
+                    targetsAct[k] = self.cnnRealUserDataActs[randInd]
+                    targetsScore[k] = self.cnnRealUserDataRewards[randInd]
+                    for dis=0, self.opt.scorePredStateScope-1 do
+                        if (randInd+dis) <= #self.cnnRealUserDataActs and self.cnnRealUserDataActs[randInd+dis] == self.ciUserSimulator.CIFr.usrActInd_end then
+                            -- If current state is close enough to the end of this sequence, mark it.
+                            -- This is for marking near end state, with which the score prediction should be more accurate and be utilized in score pred training
+                            closeToEnd[k] = 1
+                            break
+                        end
+                    end
+                    k = k + 1
+                end
+            end
+
+            t = t + self.opt.batchSize
+            if t > #self.cnnRealUserDataStates then
+                epochDone = true
+            end
+
+            if self.opt.actPredDataAug > 0 then
+                -- Data augmentation
+                self.ciUserSimulator:UserSimActDataAugment(inputs, targetsAct, targetsScore, self.opt.uppModel)
+            end
+            -- Should do input feature pre-processing after data augmentation
+            inputs = self.ciUserSimulator:preprocessUserStateData(inputs, self.opt.prepro)
+            -- Try to add random normal noise to input features and see how it performs
+            -- This should be invoked after input preprocess bcz we want to set an unique std
+            --self.ciUserSimulator:UserSimDataAddRandNoise(inputs, false, 0.01)
+
+            if self.opt.gpu > 0 then
+                inputs = inputs:cuda()
+                targetsAct = targetsAct:cuda()
+                targetsScore = targetsScore:cuda()
+                closeToEnd = closeToEnd:cuda()
+            end
+
+            targetsActScore = {targetsAct, targetsScore}
 
         else
             -- non-rnn, non-cnn models, create mini batch
@@ -555,15 +614,9 @@ function CIUserActScorePredictor:trainOneEpoch()
             closeToEnd = torch.Tensor(self.opt.batchSize):fill(0)
             local k = 1
             for i = t, math.min(t+self.opt.batchSize-1, #self.ciUserSimulator.realUserDataStates) do
-                -- load new sample
-                local input = self.ciUserSimulator.realUserDataStates[i]    -- :clone() -- if preprocess is called, clone is not needed, I believe
-                -- need do preprocess for input features
-                input = self.ciUserSimulator:preprocessUserStateData(input, self.opt.prepro)
-                local singleTargetAct = self.ciUserSimulator.realUserDataActs[i]
-                local singleTargetScore = self.ciUserSimulator.realUserDataRewards[i]
-                inputs[k] = input
-                targetsAct[k] = singleTargetAct
-                targetsScore[k] = singleTargetScore
+                inputs[k] = self.ciUserSimulator.realUserDataStates[i]
+                targetsAct[k] = self.ciUserSimulator.realUserDataActs[i]
+                targetsScore[k] = self.ciUserSimulator.realUserDataRewards[i]
                 for dis=0, self.opt.scorePredStateScope-1 do
                     if (i+dis) <= #self.ciUserSimulator.realUserDataActs and self.ciUserSimulator.realUserDataActs[i+dis] == self.ciUserSimulator.CIFr.usrActInd_end then
                         -- If current state is close enough to the end of this sequence, mark it.
@@ -579,7 +632,7 @@ function CIUserActScorePredictor:trainOneEpoch()
             if k ~= self.opt.batchSize + 1 then
                 while k <= self.opt.batchSize do
                     local randInd = torch.random(1, #self.ciUserSimulator.realUserDataStates)
-                    inputs[k] = self.ciUserSimulator:preprocessUserStateData(self.ciUserSimulator.realUserDataStates[randInd], self.opt.prepro)
+                    inputs[k] = self.ciUserSimulator.realUserDataStates[randInd]
                     targetsAct[k] = self.ciUserSimulator.realUserDataActs[randInd]
                     targetsScore[k] = self.ciUserSimulator.realUserDataRewards[randInd]
                     for dis=0, self.opt.scorePredStateScope-1 do
@@ -598,6 +651,16 @@ function CIUserActScorePredictor:trainOneEpoch()
             if t > #self.ciUserSimulator.realUserDataStates then
                 epochDone = true
             end
+
+            if self.opt.actPredDataAug > 0 then
+                -- Data augmentation
+                self.ciUserSimulator:UserSimActDataAugment(inputs, targetsAct, targetsScore, self.opt.uppModel)
+            end
+            -- Should do input feature pre-processing after data augmentation
+            inputs = self.ciUserSimulator:preprocessUserStateData(inputs, self.opt.prepro)
+            -- Try to add random normal noise to input features and see how it performs
+            -- This should be invoked after input preprocess bcz we want to set an unique std
+            --self.ciUserSimulator:UserSimDataAddRandNoise(inputs, false, 0.01)
 
             if self.opt.gpu > 0 then
                 inputs = inputs:cuda()
@@ -638,7 +701,7 @@ function CIUserActScorePredictor:trainOneEpoch()
             -- Zero error values (change output to target) for score prediction cases far away from ending state (I don't hope these cases influence training)
             for cl=1, closeToEnd:size(1) do
                 if closeToEnd[cl] < 1 then
-                    if self.opt.uppModel == 'lstm' then
+                    if string.sub(self.opt.uppModel, 1, 4) == 'rnn_' then
                         outputs[self.opt.lstmHist][2][cl] = targetsActScore[self.opt.lstmHist][2][cl]
                     else
                         outputs[2][cl] = targetsActScore[2][cl]
@@ -649,7 +712,7 @@ function CIUserActScorePredictor:trainOneEpoch()
             local f = self.uaspPrlCriterion:forward(outputs, targetsActScore) -- I made an experiment. The returned error value (f) from parallelCriterion is the sum of each criterion
             local df_do = self.uaspPrlCriterion:backward(outputs, targetsActScore)
 
-            if self.opt.uppModel == 'lstm' then
+            if string.sub(self.opt.uppModel, 1, 4) == 'rnn_' then
                 local subTot_f = 0
                 for s=1, self.opt.lstmHist do
                     subTot_f = subTot_f + self.uapCriterion:forward(outputs[s][1], targetsActScore[s][1])
@@ -661,7 +724,7 @@ function CIUserActScorePredictor:trainOneEpoch()
                 end
             end
 
-            -- If moe with shared lower layers, we merge the df_do before backprop
+            -- If moe with shared lower layers, we merge the df_do before backprop. This is necessary because the network has merged act/outcome prediction output in one tensor
             if self.opt.uppModel == 'moe' then
                 df_do = nn.JoinTable(-1):forward(df_do)  -- We assume 1st dim is batch index. Act pred is the 1st set of output, having dim of 15. Score dim 2.
                 if self.opt.gpu > 0 then
@@ -685,7 +748,7 @@ function CIUserActScorePredictor:trainOneEpoch()
             end
 
             -- update self.uapConfusion and self.uspConfusion
-            if self.opt.uppModel == 'lstm' then
+            if string.sub(self.opt.uppModel, 1, 4) == 'rnn_' then
                 for j = 1, self.opt.lstmHist do
                     for i = 1,self.opt.batchSize do
                         self.uapConfusion:add(outputs[j][1][i], targetsActScore[j][1][i])
@@ -701,12 +764,16 @@ function CIUserActScorePredictor:trainOneEpoch()
                 end
             end
 
+            -- gradient clipping. It is recommended for rnn models, not sure if it is helpful to other models.
+            if string.sub(self.opt.uppModel, 1, 4) == 'rnn_' then
+                OptimMisc.clipGradByNorm(self.uspDParam, 10)    -- right now 10 is used constantly as clipping norm
+            end
             -- return f and df/dX
             return f, self.uaspDParam
         end
 
         self.model:training()
-        if self.opt.uppModel == 'lstm' then
+        if string.sub(self.opt.uppModel, 1, 4) == 'rnn_' then
             self.model:forget()
         end
 
@@ -737,7 +804,7 @@ function CIUserActScorePredictor:trainOneEpoch()
             optim.sgd(feval, self.uaspParam, sgdState)
 
             -- disp progress
-            if self.opt.uppModel ~= 'lstm' then
+            if string.sub(self.opt.uppModel, 1, 4) ~= 'rnn_' then
                 xlua.progress(t, #self.ciUserSimulator.realUserDataStates)
             else
                 xlua.progress(lstmIter, #self.rnnRealUserDataStates)
@@ -754,7 +821,7 @@ function CIUserActScorePredictor:trainOneEpoch()
             optim.adam(feval, self.uaspParam, adamState)
 
             -- disp progress
-            if self.opt.uppModel ~= 'lstm' then
+            if string.sub(self.opt.uppModel, 1, 4) ~= 'rnn_' then
                 xlua.progress(t, #self.ciUserSimulator.realUserDataStates)
             else
                 xlua.progress(lstmIter, #self.rnnRealUserDataStates)
@@ -769,7 +836,7 @@ function CIUserActScorePredictor:trainOneEpoch()
             optim.rmsprop(feval, self.uaspParam, rmspropState)
 
             -- disp progress
-            if self.opt.uppModel ~= 'lstm' then
+            if string.sub(self.opt.uppModel, 1, 4) ~= 'rnn_' then
                 xlua.progress(t, #self.ciUserSimulator.realUserDataStates)
             else
                 xlua.progress(lstmIter, #self.rnnRealUserDataStates)
@@ -811,18 +878,22 @@ function CIUserActScorePredictor:trainOneEpoch()
     --torch.save(filename, self.model)
 
     if self.trainEpoch % 10 == 0 and self.opt.ciuTType == 'train' then
-        filename = paths.concat('userModelTrained', self.opt.save, string.format('%d', self.trainEpoch)..'_'..
-                string.format('%.2f', self.uapConfusion.totalValid*100)..'_'..string.format('%.2f', self.uspConfusion.totalValid*100)..'uasp.t7')
-        os.execute('mkdir -p ' .. sys.dirname(filename))
-        print('<trainer> saving periodly trained ciunet to '..filename)
-        torch.save(filename, self.model)
+        -- todo:pwang8. Dec 8, 2017. For test purpose, this model saving func is temporarily ceased
+        --filename = paths.concat('userModelTrained', self.opt.save, string.format('%d', self.trainEpoch)..'_'..
+        --        string.format('%.2f', self.uapConfusion.totalValid*100)..'_'..string.format('%.2f', self.uspConfusion.totalValid*100)..'uasp.t7')
+        --os.execute('mkdir -p ' .. sys.dirname(filename))
+        --print('<trainer> saving periodly trained ciunet to '..filename)
+        --torch.save(filename, self.model)
     end
 
     if (self.opt.ciuTType == 'train' or self.opt.ciuTType == 'train_tr') and self.trainEpoch % self.opt.testOnTestFreq == 0 then
         local actScoreTestAccu = self:testActScorePredOnTestDetOneEpoch()
-        print('<Act prediction accuracy at epoch '..string.format('%d', self.trainEpoch)..' on test set > '..string.format('%.2f%%', actScoreTestAccu[1]*100))
-        print('<Score prediction accuracy at epoch '..string.format('%d', self.trainEpoch)..' on test set > '..string.format('%.2f%%', actScoreTestAccu[2]*100))
-        self.uaspTestLogger:add{string.format('%d', self.trainEpoch), string.format('%.5f%%', actScoreTestAccu[1]*100), string.format('%.5f%%', actScoreTestAccu[2]*100)}
+        print('<Act prediction accuracy at epoch '..string.format('%d', self.trainEpoch)..' on test set > '..string.format('%.2f%%', actScoreTestAccu[1]*100)..
+            ', and LogLoss '..string.format('%.2f', actScoreTestAccu[2]))
+        print('<Score prediction accuracy at epoch '..string.format('%d', self.trainEpoch)..' on test set > '..string.format('%.2f%%', actScoreTestAccu[3]*100)..
+            ', and LogLoss '..string.format('%.2f', actScoreTestAccu[4]))
+        self.uaspTestLogger:add{string.format('%d', self.trainEpoch), string.format('%.5f%%', actScoreTestAccu[1]*100), string.format('%.5f%%', actScoreTestAccu[2]),
+            string.format('%.5f%%', actScoreTestAccu[3]*100), string.format('%.5f%%', actScoreTestAccu[4])}
     end
 
     self.uapConfusion:zero()
@@ -837,6 +908,7 @@ function CIUserActScorePredictor:testActScorePredOnTestDetOneEpoch()
     local crcActCnt = 0
     local crcRewCnt = 0
 
+    -- todo:pwang8. Time to edit from here. Dec 8, 2017.
     -- todo:pwang8. Need to calculate cross validated cross entropy (log loss in scikit-learn) for action/outcome prediction evaluation
     if self.opt.uppModel == 'lstm' then
         -- uSimShLayer == 1 and lstm model
