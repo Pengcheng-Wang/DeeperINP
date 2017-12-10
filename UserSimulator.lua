@@ -1054,14 +1054,15 @@ end
 --- Augment data in training corpus using the proteties we extract here
 --- In this version, action and score are sent together as input param, so generated
 --- augmented data points will have corresponding action and score labels together
-function CIUserSimulator:UserSimActDataAugment(input, output_act, output_score, uppModelForm)
+function CIUserSimulator:UserSimActDataAugment(input, output_act, output_score_classifier, output_score_regressor, uppModelForm)
     if string.sub(uppModelForm, 1, 4) == 'rnn_' then
         -- If the player simulation model is an RNN model, which means the model is a sequencer,
         -- and requires input to be a table of tensors in which the 1st dim (of the table) is time step
         for j = 1, self.opt.lstmHist do
             input[j]:resize(self.opt.batchSize * 2, self.userStateFeatureCnt)
             output_act[j]:resize(self.opt.batchSize * 2)
-            output_score[j]:resize(self.opt.batchSize * 2)
+            output_score_classifier[j]:resize(self.opt.batchSize * 2)
+            output_score_regressor[j]:resize(self.opt.batchSize * 2)
         end
 
         for i=1, self.opt.batchSize do
@@ -1069,8 +1070,9 @@ function CIUserSimulator:UserSimActDataAugment(input, output_act, output_score, 
             for j=1, self.opt.lstmHist do
                 input[j][self.opt.batchSize+i] = input[j][i]
                 output_act[j][self.opt.batchSize+i] = output_act[j][i]
-                output_score[j][self.opt.batchSize+i] = output_score[j][i]
-                -- for output_score, we only need to double-sized the tensors, and does not need to make any changes.
+                output_score_classifier[j][self.opt.batchSize+i] = output_score_classifier[j][i]
+                output_score_regressor[j][self.opt.batchSize+i] = output_score_regressor[j][i]
+                -- for output_score_classifier and output_score_regressor, we only need to double-sized the tensors, and does not need to make any changes.
                 -- This is because the current data augmentation, or perturbation is based on inserting/deleting actions
                 -- in the interaction sequence. In our CI dataset, the score label is duplicated for each time step in
                 -- one player's interaction. So, we just double-size it here and it should correspond to augmented data points.
@@ -1234,16 +1236,18 @@ function CIUserSimulator:UserSimActDataAugment(input, output_act, output_score, 
         -- If this player simulation model is in CNN form, meaning its input may contain multiple
         -- frames of features, and action prediction output_act only contains one value. For data augmentation,
         -- the data is processed similar as it is for RNN models
-        assert(input:dim()==3 and output_act:dim()==1 and output_score:dim()==1, 'Input for CNN models in player simulator should be 3d')
+        assert(input:dim()==3 and output_act:dim()==1 and output_score_classifier:dim()==1 and output_score_regressor:dim()==1, 'Input for CNN models in player simulator should be 3d')
         input:resize(self.opt.batchSize * 2, input:size(2), input:size(3))
         output_act:resize(self.opt.batchSize * 2)
-        output_score:resize(self.opt.batchSize * 2)
+        output_score_classifier:resize(self.opt.batchSize * 2)
+        output_score_regressor:resize(self.opt.batchSize * 2)
 
         for i=1, self.opt.batchSize do
             -- clone from original
             input[self.opt.batchSize+i] = input[i]
             output_act[self.opt.batchSize+i] = output_act[i]
-            output_score[self.opt.batchSize+i] = output_score[i]
+            output_score_classifier[self.opt.batchSize+i] = output_score_classifier[i]
+            output_score_regressor[self.opt.batchSize+i] = output_score_regressor[i]
 
             local actStepCntTotal = torch.cumsum(input[self.opt.batchSize+i][self.opt.lstmHist])[self.CIFr.usrActInd_end-1]    -- the counting of all actions the player took till now
             local freqActPertProb
@@ -1399,19 +1403,21 @@ function CIUserSimulator:UserSimActDataAugment(input, output_act, output_score, 
         end
 
     else
-        -- If the model is not in RNN or CNN form, which means each input just contains feature values
+        -- If the model is non-RNN or non-CNN form, which means each input just contains feature values
         -- at the current time step. Right now, the strategy is using original data points and
         -- augmented data points in ratio of 1:1
         input:resize(self.opt.batchSize * 2, self.userStateFeatureCnt)
         output_act:resize(self.opt.batchSize * 2)
-        output_score:resize(self.opt.batchSize * 2)
+        output_score_classifier:resize(self.opt.batchSize * 2)
+        output_score_regressor:resize(self.opt.batchSize * 2)
 
         -- Okay, try to utilize correlation in perturbing feature values
         for i=1, self.opt.batchSize do
             -- clone from original
             input[self.opt.batchSize+i] = input[i]
             output_act[self.opt.batchSize+i] = output_act[i]
-            output_score[self.opt.batchSize+i] = output_score[i]
+            output_score_classifier[self.opt.batchSize+i] = output_score_classifier[i]
+            output_score_regressor[self.opt.batchSize+i] = output_score_regressor[i]
 
             if output_act[i] ~= self.CIFr.usrActInd_end then -- and self.actFreqTotal[output_act[i]] < self.actFreqTotal[self.CIFr.usrActInd_end] * 5
                 -- perturb feature values (action counting) according to correlation

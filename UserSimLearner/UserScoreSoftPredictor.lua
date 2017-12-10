@@ -388,7 +388,6 @@ function CIUserScoreSoftPredictor:_init(CIUserSimulator, opt)
     self.uspParam, self.uspDParam = self.model:getParameters()
 end
 
--- todo:pwang8. Dec 9, 2017. Edit from here. I should also modify data augmentation function to let it contain standardNLG values.
 -- training function
 function CIUserScoreSoftPredictor:trainOneEpoch()
     -- local vars
