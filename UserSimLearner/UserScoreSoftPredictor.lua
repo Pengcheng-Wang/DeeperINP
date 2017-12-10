@@ -398,7 +398,7 @@ function CIUserScoreSoftPredictor:trainOneEpoch()
     print("<trainer> online epoch # " .. self.trainEpoch .. ' [batchSize = ' .. self.opt.batchSize .. ']')
     local inputs
     local targets   -- targets are player score labels in this script
-    local plh_acts  -- place holder for player action label.
+    local plh_acts  -- place holder for player action label.    -- todo:pwang8. Dec 10, 2017. Should start to add regression data from here.
     local closeToEnd
     local t = 1
     local lstmIter = 1  -- lstm iterate for each squence starts from this value
