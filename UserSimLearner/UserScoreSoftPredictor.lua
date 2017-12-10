@@ -345,8 +345,8 @@ function CIUserScoreSoftPredictor:_init(CIUserSimulator, opt)
     self.rnnRealUserDataStates = self.ciUserSimulator.rnnRealUserDataStates
     self.rnnRealUserDataActs = self.ciUserSimulator.rnnRealUserDataActs
     self.rnnRealUserDataRewards = self.ciUserSimulator.rnnRealUserDataRewards
+    self.rnnRealUserDataStandardNLG = self.ciUserSimulator.rnnRealUserDataStandardNLG
     self.rnnRealUserDataEnds = self.ciUserSimulator.rnnRealUserDataEnds
-    -- todo:pwang8. Should add the real-valued score here. Dec. 9, 2017. Edit from here.
 
     ----------------------------------------------------------------------
     --- Prepare data for RNN models in test/train_validation set
@@ -362,6 +362,7 @@ function CIUserScoreSoftPredictor:_init(CIUserSimulator, opt)
     self.cnnRealUserDataStates = self.ciUserSimulator.cnnRealUserDataStates
     self.cnnRealUserDataActs = self.ciUserSimulator.cnnRealUserDataActs
     self.cnnRealUserDataRewards = self.ciUserSimulator.cnnRealUserDataRewards
+    self.cnnRealUserDataStandardNLG = self.ciUserSimulator.cnnRealUserDataStandardNLG
 
     ----------------------------------------------------------------------
     --- Prepare data for CNN models in test/train_validation set
@@ -387,7 +388,7 @@ function CIUserScoreSoftPredictor:_init(CIUserSimulator, opt)
     self.uspParam, self.uspDParam = self.model:getParameters()
 end
 
-
+-- todo:pwang8. Dec 9, 2017. Edit from here. I should also modify data augmentation function to let it contain standardNLG values.
 -- training function
 function CIUserScoreSoftPredictor:trainOneEpoch()
     -- local vars

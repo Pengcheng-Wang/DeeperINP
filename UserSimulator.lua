@@ -17,6 +17,7 @@ function CIUserSimulator:_init(CIFileReader, opt)
     self.realUserDataStates = {}
     self.realUserDataActs = {}
     self.realUserDataRewards = {}
+    self.realUserDataStandardNLG = {}   -- std for nlg is 0.27016 for 402 records
     self.realUserDataStartLines = {}    -- this table stores the starting line of each real human user's interation
     self.realUserDataEndLines = {}
 
@@ -117,6 +118,8 @@ function CIUserSimulator:_init(CIFileReader, opt)
             else
                 self.realUserDataRewards[#self.realUserDataStates] = 2     -- This is (binary) reward class label, not reward value
             end
+            self.realUserDataStandardNLG[#self.realUserDataStates] =
+                        (CIFileReader.surveyData[userId][CIFileReader.userStateSurveyFeatureCnt+1] - 0.16666667) / 0.27016   -- 0.27016 is the std of nlg
 
             if act == CIFileReader.usrActInd_end then
 --                print('@@ End action reached')
@@ -404,6 +407,7 @@ function CIUserSimulator:_init(CIFileReader, opt)
     self.rnnRealUserDataStates = {}
     self.rnnRealUserDataActs = {}
     self.rnnRealUserDataRewards = {}
+    self.rnnRealUserDataStandardNLG = {}
     self.rnnRealUserDataStarts = {}
     self.rnnRealUserDataEnds = {}
     self.rnnRealUserDataPad = torch.Tensor(#self.realUserDataStartLines):fill(0)    -- indicating whether data has padding at head (should be padded)
@@ -417,15 +421,18 @@ function CIUserSimulator:_init(CIFileReader, opt)
                     self.rnnRealUserDataStates[#self.rnnRealUserDataStates + 1] = {}
                     self.rnnRealUserDataActs[#self.rnnRealUserDataActs + 1] = {}
                     self.rnnRealUserDataRewards[#self.rnnRealUserDataRewards + 1] = {}
+                    self.rnnRealUserDataStandardNLG[#self.rnnRealUserDataStandardNLG + 1] = {}
                     for i=1, padi do
                         self.rnnRealUserDataStates[#self.rnnRealUserDataStates][i] = torch.Tensor(self.userStateFeatureCnt):fill(0)
                         self.rnnRealUserDataActs[#self.rnnRealUserDataActs][i] = self.realUserDataActs[indSeqHead]  -- duplicate the 1st user action for padded states
                         self.rnnRealUserDataRewards[#self.rnnRealUserDataRewards][i] = self.realUserDataRewards[indSeqHead]
+                        self.rnnRealUserDataStandardNLG[#self.rnnRealUserDataStandardNLG][i] = self.realUserDataStandardNLG[indSeqHead]
                     end
                     for i=1, opt.lstmHist-padi do
                         self.rnnRealUserDataStates[#self.rnnRealUserDataStates][i+padi] = self.realUserDataStates[indSeqHead+i-1]
                         self.rnnRealUserDataActs[#self.rnnRealUserDataActs][i+padi] = self.realUserDataActs[indSeqHead+i-1]
                         self.rnnRealUserDataRewards[#self.rnnRealUserDataRewards][i+padi] = self.realUserDataRewards[indSeqHead+i-1]
+                        self.rnnRealUserDataStandardNLG[#self.rnnRealUserDataStandardNLG][i+padi] = self.realUserDataStandardNLG[indSeqHead+i-1]
                     end
                     if padi == opt.lstmHist-1 then
                         self.rnnRealUserDataStarts[#self.rnnRealUserDataStarts+1] = #self.rnnRealUserDataStates     -- This is the start of a user's record -- This is duplicated. The value should be the same as realUserDataStartLines
@@ -441,10 +448,12 @@ function CIUserSimulator:_init(CIFileReader, opt)
                     self.rnnRealUserDataStates[#self.rnnRealUserDataStates + 1] = {}
                     self.rnnRealUserDataActs[#self.rnnRealUserDataActs + 1] = {}
                     self.rnnRealUserDataRewards[#self.rnnRealUserDataRewards + 1] = {}
+                    self.rnnRealUserDataStandardNLG[#self.rnnRealUserDataStandardNLG + 1] = {}
                     for i=1, opt.lstmHist do
                         self.rnnRealUserDataStates[#self.rnnRealUserDataStates][i] = self.realUserDataStates[indSeqHead+i-1]
                         self.rnnRealUserDataActs[#self.rnnRealUserDataActs][i] = self.realUserDataActs[indSeqHead+i-1]
                         self.rnnRealUserDataRewards[#self.rnnRealUserDataRewards][i] = self.realUserDataRewards[indSeqHead+i-1]
+                        self.rnnRealUserDataStandardNLG[#self.rnnRealUserDataStandardNLG][i] = self.realUserDataStandardNLG[indSeqHead+i-1]
                     end
                     indSeqHead = indSeqHead + 1
                     indSeqTail = indSeqTail + 1
@@ -531,6 +540,7 @@ function CIUserSimulator:_init(CIFileReader, opt)
     self.cnnRealUserDataStates = {}
     self.cnnRealUserDataActs = {}
     self.cnnRealUserDataRewards = {}
+    self.cnnRealUserDataStandardNLG = {}
     self.cnnRealUserDataStarts = {}
     self.cnnRealUserDataEnds = {}
     self.cnnRealUserDataPad = torch.Tensor(#self.realUserDataStartLines):fill(0)    -- indicating whether data has padding at head (should be padded)
@@ -544,6 +554,7 @@ function CIUserSimulator:_init(CIFileReader, opt)
                     self.cnnRealUserDataStates[#self.cnnRealUserDataStates + 1] = torch.Tensor(opt.lstmHist, self.userStateFeatureCnt)  -- input into TemporalConvolution is 2d or 3d tensor
                     self.cnnRealUserDataActs[#self.cnnRealUserDataActs + 1] = self.realUserDataActs[indSeqHead + opt.lstmHist - padi - 1]   -- act and reward were set to the value at last position in this
                     self.cnnRealUserDataRewards[#self.cnnRealUserDataRewards + 1] = self.realUserDataRewards[indSeqHead + opt.lstmHist-padi - 1]    -- time sequence
+                    self.cnnRealUserDataStandardNLG[#self.cnnRealUserDataStandardNLG + 1] = self.realUserDataStandardNLG[indSeqHead + opt.lstmHist-padi - 1]
                     for i=1, padi do
                         self.cnnRealUserDataStates[#self.cnnRealUserDataStates][i]:fill(0)
                     end
@@ -564,6 +575,7 @@ function CIUserSimulator:_init(CIFileReader, opt)
                     self.cnnRealUserDataStates[#self.cnnRealUserDataStates + 1] = torch.Tensor(opt.lstmHist, self.userStateFeatureCnt)  -- input into TemporalConvolution is 2d or 3d tensor
                     self.cnnRealUserDataActs[#self.cnnRealUserDataActs + 1] = self.realUserDataActs[indSeqHead + opt.lstmHist - 1]
                     self.cnnRealUserDataRewards[#self.cnnRealUserDataRewards + 1] = self.realUserDataRewards[indSeqHead + opt.lstmHist - 1]
+                    self.cnnRealUserDataStandardNLG[#self.cnnRealUserDataStandardNLG + 1] = self.realUserDataStandardNLG[indSeqHead + opt.lstmHist - 1]
                     for i=1, opt.lstmHist do
                         self.cnnRealUserDataStates[#self.cnnRealUserDataStates][i] = self.realUserDataStates[indSeqHead+i-1]
                     end
