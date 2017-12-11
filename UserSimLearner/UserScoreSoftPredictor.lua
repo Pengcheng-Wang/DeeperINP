@@ -907,7 +907,7 @@ function CIUserScoreSoftPredictor:testScorePredOnTestDetOneEpoch()
             _logLoss = _logLoss + -1 * nll_rewards[self.opt.lstmHist][1][i][self.rnnRealUserDataRewardsTest[self.rnnRealUserDataEndsTest[i]][self.opt.lstmHist]]
             _regE = _regE + math.pow((nll_rewards[self.opt.lstmHist][2][i] - self.rnnRealUserDataStandardNLG[self.rnnRealUserDataEndsTest[i]][self.opt.lstmHist])[1], 2)
         end
-        print("For score regression, the mse in test set is ".._regE/#self.rnnRealUserDataEndsTest)
+        print("For score regression, the MSE in test set is ".._regE/#self.rnnRealUserDataEndsTest)
         self.uspConfusion:updateValids()
         local tvalid = self.uspConfusion.totalValid
         self.uspConfusion:zero()
@@ -928,10 +928,13 @@ function CIUserScoreSoftPredictor:testScorePredOnTestDetOneEpoch()
 
         self.uspConfusion:zero()
         nn.utils.recursiveType(nll_rewards, 'torch.FloatTensor')
+        local _regE = 0
         for i=1, #self.cnnRealUserDataEndsTest do
             self.uspConfusion:add(nll_rewards[1][i], self.cnnRealUserDataRewardsTest[self.cnnRealUserDataEndsTest[i]])
             _logLoss = _logLoss + -1 * nll_rewards[1][i][self.cnnRealUserDataRewardsTest[self.cnnRealUserDataEndsTest[i]]]
+            _regE = _regE + math.pow((nll_rewards[2][i] - self.cnnRealUserDataRewardsTest[self.cnnRealUserDataEndsTest[i]])[1], 2)
         end
+        print("For score regression, the MSE in test set is ".._regE/#self.cnnRealUserDataEndsTest)
         self.uspConfusion:updateValids()
         local tvalid = self.uspConfusion.totalValid
         self.uspConfusion:zero()
@@ -955,10 +958,13 @@ function CIUserScoreSoftPredictor:testScorePredOnTestDetOneEpoch()
         end
 
         self.uspConfusion:zero()
+        local _regE = 0
         for i=1, #self.ciUserSimulator.realUserDataEndLinesTest do
             self.uspConfusion:add(nll_rewards[1][i], self.ciUserSimulator.realUserDataRewardsTest[self.ciUserSimulator.realUserDataEndLinesTest[i]])
             _logLoss = _logLoss + -1 * nll_rewards[1][i][self.ciUserSimulator.realUserDataRewardsTest[self.ciUserSimulator.realUserDataEndLinesTest[i]]]
+            _regE = _regE + math.pow((nll_rewards[2][i] - self.ciUserSimulator.realUserDataRewardsTest[self.ciUserSimulator.realUserDataEndLinesTest[i]])[1], 2)
         end
+        print("For score regression, the MSE in test set is ".._regE/#self.ciUserSimulator.realUserDataEndLinesTest)
         self.uspConfusion:updateValids()
         local tvalid = self.uspConfusion.totalValid
         self.uspConfusion:zero()

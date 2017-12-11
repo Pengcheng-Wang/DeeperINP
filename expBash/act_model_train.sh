@@ -733,7 +733,37 @@
 
 
 
-# Try to do score/outcome prediction using rhn models, without using multi-task structure
+## Try to do score/outcome prediction using rhn models, without using multi-task structure
+#s=1
+#for rnnHdLc in 1 2
+#do
+#    for recD in 5
+#    do
+#        echo 'For outcome prediction, in RNN round' ${recD}
+#        date +%Y,%m,%d-%H:%M:%S
+#        for t in `seq 1 2`;
+#        do
+#            g=0
+#            if [ $t -eq 2 ]
+#            then
+#                g=0 #1
+#            fi
+#            if [ $t -eq 1 ];
+#            then
+#                th userSimMain.lua -trType sc -save mul_rhn_hdlc_${rnnHdLc}_recDp_${recD}L/rnndrop.1/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 5e-3 -rnnHdSizeL1 21 -rnnHdLyCnt $(($rnnHdLc)) -rhnReccDept $(($recD)) -ciuTType train -uppModel rnn_rhn -lstmHist 10 -usimTrIte 5000  -uSimShLayer 1 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0.1 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) > /dev/null &
+#            else
+#                th userSimMain.lua -trType sc -save mul_rhn_hdlc_${rnnHdLc}_recDp_${recD}L/rnndrop.1/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 5e-3 -rnnHdSizeL1 21 -rnnHdLyCnt $(($rnnHdLc)) -rhnReccDept $(($recD)) -ciuTType train -uppModel rnn_rhn -lstmHist 10 -usimTrIte 5000  -uSimShLayer 1 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0.1 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) > /dev/null &
+#            fi
+#        done
+#        wait
+#        echo 'done with 2 sets in RHN'  ${recD}
+#        date +%Y,%m,%d-%H:%M:%S
+#    done
+#done
+
+
+# Dec 11, 2017.
+# Try to do score/outcome prediction using rhn models, without using multi-task structure.
 s=1
 for rnnHdLc in 1 2
 do
@@ -746,13 +776,13 @@ do
             g=0
             if [ $t -eq 2 ]
             then
-                g=0 #1
+                g=1
             fi
             if [ $t -eq 1 ];
             then
-                th userSimMain.lua -trType sc -save mul_rhn_hdlc_${rnnHdLc}_recDp_${recD}L/rnndrop.1/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 5e-3 -rnnHdSizeL1 21 -rnnHdLyCnt $(($rnnHdLc)) -rhnReccDept $(($recD)) -ciuTType train -uppModel rnn_rhn -lstmHist 10 -usimTrIte 5000  -uSimShLayer 1 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0.1 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) > /dev/null &
+                th userSimMain.lua -trType sc -save sc_rhn_hdlc_${rnnHdLc}_recDp_${recD}L/rnndrop.5/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 5e-2 -rnnHdSizeL1 21 -rnnHdLyCnt $(($rnnHdLc)) -rhnReccDept $(($recD)) -ciuTType train -uppModel rnn_rhn -lstmHist 10 -usimTrIte 5000  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0.5 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) > /dev/null &
             else
-                th userSimMain.lua -trType sc -save mul_rhn_hdlc_${rnnHdLc}_recDp_${recD}L/rnndrop.1/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 5e-3 -rnnHdSizeL1 21 -rnnHdLyCnt $(($rnnHdLc)) -rhnReccDept $(($recD)) -ciuTType train -uppModel rnn_rhn -lstmHist 10 -usimTrIte 5000  -uSimShLayer 1 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0.1 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) > /dev/null &
+                th userSimMain.lua -trType sc -save sc_rhn_hdlc_${rnnHdLc}_recDp_${recD}L/rnndrop.5/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 5e-2 -rnnHdSizeL1 21 -rnnHdLyCnt $(($rnnHdLc)) -rhnReccDept $(($recD)) -ciuTType train -uppModel rnn_rhn -lstmHist 10 -usimTrIte 5000  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0.5 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) > /dev/null &
             fi
         done
         wait
