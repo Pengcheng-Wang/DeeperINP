@@ -60,7 +60,7 @@ opt = lapp[[
 
 -- threads and default tensor type
 torch.setnumthreads(opt.threads)
-torch.setdefaulttensortype('torch.FloatTensor')
+torch.setdefaulttensortype('torch.DoubleTensor')    --FloatTensor
 -- Set manual seed
 torch.manualSeed(opt.seed)
 
