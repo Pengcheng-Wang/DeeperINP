@@ -58,6 +58,8 @@ function CIUserScorePredictor:_init(CIUserSimulator, opt)
                 --expert:add(nn.ReLU())
                 --if opt.dropoutUSim > 0 then expert:add(nn.Dropout(opt.dropoutUSim)) end -- apply dropout, if any
                 --expert:add(nn.Linear(24, #self.classes))
+
+                if opt.dropoutUSim > 0 then expert:add(nn.Dropout(opt.dropoutUSim)) end -- apply dropout, if any
                 expert:add(nn.Linear(self.inputFeatureNum, #self.classes))
                 expert:add(nn.LogSoftMax())
                 experts:add(expert)
@@ -65,10 +67,13 @@ function CIUserScorePredictor:_init(CIUserSimulator, opt)
 
             local gater = nn.Sequential()
             gater:add(nn.Reshape(self.inputFeatureNum))
-            gater:add(nn.Linear(self.inputFeatureNum, 24))
-            gater:add(nn.Tanh())
+            --gater:add(nn.Linear(self.inputFeatureNum, 24))
+            --gater:add(nn.Tanh())
+            --if opt.dropoutUSim > 0 then gater:add(nn.Dropout(opt.dropoutUSim)) end -- apply dropout, if any
+            --gater:add(nn.Linear(24, numOfExp))
+
             if opt.dropoutUSim > 0 then gater:add(nn.Dropout(opt.dropoutUSim)) end -- apply dropout, if any
-            gater:add(nn.Linear(24, numOfExp))
+            gater:add(nn.Linear(self.inputFeatureNum, numOfExp))
             gater:add(nn.SoftMax())
 
             local trunk = nn.ConcatTable()
