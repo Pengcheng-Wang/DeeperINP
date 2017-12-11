@@ -905,7 +905,7 @@ function CIUserScoreSoftPredictor:testScorePredOnTestDetOneEpoch()
         for i=1, #self.rnnRealUserDataEndsTest do
             self.uspConfusion:add(nll_rewards[self.opt.lstmHist][1][i], self.rnnRealUserDataRewardsTest[self.rnnRealUserDataEndsTest[i]][self.opt.lstmHist])
             _logLoss = _logLoss + -1 * nll_rewards[self.opt.lstmHist][1][i][self.rnnRealUserDataRewardsTest[self.rnnRealUserDataEndsTest[i]][self.opt.lstmHist]]
-            _regE = _regE + math.pow((nll_rewards[self.opt.lstmHist][2][i] - self.rnnRealUserDataStandardNLG[self.rnnRealUserDataEndsTest[i]][self.opt.lstmHist]), 2)
+            _regE = _regE + math.pow((nll_rewards[self.opt.lstmHist][2][i] - self.rnnRealUserDataStandardNLG[self.rnnRealUserDataEndsTest[i]][self.opt.lstmHist])[1], 2)
         end
         print("For score regression, the mse in test set is ".._regE/#self.rnnRealUserDataEndsTest)
         self.uspConfusion:updateValids()
