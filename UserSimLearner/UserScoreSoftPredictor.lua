@@ -901,14 +901,13 @@ function CIUserScoreSoftPredictor:testScorePredOnTestDetOneEpoch()
 
         self.uspConfusion:zero()
         nn.utils.recursiveType(nll_rewards, 'torch.FloatTensor')
-        local _regCrit = nn.MSECriterion()
         local _regE = 0
         for i=1, #self.rnnRealUserDataEndsTest do
             self.uspConfusion:add(nll_rewards[self.opt.lstmHist][1][i], self.rnnRealUserDataRewardsTest[self.rnnRealUserDataEndsTest[i]][self.opt.lstmHist])
             _logLoss = _logLoss + -1 * nll_rewards[self.opt.lstmHist][1][i][self.rnnRealUserDataRewardsTest[self.rnnRealUserDataEndsTest[i]][self.opt.lstmHist]]
-            _regE = _regE + _regCrit:forward(nll_rewards[self.opt.lstmHist][2][i], self.rnnRealUserDataStandardNLG[self.rnnRealUserDataEndsTest[i]][self.opt.lstmHist])
+            _regE = _regE + (nll_rewards[self.opt.lstmHist][2][i] - self.rnnRealUserDataStandardNLG[self.rnnRealUserDataEndsTest[i]][self.opt.lstmHist])^2
         end
-        print("For score regression, the mse in test set is ".._regE)
+        print("For score regression, the mse in test set is ".._regE/#self.rnnRealUserDataEndsTest)
         self.uspConfusion:updateValids()
         local tvalid = self.uspConfusion.totalValid
         self.uspConfusion:zero()
