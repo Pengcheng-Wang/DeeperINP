@@ -813,7 +813,7 @@ function CIUserScorePredictor:testScorePredOnTestDetOneEpoch()
         end
         self.uspConfusion:updateValids()
         local tvalid = self.uspConfusion.totalValid
-        self.uspConfusion:zero()
+        self.uspConfusion:zero() print("###".._logLoss, "@@@"..#self.rnnRealUserDataEndsTest)
         return {tvalid, _logLoss/#self.rnnRealUserDataEndsTest}
 
     elseif string.sub(self.opt.uppModel, 1, 4) == 'cnn_' then
