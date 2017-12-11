@@ -901,7 +901,7 @@ function CIUserScoreSoftPredictor:testScorePredOnTestDetOneEpoch()
 
         self.uspConfusion:zero()
         nn.utils.recursiveType(nll_rewards, 'torch.FloatTensor')
-        local _regCrit = nn.MSECriterion
+        local _regCrit = nn.MSECriterion()
         local _regE = 0
         for i=1, #self.rnnRealUserDataEndsTest do
             self.uspConfusion:add(nll_rewards[self.opt.lstmHist][1][i], self.rnnRealUserDataRewardsTest[self.rnnRealUserDataEndsTest[i]][self.opt.lstmHist])
