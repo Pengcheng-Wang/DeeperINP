@@ -21,7 +21,7 @@ require 'classic.torch' -- Enables serialisation
 local TableSet = require 'MyMisc.TableSetMisc'
 local OptimMisc = require 'MyMisc.OptimMisc'    -- required to do gradient clipping for rnn modeling training
 
-local CIUserScoreSoftPredictor = classic.class('UserScorePredictor')
+local CIUserScoreSoftPredictor = classic.class('UserScoreSoftPredictor')
 
 function CIUserScoreSoftPredictor:_init(CIUserSimulator, opt)
 
@@ -69,7 +69,7 @@ function CIUserScoreSoftPredictor:_init(CIUserSimulator, opt)
                 mulOutConcatTab:add(scoreClsNN)
                 mulOutConcatTab:add(scoreRegNN) -- {score_classification_output, score_regression_output}
                 expert:add(mulOutConcatTab)
-                expert:add(nn.JoinTable(-1))
+                expert:add(nn.JoinTable(-1))    -- this JoinTable will merge the output from a table of 2 elements into a single tensor
                 experts:add(expert)
             end
 
@@ -397,8 +397,10 @@ function CIUserScoreSoftPredictor:trainOneEpoch()
     print('<trainer> on training set:')
     print("<trainer> online epoch # " .. self.trainEpoch .. ' [batchSize = ' .. self.opt.batchSize .. ']')
     local inputs
-    local targets   -- targets are player score labels in this script
-    local plh_acts  -- place holder for player action label.    -- todo:pwang8. Dec 10, 2017. Should start to add regression data from here.
+    local targetsClsRegScore = {}   -- the output of NN contains 2 elements in a table
+    local targets   -- targets are player score labels (classification) in this script
+    local plh_acts  -- place holder for player action label.
+    local score_reg -- the regression target for score/outcome prediction output
     local closeToEnd
     local t = 1
     local lstmIter = 1  -- lstm iterate for each squence starts from this value
@@ -409,17 +411,20 @@ function CIUserScoreSoftPredictor:trainOneEpoch()
             inputs = {}
             targets = {}
             plh_acts = {}
+            score_reg = {}
             closeToEnd = torch.Tensor(self.opt.batchSize):fill(0)
             local k
             for j = 1, self.opt.lstmHist do
                 inputs[j] = torch.Tensor(self.opt.batchSize, self.inputFeatureNum)
                 targets[j] = torch.Tensor(self.opt.batchSize)
                 plh_acts[j] = torch.Tensor(self.opt.batchSize)
+                score_reg[j] = torch.Tensor(self.opt.batchSize)
                 k = 1
                 for i = lstmIter, math.min(lstmIter+self.opt.batchSize-1, #self.rnnRealUserDataStates) do
                     inputs[j][k] = self.rnnRealUserDataStates[i][j]
                     targets[j][k] = self.rnnRealUserDataRewards[i][j]
                     plh_acts[j][k] = self.rnnRealUserDataActs[i][j]
+                    score_reg[j][k] = self.rnnRealUserDataStandardNLG[i][j] -- the score/outcome regression prediction ground-truth
                     if j == self.opt.lstmHist then
                         for dis=0, self.opt.scorePredStateScope-1 do
                             if (i+dis) <= #self.rnnRealUserDataStates and TableSet.tableContainsValue(self.rnnRealUserDataEnds, i+dis) then
@@ -442,6 +447,7 @@ function CIUserScoreSoftPredictor:trainOneEpoch()
                         inputs[j][k] = self.rnnRealUserDataStates[randInd][j]
                         targets[j][k] = self.rnnRealUserDataRewards[randInd][j]
                         plh_acts[j][k] = self.rnnRealUserDataActs[randInd][j]
+                        score_reg[j][k] = self.rnnRealUserDataStandardNLG[randInd][j]
                         if j == self.opt.lstmHist then
                             for dis=0, self.opt.scorePredStateScope-1 do
                                 if (randInd+dis) <= #self.rnnRealUserDataStates and TableSet.tableContainsValue(self.rnnRealUserDataEnds, randInd+dis) then
@@ -464,7 +470,7 @@ function CIUserScoreSoftPredictor:trainOneEpoch()
 
             if self.opt.actPredDataAug > 0 then
                 -- Data augmentation
-                self.ciUserSimulator:UserSimActDataAugment(inputs, plh_acts, targets, self.opt.uppModel)
+                self.ciUserSimulator:UserSimActDataAugment(inputs, plh_acts, targets, score_reg, self.opt.uppModel)
                 if self.opt.uppModelRNNDom > 0 then
                     TableSet.buildRNNDropoutMask(self.rnn_noise_i, self.rnn_noise_h, self.rnn_noise_o, self.inputFeatureNum, self.opt.rnnHdSizeL1, self.opt.rnnHdLyCnt, inputs[1]:size(1), self.opt.lstmHist, self.opt.uppModelRNNDom)
                 end
@@ -488,15 +494,22 @@ function CIUserScoreSoftPredictor:trainOneEpoch()
             if self.opt.gpu > 0 then
                 nn.utils.recursiveType(inputs, 'torch.CudaTensor')
                 nn.utils.recursiveType(targets, 'torch.CudaTensor')
+                nn.utils.recursiveType(score_reg, 'torch.CudaTensor')
                 closeToEnd = closeToEnd:cuda()
                 -- do not need to transform plh_acts into cudaTensor because it is not actually used in training. It is used in data augmentation.
+            end
+
+            -- Put score/outcome classification and regression targets into a table, to make it match the format of the multi-task NN output
+            for j = 1, self.opt.lstmHist do
+                targetsClsRegScore[j] = {targets[j], score_reg[j]}
             end
 
         elseif string.sub(self.opt.uppModel, 1, 4) == 'cnn_' then
             -- cnn models
             inputs = torch.Tensor(self.opt.batchSize, self.opt.lstmHist, self.inputFeatureNum)
-            targets = torch.Tensor(self.opt.batchSize)  -- labels for score
+            targets = torch.Tensor(self.opt.batchSize)  -- labels for score classification
             plh_acts = torch.Tensor(self.opt.batchSize) -- labels for player action
+            score_reg = torch.Tensor(self.opt.batchSize)  -- standard nlg for score regression
             closeToEnd = torch.Tensor(self.opt.batchSize):fill(0)
 
             local k = 1
@@ -504,6 +517,7 @@ function CIUserScoreSoftPredictor:trainOneEpoch()
                 inputs[k] = self.cnnRealUserDataStates[i]
                 targets[k] = self.cnnRealUserDataRewards[i]
                 plh_acts[k] = self.cnnRealUserDataActs[i]
+                score_reg[k] = self.cnnRealUserDataStandardNLG[i]
                 for dis=0, self.opt.scorePredStateScope-1 do
                     if (i+dis) <= #self.cnnRealUserDataActs and self.cnnRealUserDataActs[i+dis] == self.ciUserSimulator.CIFr.usrActInd_end then
                         -- If current state is close enough to the end of this sequence, mark it.
@@ -523,6 +537,7 @@ function CIUserScoreSoftPredictor:trainOneEpoch()
                     inputs[k] = self.cnnRealUserDataStates[randInd]
                     targets[k] = self.cnnRealUserDataRewards[randInd]
                     plh_acts[k] = self.cnnRealUserDataActs[randInd]
+                    score_reg[k] = self.cnnRealUserDataStandardNLG[randInd]
                     for dis=0, self.opt.scorePredStateScope-1 do
                         if (randInd+dis) <= #self.cnnRealUserDataActs and self.cnnRealUserDataActs[randInd+dis] == self.ciUserSimulator.CIFr.usrActInd_end then
                             -- If current state is close enough to the end of this sequence, mark it.
@@ -542,7 +557,7 @@ function CIUserScoreSoftPredictor:trainOneEpoch()
 
             if self.opt.actPredDataAug > 0 then
                 -- Data augmentation
-                self.ciUserSimulator:UserSimActDataAugment(inputs, plh_acts, targets, self.opt.uppModel)
+                self.ciUserSimulator:UserSimActDataAugment(inputs, plh_acts, targets, score_reg, self.opt.uppModel)
             end
             -- Should do input feature pre-processing after data augmentation
             inputs = self.ciUserSimulator:preprocessUserStateData(inputs, self.opt.prepro)
@@ -553,20 +568,25 @@ function CIUserScoreSoftPredictor:trainOneEpoch()
             if self.opt.gpu > 0 then
                 inputs = inputs:cuda()
                 targets = targets:cuda()
+                score_reg = score_reg:cuda()
                 closeToEnd = closeToEnd:cuda()
             end
+
+            targetsClsRegScore = {targets, score_reg}
 
         else
             -- non-rnn, non-cnn models, create mini batch
             inputs = torch.Tensor(self.opt.batchSize, self.inputFeatureNum)
-            targets = torch.Tensor(self.opt.batchSize)
+            targets = torch.Tensor(self.opt.batchSize)      -- score/outcome classification labels
             plh_acts = torch.Tensor(self.opt.batchSize)
+            score_reg = torch.Tensor(self.opt.batchSize)    -- score/outcome regression ground-truth
             closeToEnd = torch.Tensor(self.opt.batchSize):fill(0)
             local k = 1
             for i = t, math.min(t+self.opt.batchSize-1, #self.ciUserSimulator.realUserDataStates) do
                 inputs[k] = self.ciUserSimulator.realUserDataStates[i]
                 targets[k] = self.ciUserSimulator.realUserDataRewards[i]
                 plh_acts[k] = self.ciUserSimulator.realUserDataActs[i]
+                score_reg[k] = self.ciUserSimulator.realUserDataStandardNLG[i]
                 for dis=0, self.opt.scorePredStateScope-1 do
                     if (i+dis) <= #self.ciUserSimulator.realUserDataActs and self.ciUserSimulator.realUserDataActs[i+dis] == self.ciUserSimulator.CIFr.usrActInd_end then
                         -- If current state is close enough to the end of this sequence, mark it.
@@ -585,6 +605,7 @@ function CIUserScoreSoftPredictor:trainOneEpoch()
                     inputs[k] = self.ciUserSimulator.realUserDataStates[randInd]
                     targets[k] = self.ciUserSimulator.realUserDataRewards[randInd]
                     plh_acts[k] = self.ciUserSimulator.realUserDataActs[randInd]
+                    score_reg[k] = self.ciUserSimulator.realUserDataStandardNLG[randInd]
                     for dis=0, self.opt.scorePredStateScope-1 do
                         if (randInd+dis) <= #self.ciUserSimulator.realUserDataActs and self.ciUserSimulator.realUserDataActs[randInd+dis] == self.ciUserSimulator.CIFr.usrActInd_end then
                             -- If current state is close enough to the end of this sequence, mark it.
@@ -604,7 +625,7 @@ function CIUserScoreSoftPredictor:trainOneEpoch()
 
             if self.opt.actPredDataAug > 0 then
                 -- Data augmentation
-                self.ciUserSimulator:UserSimActDataAugment(inputs, plh_acts, targets, self.opt.uppModel)
+                self.ciUserSimulator:UserSimActDataAugment(inputs, plh_acts, targets, score_reg, self.opt.uppModel)
             end
             -- Should do input feature pre-processing after data augmentation
             inputs = self.ciUserSimulator:preprocessUserStateData(inputs, self.opt.prepro)
@@ -615,8 +636,11 @@ function CIUserScoreSoftPredictor:trainOneEpoch()
             if self.opt.gpu > 0 then
                 inputs = inputs:cuda()
                 targets = targets:cuda()
+                score_reg = score_reg:cuda()
                 closeToEnd = closeToEnd:cuda()
             end
+
+            targetsClsRegScore = {targets, score_reg}
 
         end
 
@@ -635,23 +659,45 @@ function CIUserScoreSoftPredictor:trainOneEpoch()
 
             -- evaluate function for complete mini batch
             local outputs = self.model:forward(inputs)
+
+            -- Here, if moe is used with shared lower layers, it is the problem that,
+            -- due to limitation of MixtureTable module, we have to join tables together as
+            -- a single tensor as output of the user score classification and regression prediction models.
+            -- So, to guarantee the compatability, we need split the tensor into two tables here,
+            -- for score classification and regression prediction respectively.
+            if self.opt.uppModel == 'moe' then
+                outputs = outputs:split(#self.classes, 2)  -- We assume 1st dim is batch index. Score classification is the 1st set of output, having 2 output values. Score regression has 1 output.
+            end
+
             -- Zero error values (change output to target) for score prediction cases far away from ending state (I don't hope these cases influence training)
             for cl=1, closeToEnd:size(1) do
                 if closeToEnd[cl] < 1 then
                     if string.sub(self.opt.uppModel, 1, 4) == 'rnn_' then
-                        outputs[self.opt.lstmHist][cl] = targets[self.opt.lstmHist][cl]
+                        outputs[self.opt.lstmHist][1][cl][targetsClsRegScore[self.opt.lstmHist][1][cl]] = 0 -- Attention: because LogSoftMax is the output of a classification module, and NLL is criterion, so if we set ground-truth labeled output into 0, this will generate no error
+                        outputs[self.opt.lstmHist][2][cl] = targetsClsRegScore[self.opt.lstmHist][2][cl]    -- Because this is the socre regression part, we only need to set the output to groud-truth to make no error
                     else
-                        outputs[cl] = targets[cl]
+                        outputs[1][cl][targetsClsRegScore[1][cl]] = 0
+                        outputs[2][cl] = targetsClsRegScore[2][cl]
                     end
                 end
             end
-            local f = self.uspClsCriterion:forward(outputs, targets)
-            local df_do = self.uspClsCriterion:backward(outputs, targets)
+            local f = self.uspPrlCriterion:forward(outputs, targetsClsRegScore)
+            local df_do = self.uspPrlCriterion:backward(outputs, targetsClsRegScore)
 
             if string.sub(self.opt.uppModel, 1, 4) == 'rnn_' then
-                f = self.uspClsCriterion:forward(outputs[self.opt.lstmHist], targets[self.opt.lstmHist])
+                f = self.uspPrlCriterion:forward({outputs[self.opt.lstmHist]}, {targetsClsRegScore[self.opt.lstmHist]})
                 for step=1, self.opt.lstmHist-1 do
-                    df_do[step]:zero()
+                    assert(type(df_do)=='table' and #df_do==self.opt.lstmHist, 'df_do format is not correct!')
+                    df_do[step][1]:zero()   -- zero df_do for both score classification and score regression
+                    df_do[step][2]:zero()   -- for time steps before the last one
+                end
+            end
+
+            -- If moe with shared lower layers, we merge the df_do before backprop. This is necessary because the network has merged classification and regression output in one tensor
+            if self.opt.uppModel == 'moe' then
+                df_do = nn.JoinTable(-1):forward(df_do)  -- We assume 1st dim is batch index. Act pred is the 1st set of output, having dim of 15. Score dim 2.
+                if self.opt.gpu > 0 then
+                    df_do = df_do:cuda()  -- seems like after calling the forward function of nn.JoinTable, that output(df_do) becomes main memory object again
                 end
             end
 
@@ -673,12 +719,12 @@ function CIUserScoreSoftPredictor:trainOneEpoch()
             -- update self.uspConfusion
             if string.sub(self.opt.uppModel, 1, 4) == 'rnn_' then
                 for i = 1,self.opt.batchSize do
-                    self.uspConfusion:add(outputs[self.opt.lstmHist][i], targets[self.opt.lstmHist][i])
+                    self.uspConfusion:add(outputs[self.opt.lstmHist][1][i], targetsClsRegScore[self.opt.lstmHist][1][i])
                 end
             else
                 -- for cnn and non-rnn, non-cnn models
                 for i = 1,self.opt.batchSize do
-                    self.uspConfusion:add(outputs[i], targets[i])
+                    self.uspConfusion:add(outputs[1][i], targetsClsRegScore[1][i])
                 end
             end
 
@@ -772,7 +818,7 @@ function CIUserScoreSoftPredictor:trainOneEpoch()
     -- print self.uspConfusion matrix
     --    print(self.uspConfusion)
     self.uspConfusion:updateValids()
-    local confMtxStr = 'average row correct: ' .. (self.uspConfusion.averageValid*100) .. '% \n' ..
+    local confMtxStr = 'Score classification average row correct: ' .. (self.uspConfusion.averageValid*100) .. '% \n' ..
     'average rowUcol correct (VOC measure): ' .. (self.uspConfusion.averageUnionValid*100) .. '% \n' ..
     ' + global correct: ' .. (self.uspConfusion.totalValid*100) .. '%'
     print(confMtxStr)
@@ -780,7 +826,7 @@ function CIUserScoreSoftPredictor:trainOneEpoch()
 
 
     -- save/log current net
-    local filename = paths.concat('userModelTrained', self.opt.save, 'usp.t7')
+    local filename = paths.concat('userModelTrained', self.opt.save, 'uspSoft.t7')
     os.execute('mkdir -p ' .. sys.dirname(filename))
     --    if paths.filep(filename) then
     --        os.execute('mv ' .. filename .. ' ' .. filename .. '.old')
@@ -788,7 +834,7 @@ function CIUserScoreSoftPredictor:trainOneEpoch()
 
     if self.trainEpoch % 10 == 0 and self.opt.ciuTType == 'train' then
         -- todo:pwang8. Dec 7, 2017. For test purpose, this model saving func is temporarily ceased
-        --filename = paths.concat('userModelTrained', self.opt.save, string.format('%d', self.trainEpoch)..'_'..string.format('%.2f', self.uspConfusion.totalValid*100)..'_usp.t7')
+        --filename = paths.concat('userModelTrained', self.opt.save, string.format('%d', self.trainEpoch)..'_'..string.format('%.2f', self.uspConfusion.totalValid*100)..'_uspSoft.t7')
         --os.execute('mkdir -p ' .. sys.dirname(filename))
         --print('<trainer> saving periodly trained ciunet to '..filename)
         --torch.save(filename, self.model)
@@ -796,7 +842,7 @@ function CIUserScoreSoftPredictor:trainOneEpoch()
 
     if self.trainEpoch == self.opt.usimTrIte and self.opt.ciuTType == 'train' then
         -- Save the trained model after the final epoch
-        filename = paths.concat('userModelTrained', self.opt.save, string.format('final_%d', self.trainEpoch)..'_'..string.format('%.2f', self.uspConfusion.totalValid*100)..'_usp.t7')
+        filename = paths.concat('userModelTrained', self.opt.save, string.format('final_%d', self.trainEpoch)..'_'..string.format('%.2f', self.uspConfusion.totalValid*100)..'_uspSoft.t7')
         os.execute('mkdir -p ' .. sys.dirname(filename))
         print('<trainer> saving final trained action prediction ciunet to '..filename)
         torch.save(filename, self.model)
@@ -856,8 +902,8 @@ function CIUserScoreSoftPredictor:testScorePredOnTestDetOneEpoch()
         self.uspConfusion:zero()
         nn.utils.recursiveType(nll_rewards, 'torch.FloatTensor')
         for i=1, #self.rnnRealUserDataEndsTest do
-            self.uspConfusion:add(nll_rewards[self.opt.lstmHist][i], self.rnnRealUserDataRewardsTest[self.rnnRealUserDataEndsTest[i]][self.opt.lstmHist])
-            _logLoss = _logLoss + -1 * nll_rewards[self.opt.lstmHist][i][self.rnnRealUserDataRewardsTest[self.rnnRealUserDataEndsTest[i]][self.opt.lstmHist]]
+            self.uspConfusion:add(nll_rewards[self.opt.lstmHist][1][i], self.rnnRealUserDataRewardsTest[self.rnnRealUserDataEndsTest[i]][self.opt.lstmHist])
+            _logLoss = _logLoss + -1 * nll_rewards[self.opt.lstmHist][1][i][self.rnnRealUserDataRewardsTest[self.rnnRealUserDataEndsTest[i]][self.opt.lstmHist]]
         end
         self.uspConfusion:updateValids()
         local tvalid = self.uspConfusion.totalValid
@@ -878,10 +924,10 @@ function CIUserScoreSoftPredictor:testScorePredOnTestDetOneEpoch()
         local nll_rewards = self.model:forward(prepUserState)
 
         self.uspConfusion:zero()
-        nll_rewards:float()     -- set nll_rewards back to cpu mode (in main memory)
+        nn.utils.recursiveType(nll_rewards, 'torch.FloatTensor')
         for i=1, #self.cnnRealUserDataEndsTest do
-            self.uspConfusion:add(nll_rewards[i], self.cnnRealUserDataRewardsTest[self.cnnRealUserDataEndsTest[i]])
-            _logLoss = _logLoss + -1 * nll_rewards[i][self.cnnRealUserDataRewardsTest[self.cnnRealUserDataEndsTest[i]]]
+            self.uspConfusion:add(nll_rewards[1][i], self.cnnRealUserDataRewardsTest[self.cnnRealUserDataEndsTest[i]])
+            _logLoss = _logLoss + -1 * nll_rewards[1][i][self.cnnRealUserDataRewardsTest[self.cnnRealUserDataEndsTest[i]]]
         end
         self.uspConfusion:updateValids()
         local tvalid = self.uspConfusion.totalValid
@@ -900,12 +946,15 @@ function CIUserScoreSoftPredictor:testScorePredOnTestDetOneEpoch()
             prepUserState = prepUserState:cuda()
         end
         local nll_rewards = self.model:forward(prepUserState)
+        nn.utils.recursiveType(nll_rewards, 'torch.FloatTensor')
+        if self.opt.uppModel == 'moe' then
+            nll_rewards = nll_rewards:split(#self.classes, 2)  -- We assume 1st dim is batch index. Score classification is the 1st set of output, having 2 outputs. Score regression is the 2nd set of output.
+        end
 
         self.uspConfusion:zero()
-        nll_rewards:float()     -- set nll_rewards back to cpu mode (in main memory)
         for i=1, #self.ciUserSimulator.realUserDataEndLinesTest do
-            self.uspConfusion:add(nll_rewards[i], self.ciUserSimulator.realUserDataRewardsTest[self.ciUserSimulator.realUserDataEndLinesTest[i]])
-            _logLoss = _logLoss + -1 * nll_rewards[i][self.ciUserSimulator.realUserDataRewardsTest[self.ciUserSimulator.realUserDataEndLinesTest[i]]]
+            self.uspConfusion:add(nll_rewards[1][i], self.ciUserSimulator.realUserDataRewardsTest[self.ciUserSimulator.realUserDataEndLinesTest[i]])
+            _logLoss = _logLoss + -1 * nll_rewards[1][i][self.ciUserSimulator.realUserDataRewardsTest[self.ciUserSimulator.realUserDataEndLinesTest[i]]]
         end
         self.uspConfusion:updateValids()
         local tvalid = self.uspConfusion.totalValid

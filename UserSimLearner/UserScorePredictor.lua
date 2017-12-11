@@ -591,9 +591,9 @@ function CIUserScorePredictor:trainOneEpoch()
             for cl=1, closeToEnd:size(1) do
                 if closeToEnd[cl] < 1 then
                     if string.sub(self.opt.uppModel, 1, 4) == 'rnn_' then
-                        outputs[self.opt.lstmHist][cl] = targets[self.opt.lstmHist][cl]
+                        outputs[self.opt.lstmHist][cl][targets[self.opt.lstmHist][cl]] = 0
                     else
-                        outputs[cl] = targets[cl]
+                        outputs[cl][targets[cl]] = 0
                     end
                 end
             end
@@ -601,7 +601,7 @@ function CIUserScorePredictor:trainOneEpoch()
             local df_do = self.uspCriterion:backward(outputs, targets)
 
             if string.sub(self.opt.uppModel, 1, 4) == 'rnn_' then
-                f = self.uspCriterion:forward(outputs[self.opt.lstmHist], targets[self.opt.lstmHist])
+                f = self.uspCriterion:forward({outputs[self.opt.lstmHist]}, {targets[self.opt.lstmHist]})
                 for step=1, self.opt.lstmHist-1 do
                     df_do[step]:zero()
                 end

@@ -716,9 +716,9 @@ function CIUserActScorePredictor:trainOneEpoch()
             for cl=1, closeToEnd:size(1) do
                 if closeToEnd[cl] < 1 then
                     if string.sub(self.opt.uppModel, 1, 4) == 'rnn_' then
-                        outputs[self.opt.lstmHist][2][cl] = targetsActScore[self.opt.lstmHist][2][cl]
+                        outputs[self.opt.lstmHist][2][cl][targetsActScore[self.opt.lstmHist][2][cl]] = 0    -- set the ground-truth labeled item into 0
                     else
-                        outputs[2][cl] = targetsActScore[2][cl]
+                        outputs[2][cl][targetsActScore[2][cl]] = 0
                     end
                 end
             end
@@ -990,10 +990,6 @@ function CIUserActScorePredictor:testActScorePredOnTestDetOneEpoch()
         end
         local nll_acts = self.model:forward(prepUserState)
         nn.utils.recursiveType(nll_acts, 'torch.FloatTensor')
-
-        if self.opt.uppModel == 'moe' then
-            nll_acts = nll_acts:split(self.ciUserSimulator.CIFr.usrActInd_end, 2)  -- We assume 1st dim is batch index. Act pred is the 1st set of output, having dim of 15. Score dim 2.
-        end
 
         --- Action prediction evaluation
         self.uapConfusion:zero()
