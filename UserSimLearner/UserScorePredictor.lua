@@ -47,17 +47,18 @@ function CIUserScorePredictor:_init(CIUserSimulator, opt)
             -- mixture of experts
             ------------------------------------------------------------
             local experts = nn.ConcatTable()
-            local numOfExp = 4
+            local numOfExp = 16
             for i = 1, numOfExp do
                 local expert = nn.Sequential()
                 expert:add(nn.Reshape(self.inputFeatureNum))
-                expert:add(nn.Linear(self.inputFeatureNum, 32))
-                expert:add(nn.ReLU())
-                if opt.dropoutUSim > 0 then expert:add(nn.Dropout(opt.dropoutUSim)) end -- apply dropout, if any
-                expert:add(nn.Linear(32, 24))
-                expert:add(nn.ReLU())
-                if opt.dropoutUSim > 0 then expert:add(nn.Dropout(opt.dropoutUSim)) end -- apply dropout, if any
-                expert:add(nn.Linear(24, #self.classes))
+                --expert:add(nn.Linear(self.inputFeatureNum, 32))
+                --expert:add(nn.ReLU())
+                --if opt.dropoutUSim > 0 then expert:add(nn.Dropout(opt.dropoutUSim)) end -- apply dropout, if any
+                --expert:add(nn.Linear(32, 24))
+                --expert:add(nn.ReLU())
+                --if opt.dropoutUSim > 0 then expert:add(nn.Dropout(opt.dropoutUSim)) end -- apply dropout, if any
+                --expert:add(nn.Linear(24, #self.classes))
+                expert:add(nn.Linear(self.inputFeatureNum, #self.classes))
                 expert:add(nn.LogSoftMax())
                 experts:add(expert)
             end
