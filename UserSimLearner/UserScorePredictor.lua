@@ -47,18 +47,10 @@ function CIUserScorePredictor:_init(CIUserSimulator, opt)
             -- mixture of experts
             ------------------------------------------------------------
             local experts = nn.ConcatTable()
-            local numOfExp = 16
+            local numOfExp = opt.moeExpCnt
             for i = 1, numOfExp do
                 local expert = nn.Sequential()
                 expert:add(nn.Reshape(self.inputFeatureNum))
-                --expert:add(nn.Linear(self.inputFeatureNum, 32))
-                --expert:add(nn.ReLU())
-                --if opt.dropoutUSim > 0 then expert:add(nn.Dropout(opt.dropoutUSim)) end -- apply dropout, if any
-                --expert:add(nn.Linear(32, 24))
-                --expert:add(nn.ReLU())
-                --if opt.dropoutUSim > 0 then expert:add(nn.Dropout(opt.dropoutUSim)) end -- apply dropout, if any
-                --expert:add(nn.Linear(24, #self.classes))
-
                 if opt.dropoutUSim > 0 then expert:add(nn.Dropout(opt.dropoutUSim)) end -- apply dropout, if any
                 expert:add(nn.Linear(self.inputFeatureNum, #self.classes))
                 expert:add(nn.LogSoftMax())
@@ -67,13 +59,9 @@ function CIUserScorePredictor:_init(CIUserSimulator, opt)
 
             local gater = nn.Sequential()
             gater:add(nn.Reshape(self.inputFeatureNum))
-            --gater:add(nn.Linear(self.inputFeatureNum, 24))
-            --gater:add(nn.Tanh())
-            --if opt.dropoutUSim > 0 then gater:add(nn.Dropout(opt.dropoutUSim)) end -- apply dropout, if any
-            --gater:add(nn.Linear(24, numOfExp))
-
             if opt.dropoutUSim > 0 then gater:add(nn.Dropout(opt.dropoutUSim)) end -- apply dropout, if any
             gater:add(nn.Linear(self.inputFeatureNum, numOfExp))
+            gater:add(nn.Tanh())
             gater:add(nn.SoftMax())
 
             local trunk = nn.ConcatTable()

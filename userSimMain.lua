@@ -34,6 +34,7 @@ opt = lapp[[
        --lstmHist         (default 10)          lstm hist length. This influence the rnn tensor table construction in data preparation. Attention: we also use it as history length indicator (input frame number) in CNN models
        --cnnKernelWidth   (default 3)           Temporal Convolution kernel width
        --cnnConnType      (default "v2")        Residual connection type in player simulation CNN model
+       --moeExpCnt        (default 32)          Number of expert modules used in moe model
        --uSimGru          (default 0)           whether to substitue lstm with gru (0 for using lstm, 1 for GRU)
        --uSimLstmBackLen  (default 3)           The maximum step applied in bptt in lstm
        --ubgDir           (default "ubgModel")  directory storing uap and usp models
