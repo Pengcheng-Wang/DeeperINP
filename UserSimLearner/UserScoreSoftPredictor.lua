@@ -48,24 +48,19 @@ function CIUserScoreSoftPredictor:_init(CIUserSimulator, opt)
             -- mixture of experts
             ------------------------------------------------------------
             local experts = nn.ConcatTable()
-            local numOfExp = 4
+            local numOfExp = opt.moeExpCnt
             for i = 1, numOfExp do
                 local expert = nn.Sequential()
                 expert:add(nn.Reshape(self.inputFeatureNum))
-                expert:add(nn.Linear(self.inputFeatureNum, 32))
-                expert:add(nn.ReLU())
-                if opt.dropoutUSim > 0 then expert:add(nn.Dropout(opt.dropoutUSim)) end -- apply dropout, if any
-                expert:add(nn.Linear(32, 24))
-                expert:add(nn.ReLU())
                 if opt.dropoutUSim > 0 then expert:add(nn.Dropout(opt.dropoutUSim)) end -- apply dropout, if any
                 -- The following code creates two output modules. One output module represents predicted
                 -- player outcome (binary) classification result, the other represents real-valued outcome
                 local mulOutConcatTab = nn.ConcatTable()
                 local scoreClsNN = nn.Sequential()  -- score prediction classification module
-                scoreClsNN:add(nn.Linear(24, #self.classes))
+                scoreClsNN:add(nn.Linear(self.inputFeatureNum, #self.classes))
                 scoreClsNN:add(nn.LogSoftMax())
                 local scoreRegNN = nn.Sequential()  -- score prediction regression module
-                scoreRegNN:add(nn.Linear(24, 1))
+                scoreRegNN:add(nn.Linear(self.inputFeatureNum, 1))
                 mulOutConcatTab:add(scoreClsNN)
                 mulOutConcatTab:add(scoreRegNN) -- {score_classification_output, score_regression_output}
                 expert:add(mulOutConcatTab)
@@ -75,10 +70,8 @@ function CIUserScoreSoftPredictor:_init(CIUserSimulator, opt)
 
             local gater = nn.Sequential()
             gater:add(nn.Reshape(self.inputFeatureNum))
-            gater:add(nn.Linear(self.inputFeatureNum, 24))
-            gater:add(nn.Tanh())
             if opt.dropoutUSim > 0 then gater:add(nn.Dropout(opt.dropoutUSim)) end -- apply dropout, if any
-            gater:add(nn.Linear(24, numOfExp))
+            gater:add(nn.Linear(self.inputFeatureNum, numOfExp))
             gater:add(nn.SoftMax())
 
             local trunk = nn.ConcatTable()
@@ -272,6 +265,52 @@ function CIUserScoreSoftPredictor:_init(CIUserSimulator, opt)
             mulOutConcatTab:add(scoreClsNN)
             mulOutConcatTab:add(scoreRegNN) -- {score_classification_output, score_regression_output}
             self.model:add(mulOutConcatTab)
+            ------------------------------------------------------------
+
+        elseif opt.uppModel == 'cnn_uSimCnn_moe' then
+            ------------------------------------------------------------
+            -- CNN with MOE model
+            ------------------------------------------------------------
+            require 'modules.TempConvInUserSimCNN'
+            local tempCnn = nn.TempConvUserSimCNN()         -- inputSize, outputSize, cnn_layers, kernel_width, dropout_rate, version
+            local _tempCnnLayer = tempCnn:CreateCNNModule(self.inputFeatureNum, self.inputFeatureNum, opt.rnnHdLyCnt, opt.cnnKernelWidth, opt.dropoutUSim, opt.lstmHist, opt.cnnConnType)
+            self.model:add(_tempCnnLayer)
+            self.model:add(nn.View(-1):setNumInputDims(2))  -- The input/output data should have dimensions of batch_index/frame_index/feature_index, so it's 3d, and 2d without batch index
+
+            --- moe part
+            local experts = nn.ConcatTable()
+            local numOfExp = opt.moeExpCnt
+            for i = 1, numOfExp do
+                local expert = nn.Sequential()
+                expert:add(nn.Reshape(self.inputFeatureNum * opt.lstmHist))
+                if opt.dropoutUSim > 0 then expert:add(nn.Dropout(opt.dropoutUSim)) end -- apply dropout, if any
+                -- The following code creates two output modules. One output module represents predicted
+                -- player outcome (binary) classification result, the other represents real-valued outcome
+                local mulOutConcatTab = nn.ConcatTable()
+                local scoreClsNN = nn.Sequential()  -- score prediction classification module
+                scoreClsNN:add(nn.Linear(self.inputFeatureNum * opt.lstmHist, #self.classes))
+                scoreClsNN:add(nn.LogSoftMax())
+                local scoreRegNN = nn.Sequential()  -- score prediction regression module
+                scoreRegNN:add(nn.Linear(self.inputFeatureNum * opt.lstmHist, 1))
+                mulOutConcatTab:add(scoreClsNN)
+                mulOutConcatTab:add(scoreRegNN) -- {score_classification_output, score_regression_output}
+                expert:add(mulOutConcatTab)
+                expert:add(nn.JoinTable(-1))    -- this JoinTable will merge the output from a table of 2 elements into a single tensor
+                experts:add(expert)
+            end
+
+            local gater = nn.Sequential()
+            gater:add(nn.Reshape(self.inputFeatureNum * opt.lstmHist))
+            if opt.dropoutUSim > 0 then gater:add(nn.Dropout(opt.dropoutUSim)) end -- apply dropout, if any
+            gater:add(nn.Linear(self.inputFeatureNum * opt.lstmHist, numOfExp))
+            gater:add(nn.SoftMax())
+
+            local trunk = nn.ConcatTable()
+            trunk:add(gater)
+            trunk:add(experts)
+
+            self.model:add(trunk)
+            self.model:add(nn.MixtureTable())   -- {gater, experts} is the form of input for MixtureTable. So, gater output should be the 1st in the output table
             ------------------------------------------------------------
 
         else
@@ -665,7 +704,7 @@ function CIUserScoreSoftPredictor:trainOneEpoch()
             -- a single tensor as output of the user score classification and regression prediction models.
             -- So, to guarantee the compatability, we need split the tensor into two tables here,
             -- for score classification and regression prediction respectively.
-            if self.opt.uppModel == 'moe' then
+            if string.sub(self.opt.uppModel, -3, -1) == 'moe' then
                 outputs = outputs:split(#self.classes, 2)  -- We assume 1st dim is batch index. Score classification is the 1st set of output, having 2 output values. Score regression has 1 output.
             end
 
@@ -694,7 +733,7 @@ function CIUserScoreSoftPredictor:trainOneEpoch()
             end
 
             -- If moe with shared lower layers, we merge the df_do before backprop. This is necessary because the network has merged classification and regression output in one tensor
-            if self.opt.uppModel == 'moe' then
+            if string.sub(self.opt.uppModel, -3, -1) == 'moe' then
                 df_do = nn.JoinTable(-1):forward(df_do)  -- We assume 1st dim is batch index. Act pred is the 1st set of output, having dim of 15. Score dim 2.
                 if self.opt.gpu > 0 then
                     df_do = df_do:cuda()  -- seems like after calling the forward function of nn.JoinTable, that output(df_do) becomes main memory object again
@@ -927,6 +966,9 @@ function CIUserScoreSoftPredictor:testScorePredOnTestDetOneEpoch()
             prepUserState = prepUserState:cuda()
         end
         local nll_rewards = self.model:forward(prepUserState)
+        if string.sub(self.opt.uppModel, -3, -1) == 'moe' then
+            nll_rewards = nll_rewards:split(#self.classes, 2)  -- We assume 1st dim is batch index. Score classification is the 1st set of output, having 2 outputs. Score regression is the 2nd set of output.
+        end
         nn.utils.recursiveType(nll_rewards, 'torch.FloatTensor')
         if nll_rewards[1]:ne(nll_rewards[1]):sum() > 0 then print('nan appears in output!') os.exit() end
         if nll_rewards[2]:ne(nll_rewards[2]):sum() > 0 then print('nan appears in output!') os.exit() end
@@ -958,7 +1000,7 @@ function CIUserScoreSoftPredictor:testScorePredOnTestDetOneEpoch()
         local nll_rewards = self.model:forward(prepUserState)
         nn.utils.recursiveType(nll_rewards, 'torch.FloatTensor')
 
-        if self.opt.uppModel == 'moe' then
+        if string.sub(self.opt.uppModel, -3, -1) == 'moe' then
             nll_rewards = nll_rewards:split(#self.classes, 2)  -- We assume 1st dim is batch index. Score classification is the 1st set of output, having 2 outputs. Score regression is the 2nd set of output.
         end
         if nll_rewards[1]:ne(nll_rewards[1]):sum() > 0 then print('nan appears in output!') os.exit() end

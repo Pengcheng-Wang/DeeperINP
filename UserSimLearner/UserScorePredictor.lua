@@ -61,7 +61,6 @@ function CIUserScorePredictor:_init(CIUserSimulator, opt)
             gater:add(nn.Reshape(self.inputFeatureNum))
             if opt.dropoutUSim > 0 then gater:add(nn.Dropout(opt.dropoutUSim)) end -- apply dropout, if any
             gater:add(nn.Linear(self.inputFeatureNum, numOfExp))
-            gater:add(nn.Tanh())
             gater:add(nn.SoftMax())
 
             local trunk = nn.ConcatTable()
@@ -211,7 +210,7 @@ function CIUserScorePredictor:_init(CIUserSimulator, opt)
 
         elseif opt.uppModel == 'cnn_uSimCnn_moe' then
             ------------------------------------------------------------
-            -- CNN model following the implementation of OpenNMT CNNEncoder and fb.resnet
+            -- CNN with MOE model
             ------------------------------------------------------------
             require 'modules.TempConvInUserSimCNN'
             local tempCnn = nn.TempConvUserSimCNN()         -- inputSize, outputSize, cnn_layers, kernel_width, dropout_rate, version
@@ -235,7 +234,6 @@ function CIUserScorePredictor:_init(CIUserSimulator, opt)
             gater:add(nn.Reshape(self.inputFeatureNum * opt.lstmHist))
             if opt.dropoutUSim > 0 then gater:add(nn.Dropout(opt.dropoutUSim)) end -- apply dropout, if any
             gater:add(nn.Linear(self.inputFeatureNum * opt.lstmHist, numOfExp))
-            gater:add(nn.Tanh())
             gater:add(nn.SoftMax())
 
             local trunk = nn.ConcatTable()
