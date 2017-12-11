@@ -805,7 +805,7 @@ function CIUserScorePredictor:testScorePredOnTestDetOneEpoch()
         if self.opt.gpu > 0 then
             nn.utils.recursiveType(tabState, 'torch.CudaTensor')
         end
-        local nll_rewards = self.model:forward(tabState)
+        local nll_rewards = self.model:forward(tabState)    print('###'..nll_rewards..'@@')
 
         self.uspConfusion:zero()
         nn.utils.recursiveType(nll_rewards, 'torch.FloatTensor')
