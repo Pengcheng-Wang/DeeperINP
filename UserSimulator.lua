@@ -119,7 +119,7 @@ function CIUserSimulator:_init(CIFileReader, opt)
                 self.realUserDataRewards[#self.realUserDataStates] = 2     -- This is (binary) reward class label, not reward value
             end
             self.realUserDataStandardNLG[#self.realUserDataStates] =
-                        (CIFileReader.surveyData[userId][CIFileReader.userStateSurveyFeatureCnt+1] - 0.16666667) / 0.27016   -- 0.27016 is the std of nlg
+                        (CIFileReader.surveyData[userId][CIFileReader.userStateSurveyFeatureCnt+1] - 0.16666667) / 1.5    --0.27016   -- 0.27016 is the std of nlg
 
             if act == CIFileReader.usrActInd_end then
 --                print('@@ End action reached')
