@@ -670,6 +670,7 @@ function CIUserScorePredictor:trainOneEpoch()
                 learningRate = self.opt.learningRate,
                 momentum = self.opt.momentum,
                 nesterov = true,
+                dampening = 0,
                 learningRateDecay = 5e-7
             }
             optim.sgd(feval, self.uspParam, sgdState)
