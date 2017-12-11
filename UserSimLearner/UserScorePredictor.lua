@@ -209,6 +209,43 @@ function CIUserScorePredictor:_init(CIUserSimulator, opt)
             self.model:add(nn.LogSoftMax())
             ------------------------------------------------------------
 
+        elseif opt.uppModel == 'cnn_uSimCnn_moe' then
+            ------------------------------------------------------------
+            -- CNN model following the implementation of OpenNMT CNNEncoder and fb.resnet
+            ------------------------------------------------------------
+            require 'modules.TempConvInUserSimCNN'
+            local tempCnn = nn.TempConvUserSimCNN()         -- inputSize, outputSize, cnn_layers, kernel_width, dropout_rate, version
+            local _tempCnnLayer = tempCnn:CreateCNNModule(self.inputFeatureNum, self.inputFeatureNum, opt.rnnHdLyCnt, opt.cnnKernelWidth, opt.dropoutUSim, opt.lstmHist, opt.cnnConnType)
+            self.model:add(_tempCnnLayer)
+            self.model:add(nn.View(-1):setNumInputDims(2))  -- The input/output data should have dimensions of batch_index/frame_index/feature_index, so it's 3d, and 2d without batch index
+
+            --- moe part
+            local experts = nn.ConcatTable()
+            local numOfExp = opt.moeExpCnt
+            for i = 1, numOfExp do
+                local expert = nn.Sequential()
+                expert:add(nn.Reshape(self.inputFeatureNum * opt.lstmHist))
+                if opt.dropoutUSim > 0 then expert:add(nn.Dropout(opt.dropoutUSim)) end -- apply dropout, if any
+                expert:add(nn.Linear(self.inputFeatureNum * opt.lstmHist, #self.classes))
+                expert:add(nn.LogSoftMax())
+                experts:add(expert)
+            end
+
+            local gater = nn.Sequential()
+            gater:add(nn.Reshape(self.inputFeatureNum * opt.lstmHist))
+            if opt.dropoutUSim > 0 then gater:add(nn.Dropout(opt.dropoutUSim)) end -- apply dropout, if any
+            gater:add(nn.Linear(self.inputFeatureNum * opt.lstmHist, numOfExp))
+            gater:add(nn.Tanh())
+            gater:add(nn.SoftMax())
+
+            local trunk = nn.ConcatTable()
+            trunk:add(gater)
+            trunk:add(experts)
+
+            self.model:add(trunk)
+            self.model:add(nn.MixtureTable())   -- {gater, experts} is the form of input for MixtureTable. So, gater output should be the 1st in the output table
+            ------------------------------------------------------------
+
         else
             print('Unknown uppModel type'..opt.uppModel..' in UserScorePredictor training')
             torch.CmdLine():text()
