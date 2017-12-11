@@ -953,6 +953,8 @@ function CIUserActScorePredictor:testActScorePredOnTestDetOneEpoch()
         end
         local nll_acts = self.model:forward(tabState)
         nn.utils.recursiveType(nll_acts, 'torch.FloatTensor')
+        if nll_acts[self.opt.lstmHist][1]:ne(nll_acts[self.opt.lstmHist][1]):sum() > 0 then print('nan appears in output!') os.exit() end
+        if nll_acts[self.opt.lstmHist][2]:ne(nll_acts[self.opt.lstmHist][2]):sum() > 0 then print('nan appears in output!') os.exit() end
 
         --- Action prediction evaluation
         self.uapConfusion:zero()
@@ -990,6 +992,8 @@ function CIUserActScorePredictor:testActScorePredOnTestDetOneEpoch()
         end
         local nll_acts = self.model:forward(prepUserState)
         nn.utils.recursiveType(nll_acts, 'torch.FloatTensor')
+        if nll_acts[1]:ne(nll_acts[1]):sum() > 0 then print('nan appears in output!') os.exit() end
+        if nll_acts[2]:ne(nll_acts[2]):sum() > 0 then print('nan appears in output!') os.exit() end
 
         --- Action prediction evaluation
         self.uapConfusion:zero()
@@ -1031,6 +1035,8 @@ function CIUserActScorePredictor:testActScorePredOnTestDetOneEpoch()
         if self.opt.uppModel == 'moe' then
             nll_acts = nll_acts:split(self.ciUserSimulator.CIFr.usrActInd_end, 2)  -- We assume 1st dim is batch index. Act pred is the 1st set of output, having dim of 15. Score dim 2.
         end
+        if nll_acts[1]:ne(nll_acts[1]):sum() > 0 then print('nan appears in output!') os.exit() end
+        if nll_acts[2]:ne(nll_acts[2]):sum() > 0 then print('nan appears in output!') os.exit() end
 
         --- Action prediction evaluation
         self.uapConfusion:zero()

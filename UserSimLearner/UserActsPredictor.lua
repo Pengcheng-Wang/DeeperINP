@@ -753,9 +753,10 @@ function CIUserActsPredictor:testActPredOnTestDetOneEpoch()
             nn.utils.recursiveType(tabState, 'torch.CudaTensor')
         end
         local nll_acts = self.model:forward(tabState)
+        nn.utils.recursiveType(nll_acts, 'torch.FloatTensor')
+        if nll_acts[self.opt.lstmHist]:ne(nll_acts[self.opt.lstmHist]):sum() > 0 then print('nan appears in output!') os.exit() end
 
         self.uapConfusion:zero()
-        nn.utils.recursiveType(nll_acts, 'torch.FloatTensor')
         for i=1, #self.rnnRealUserDataStatesTest do
             self.uapConfusion:add(nll_acts[self.opt.lstmHist][i], self.rnnRealUserDataActsTest[i][self.opt.lstmHist])
             _logLoss = _logLoss + -1 * nll_acts[self.opt.lstmHist][i][self.rnnRealUserDataActsTest[i][self.opt.lstmHist]]
@@ -777,9 +778,10 @@ function CIUserActsPredictor:testActPredOnTestDetOneEpoch()
             prepUserState = prepUserState:cuda()
         end
         local nll_acts = self.model:forward(prepUserState)
+        nll_acts:float()     -- set nll_rewards back to cpu mode (in main memory)
+        if nll_acts:ne(nll_acts):sum() > 0 then print('nan appears in output!') os.exit() end
 
         self.uapConfusion:zero()
-        nll_acts:float()     -- set nll_rewards back to cpu mode (in main memory)
         for i=1, #self.cnnRealUserDataStatesTest do
             self.uapConfusion:add(nll_acts[i], self.cnnRealUserDataActsTest[i])
             _logLoss = _logLoss + -1 * nll_acts[i][self.cnnRealUserDataActsTest[i]]
@@ -801,9 +803,10 @@ function CIUserActsPredictor:testActPredOnTestDetOneEpoch()
             prepUserState = prepUserState:cuda()
         end
         local nll_acts = self.model:forward(prepUserState)
+        nll_acts:float()     -- set nll_rewards back to cpu mode (in main memory)
+        if nll_acts:ne(nll_acts):sum() > 0 then print('nan appears in output!') os.exit() end
 
         self.uapConfusion:zero()
-        nll_acts:float()     -- set nll_rewards back to cpu mode (in main memory)
         for i=1, #self.ciUserSimulator.realUserDataStatesTest do
             self.uapConfusion:add(nll_acts[i], self.ciUserSimulator.realUserDataActsTest[i])
             _logLoss = _logLoss + -1 * nll_acts[i][self.ciUserSimulator.realUserDataActsTest[i]]

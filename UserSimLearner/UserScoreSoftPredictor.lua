@@ -898,9 +898,11 @@ function CIUserScoreSoftPredictor:testScorePredOnTestDetOneEpoch()
             nn.utils.recursiveType(tabState, 'torch.CudaTensor')
         end
         local nll_rewards = self.model:forward(tabState)
+        nn.utils.recursiveType(nll_rewards, 'torch.FloatTensor')
+        if nll_rewards[self.opt.lstmHist][1]:ne(nll_rewards[self.opt.lstmHist][1]):sum() > 0 then print('nan appears in output!') os.exit() end
+        if nll_rewards[self.opt.lstmHist][2]:ne(nll_rewards[self.opt.lstmHist][2]):sum() > 0 then print('nan appears in output!') os.exit() end
 
         self.uspConfusion:zero()
-        nn.utils.recursiveType(nll_rewards, 'torch.FloatTensor')
         local _regE = 0
         for i=1, #self.rnnRealUserDataEndsTest do
             self.uspConfusion:add(nll_rewards[self.opt.lstmHist][1][i], self.rnnRealUserDataRewardsTest[self.rnnRealUserDataEndsTest[i]][self.opt.lstmHist])
@@ -925,9 +927,11 @@ function CIUserScoreSoftPredictor:testScorePredOnTestDetOneEpoch()
             prepUserState = prepUserState:cuda()
         end
         local nll_rewards = self.model:forward(prepUserState)
+        nn.utils.recursiveType(nll_rewards, 'torch.FloatTensor')
+        if nll_rewards[1]:ne(nll_rewards[1]):sum() > 0 then print('nan appears in output!') os.exit() end
+        if nll_rewards[2]:ne(nll_rewards[2]):sum() > 0 then print('nan appears in output!') os.exit() end
 
         self.uspConfusion:zero()
-        nn.utils.recursiveType(nll_rewards, 'torch.FloatTensor')
         local _regE = 0
         for i=1, #self.cnnRealUserDataEndsTest do
             self.uspConfusion:add(nll_rewards[1][i], self.cnnRealUserDataRewardsTest[self.cnnRealUserDataEndsTest[i]])
@@ -953,9 +957,12 @@ function CIUserScoreSoftPredictor:testScorePredOnTestDetOneEpoch()
         end
         local nll_rewards = self.model:forward(prepUserState)
         nn.utils.recursiveType(nll_rewards, 'torch.FloatTensor')
+
         if self.opt.uppModel == 'moe' then
             nll_rewards = nll_rewards:split(#self.classes, 2)  -- We assume 1st dim is batch index. Score classification is the 1st set of output, having 2 outputs. Score regression is the 2nd set of output.
         end
+        if nll_rewards[1]:ne(nll_rewards[1]):sum() > 0 then print('nan appears in output!') os.exit() end
+        if nll_rewards[2]:ne(nll_rewards[2]):sum() > 0 then print('nan appears in output!') os.exit() end
 
         self.uspConfusion:zero()
         local _regE = 0

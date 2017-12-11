@@ -805,10 +805,15 @@ function CIUserScorePredictor:testScorePredOnTestDetOneEpoch()
         if self.opt.gpu > 0 then
             nn.utils.recursiveType(tabState, 'torch.CudaTensor')
         end
-        local nll_rewards = self.model:forward(tabState)    print('###', nll_rewards[self.opt.lstmHist], '@@')
+        local nll_rewards = self.model:forward(tabState)
+        nn.utils.recursiveType(nll_rewards, 'torch.FloatTensor')
+        -- I've seen nll_rewards to be whole nan, which stop the training and destroy the whole thing.
+        -- When it happened, it is when batch size is set to 160, and dropout rate 0.5. If I reduces batchSize to 100,
+        -- I still appears but later. If reduce dropout_rate to 0.25, the problem will not appear.
+        -- Still I want to detect if nan is the output
+        if nll_rewards[self.opt.lstmHist]:ne(nll_rewards[self.opt.lstmHist]):sum() > 0 then print('nan appears in output!') os.exit() end
 
         self.uspConfusion:zero()
-        nn.utils.recursiveType(nll_rewards, 'torch.FloatTensor')
         for i=1, #self.rnnRealUserDataEndsTest do
             self.uspConfusion:add(nll_rewards[self.opt.lstmHist][i], self.rnnRealUserDataRewardsTest[self.rnnRealUserDataEndsTest[i]][self.opt.lstmHist])
             _logLoss = _logLoss + -1 * nll_rewards[self.opt.lstmHist][i][self.rnnRealUserDataRewardsTest[self.rnnRealUserDataEndsTest[i]][self.opt.lstmHist]]
@@ -830,9 +835,10 @@ function CIUserScorePredictor:testScorePredOnTestDetOneEpoch()
             prepUserState = prepUserState:cuda()
         end
         local nll_rewards = self.model:forward(prepUserState)
+        nll_rewards:float()     -- set nll_rewards back to cpu mode (in main memory)
+        if nll_rewards:ne(nll_rewards):sum() > 0 then print('nan appears in output!') os.exit() end
 
         self.uspConfusion:zero()
-        nll_rewards:float()     -- set nll_rewards back to cpu mode (in main memory)
         for i=1, #self.cnnRealUserDataEndsTest do
             self.uspConfusion:add(nll_rewards[i], self.cnnRealUserDataRewardsTest[self.cnnRealUserDataEndsTest[i]])
             _logLoss = _logLoss + -1 * nll_rewards[i][self.cnnRealUserDataRewardsTest[self.cnnRealUserDataEndsTest[i]]]
@@ -854,9 +860,10 @@ function CIUserScorePredictor:testScorePredOnTestDetOneEpoch()
             prepUserState = prepUserState:cuda()
         end
         local nll_rewards = self.model:forward(prepUserState)
+        nll_rewards:float()     -- set nll_rewards back to cpu mode (in main memory)
+        if nll_rewards:ne(nll_rewards):sum() > 0 then print('nan appears in output!') os.exit() end
 
         self.uspConfusion:zero()
-        nll_rewards:float()     -- set nll_rewards back to cpu mode (in main memory)
         for i=1, #self.ciUserSimulator.realUserDataEndLinesTest do
             self.uspConfusion:add(nll_rewards[i], self.ciUserSimulator.realUserDataRewardsTest[self.ciUserSimulator.realUserDataEndLinesTest[i]])
             _logLoss = _logLoss + -1 * nll_rewards[i][self.ciUserSimulator.realUserDataRewardsTest[self.ciUserSimulator.realUserDataEndLinesTest[i]]]
