@@ -85,9 +85,9 @@ do
             fi
             if [ $t -eq 1 ];
             then
-                th userSimMain.lua -trType sc -save sc_blstm_hdlc_${rnnHdLc}/rnndrop.2/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 5e-2 -rnnHdSizeL1 21 -rnnHdLyCnt $(($rnnHdLc)) -rhnReccDept $(($recD)) -ciuTType train -uppModel rnn_blstm -lstmHist 10 -usimTrIte 5000  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0.2 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) > /dev/null &
+                th userSimMain.lua -trType sc -save sc_blstm_hdlc_${rnnHdLc}/rnndrop.1/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 1e-2 -rnnHdSizeL1 21 -rnnHdLyCnt $(($rnnHdLc)) -rhnReccDept $(($recD)) -ciuTType train -uppModel rnn_blstm -lstmHist 10 -usimTrIte 5000  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0.1 -learningRate 1e-4 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) &
             else
-                th userSimMain.lua -trType sc -save sc_blstm_hdlc_${rnnHdLc}/rnndrop.2/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 5e-2 -rnnHdSizeL1 21 -rnnHdLyCnt $(($rnnHdLc)) -rhnReccDept $(($recD)) -ciuTType train -uppModel rnn_blstm -lstmHist 10 -usimTrIte 5000  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0.2 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) > /dev/null &
+                th userSimMain.lua -trType sc -save sc_blstm_hdlc_${rnnHdLc}/rnndrop.1/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 1e-2 -rnnHdSizeL1 21 -rnnHdLyCnt $(($rnnHdLc)) -rhnReccDept $(($recD)) -ciuTType train -uppModel rnn_blstm -lstmHist 10 -usimTrIte 5000  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0.1 -learningRate 1e-4 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) > /dev/null &
             fi
         done
         wait
