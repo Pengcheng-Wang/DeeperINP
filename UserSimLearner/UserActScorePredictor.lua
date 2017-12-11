@@ -446,6 +446,7 @@ function CIUserActScorePredictor:trainOneEpoch()
     local targetsActScore = {}
     local targetsAct
     local targetsScore
+    local score_reg -- the regression target for score/outcome prediction output, in this script this value will only be used in data augmentation
     local closeToEnd
     local t = 1
     local lstmIter = 1  -- lstm iterate for each squence starts from this value
@@ -456,17 +457,20 @@ function CIUserActScorePredictor:trainOneEpoch()
             inputs = {}
             targetsAct = {}
             targetsScore = {}
+            score_reg = {}
             closeToEnd = torch.Tensor(self.opt.batchSize):fill(0)
             local k
             for j = 1, self.opt.lstmHist do
                 inputs[j] = torch.Tensor(self.opt.batchSize, self.inputFeatureNum)
                 targetsAct[j] = torch.Tensor(self.opt.batchSize)
                 targetsScore[j] = torch.Tensor(self.opt.batchSize)
+                score_reg[j] = torch.Tensor(self.opt.batchSize)
                 k = 1
                 for i = lstmIter, math.min(lstmIter+self.opt.batchSize-1, #self.rnnRealUserDataStates) do
                     inputs[j][k] = self.rnnRealUserDataStates[i][j]
                     targetsAct[j][k] = self.rnnRealUserDataActs[i][j]
                     targetsScore[j][k] = self.rnnRealUserDataRewards[i][j]
+                    score_reg[j][k] = self.rnnRealUserDataStandardNLG[i][j] -- the score/outcome regression prediction ground-truth
                     if j == self.opt.lstmHist then
                         for dis=0, self.opt.scorePredStateScope-1 do
                             if (i+dis) <= #self.rnnRealUserDataActs and self.rnnRealUserDataActs[i+dis][self.opt.lstmHist] == self.ciUserSimulator.CIFr.usrActInd_end then
@@ -489,6 +493,7 @@ function CIUserActScorePredictor:trainOneEpoch()
                         inputs[j][k] = self.rnnRealUserDataStates[randInd][j]
                         targetsAct[j][k] = self.rnnRealUserDataActs[randInd][j]
                         targetsScore[j][k] = self.rnnRealUserDataRewards[randInd][j]
+                        score_reg[j][k] = self.rnnRealUserDataStandardNLG[randInd][j]
                         if j == self.opt.lstmHist then
                             for dis=0, self.opt.scorePredStateScope-1 do
                                 if (randInd+dis) <= #self.rnnRealUserDataActs and self.rnnRealUserDataActs[randInd+dis][self.opt.lstmHist] == self.ciUserSimulator.CIFr.usrActInd_end then
@@ -511,7 +516,7 @@ function CIUserActScorePredictor:trainOneEpoch()
 
             if self.opt.actPredDataAug > 0 then
                 -- Data augmentation
-                self.ciUserSimulator:UserSimActDataAugment(inputs, targetsAct, targetsScore, self.opt.uppModel)
+                self.ciUserSimulator:UserSimActDataAugment(inputs, targetsAct, targetsScore, score_reg, self.opt.uppModel)
                 if self.opt.uppModelRNNDom > 0 then
                     TableSet.buildRNNDropoutMask(self.rnn_noise_i, self.rnn_noise_h, self.rnn_noise_o, self.inputFeatureNum, self.opt.rnnHdSizeL1, self.opt.rnnHdLyCnt, inputs[1]:size(1), self.opt.lstmHist, self.opt.uppModelRNNDom)
                 end
@@ -537,6 +542,7 @@ function CIUserActScorePredictor:trainOneEpoch()
                 nn.utils.recursiveType(targetsAct, 'torch.CudaTensor')
                 nn.utils.recursiveType(targetsScore, 'torch.CudaTensor')
                 closeToEnd = closeToEnd:cuda()
+                -- do not need transform score_reg because it is not used in training, only used in data augmentation
             end
 
             for j = 1, self.opt.lstmHist do
@@ -548,12 +554,14 @@ function CIUserActScorePredictor:trainOneEpoch()
             inputs = torch.Tensor(self.opt.batchSize, self.opt.lstmHist, self.inputFeatureNum)
             targetsAct = torch.Tensor(self.opt.batchSize)
             targetsScore = torch.Tensor(self.opt.batchSize)
+            score_reg = torch.Tensor(self.opt.batchSize)  -- standard nlg for score regression
             closeToEnd = torch.Tensor(self.opt.batchSize):fill(0)
             local k = 1
             for i = t, math.min(t+self.opt.batchSize-1, #self.cnnRealUserDataStates) do
                 inputs[k] = self.cnnRealUserDataStates[i]
                 targetsAct[k] = self.cnnRealUserDataActs[i]
                 targetsScore[k] = self.cnnRealUserDataRewards[i]
+                score_reg[k] = self.cnnRealUserDataStandardNLG[i]
                 for dis=0, self.opt.scorePredStateScope-1 do
                     if (i+dis) <= #self.cnnRealUserDataActs and self.cnnRealUserDataActs[i+dis] == self.ciUserSimulator.CIFr.usrActInd_end then
                         -- If current state is close enough to the end of this sequence, mark it.
@@ -572,6 +580,7 @@ function CIUserActScorePredictor:trainOneEpoch()
                     inputs[k] = self.cnnRealUserDataStates[randInd]
                     targetsAct[k] = self.cnnRealUserDataActs[randInd]
                     targetsScore[k] = self.cnnRealUserDataRewards[randInd]
+                    score_reg[k] = self.cnnRealUserDataStandardNLG[randInd]
                     for dis=0, self.opt.scorePredStateScope-1 do
                         if (randInd+dis) <= #self.cnnRealUserDataActs and self.cnnRealUserDataActs[randInd+dis] == self.ciUserSimulator.CIFr.usrActInd_end then
                             -- If current state is close enough to the end of this sequence, mark it.
@@ -591,7 +600,7 @@ function CIUserActScorePredictor:trainOneEpoch()
 
             if self.opt.actPredDataAug > 0 then
                 -- Data augmentation
-                self.ciUserSimulator:UserSimActDataAugment(inputs, targetsAct, targetsScore, self.opt.uppModel)
+                self.ciUserSimulator:UserSimActDataAugment(inputs, targetsAct, targetsScore, score_reg, self.opt.uppModel)
             end
             -- Should do input feature pre-processing after data augmentation
             inputs = self.ciUserSimulator:preprocessUserStateData(inputs, self.opt.prepro)
@@ -613,12 +622,14 @@ function CIUserActScorePredictor:trainOneEpoch()
             inputs = torch.Tensor(self.opt.batchSize, self.inputFeatureNum)
             targetsAct = torch.Tensor(self.opt.batchSize)
             targetsScore = torch.Tensor(self.opt.batchSize)
+            score_reg = torch.Tensor(self.opt.batchSize)    -- score/outcome regression ground-truth
             closeToEnd = torch.Tensor(self.opt.batchSize):fill(0)
             local k = 1
             for i = t, math.min(t+self.opt.batchSize-1, #self.ciUserSimulator.realUserDataStates) do
                 inputs[k] = self.ciUserSimulator.realUserDataStates[i]
                 targetsAct[k] = self.ciUserSimulator.realUserDataActs[i]
                 targetsScore[k] = self.ciUserSimulator.realUserDataRewards[i]
+                score_reg[k] = self.ciUserSimulator.realUserDataStandardNLG[i]
                 for dis=0, self.opt.scorePredStateScope-1 do
                     if (i+dis) <= #self.ciUserSimulator.realUserDataActs and self.ciUserSimulator.realUserDataActs[i+dis] == self.ciUserSimulator.CIFr.usrActInd_end then
                         -- If current state is close enough to the end of this sequence, mark it.
@@ -637,6 +648,7 @@ function CIUserActScorePredictor:trainOneEpoch()
                     inputs[k] = self.ciUserSimulator.realUserDataStates[randInd]
                     targetsAct[k] = self.ciUserSimulator.realUserDataActs[randInd]
                     targetsScore[k] = self.ciUserSimulator.realUserDataRewards[randInd]
+                    score_reg[k] = self.ciUserSimulator.realUserDataStandardNLG[randInd]
                     for dis=0, self.opt.scorePredStateScope-1 do
                         if (randInd+dis) <= #self.ciUserSimulator.realUserDataActs and self.ciUserSimulator.realUserDataActs[randInd+dis] == self.ciUserSimulator.CIFr.usrActInd_end then
                             -- If current state is close enough to the end of this sequence, mark it.
@@ -656,7 +668,7 @@ function CIUserActScorePredictor:trainOneEpoch()
 
             if self.opt.actPredDataAug > 0 then
                 -- Data augmentation
-                self.ciUserSimulator:UserSimActDataAugment(inputs, targetsAct, targetsScore, self.opt.uppModel)
+                self.ciUserSimulator:UserSimActDataAugment(inputs, targetsAct, targetsScore, score_reg, self.opt.uppModel)
             end
             -- Should do input feature pre-processing after data augmentation
             inputs = self.ciUserSimulator:preprocessUserStateData(inputs, self.opt.prepro)
