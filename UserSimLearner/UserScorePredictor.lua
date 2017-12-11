@@ -810,10 +810,11 @@ function CIUserScorePredictor:testScorePredOnTestDetOneEpoch()
         for i=1, #self.rnnRealUserDataEndsTest do
             self.uspConfusion:add(nll_rewards[self.opt.lstmHist][i], self.rnnRealUserDataRewardsTest[self.rnnRealUserDataEndsTest[i]][self.opt.lstmHist])
             _logLoss = _logLoss + -1 * nll_rewards[self.opt.lstmHist][i][self.rnnRealUserDataRewardsTest[self.rnnRealUserDataEndsTest[i]][self.opt.lstmHist]]
+            print('###'..nll_rewards[self.opt.lstmHist][i][self.rnnRealUserDataRewardsTest[self.rnnRealUserDataEndsTest[i]][self.opt.lstmHist]])
         end
         self.uspConfusion:updateValids()
         local tvalid = self.uspConfusion.totalValid
-        self.uspConfusion:zero() print("###".._logLoss, "@@@"..#self.rnnRealUserDataEndsTest)
+        self.uspConfusion:zero()
         return {tvalid, _logLoss/#self.rnnRealUserDataEndsTest}
 
     elseif string.sub(self.opt.uppModel, 1, 4) == 'cnn_' then
