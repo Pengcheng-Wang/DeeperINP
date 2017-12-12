@@ -213,7 +213,6 @@ function CIUserScoreSoftPredictor:_init(CIUserSimulator, opt)
             for i = 1, numOfExp do
                 local expert = nn.Sequential()
                 expert:add(nn.Reshape(opt.rnnHdSizeL1))
-                if opt.dropoutUSim > 0 then expert:add(nn.Dropout(opt.dropoutUSim)) end -- apply dropout, if any
                 -- The following code creates two output modules. One module predicts score classification
                 -- result, the other module predicts score regression result
                 local mulOutConcatTab = nn.ConcatTable()
@@ -231,7 +230,6 @@ function CIUserScoreSoftPredictor:_init(CIUserSimulator, opt)
 
             local gater = nn.Sequential()
             gater:add(nn.Reshape(opt.rnnHdSizeL1))
-            if opt.dropoutUSim > 0 then gater:add(nn.Dropout(opt.dropoutUSim)) end -- apply dropout, if any
             gater:add(nn.Linear(opt.rnnHdSizeL1, numOfExp))
             gater:add(nn.SoftMax())
 

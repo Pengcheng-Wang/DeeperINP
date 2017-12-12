@@ -182,7 +182,6 @@ function CIUserScorePredictor:_init(CIUserSimulator, opt)
             for i = 1, numOfExp do
                 local expert = nn.Sequential()
                 expert:add(nn.Reshape(opt.rnnHdSizeL1))
-                if opt.dropoutUSim > 0 then expert:add(nn.Dropout(opt.dropoutUSim)) end -- apply dropout, if any
                 expert:add(nn.Linear(opt.rnnHdSizeL1, #self.classes))
                 expert:add(nn.LogSoftMax())
                 experts:add(expert)
@@ -190,7 +189,6 @@ function CIUserScorePredictor:_init(CIUserSimulator, opt)
 
             local gater = nn.Sequential()
             gater:add(nn.Reshape(opt.rnnHdSizeL1))
-            if opt.dropoutUSim > 0 then gater:add(nn.Dropout(opt.dropoutUSim)) end -- apply dropout, if any
             gater:add(nn.Linear(opt.rnnHdSizeL1, numOfExp))
             gater:add(nn.SoftMax())
 
