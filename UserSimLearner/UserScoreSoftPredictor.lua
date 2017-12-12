@@ -751,7 +751,7 @@ function CIUserScoreSoftPredictor:trainOneEpoch()
             -- So, to guarantee the compatability, we need split the tensor into two tables here,
             -- for score classification and regression prediction respectively.
             if string.sub(self.opt.uppModel, -3, -1) == 'moe' then
-                if(type(outputs) == 'table') then
+                if string.sub(self.opt.uppModel, 1, 4) == 'rnn_' then
                     for i=1, #outputs do
                         outputs[i] = outputs[i]:split(#self.classes, 2)  -- We assume 1st dim is batch index. Score classification is the 1st set of output, having 2 output values. Score regression has 1 output.
                     end
@@ -786,7 +786,7 @@ function CIUserScoreSoftPredictor:trainOneEpoch()
 
             -- If moe with shared lower layers, we merge the df_do before backprop. This is necessary because the network has merged classification and regression output in one tensor
             if string.sub(self.opt.uppModel, -3, -1) == 'moe' then
-                if type(df_do) == 'table' then
+                if string.sub(self.opt.uppModel, 1, 4) == 'rnn_' then
                     -- rnn with moe models
                     for i=1, #df_do do
                         df_do[i] = nn.JoinTable(-1):forward(df_do[i])  -- We assume 1st dim is batch index.
