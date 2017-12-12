@@ -38,7 +38,7 @@ do
     do
         echo 'For outcome prediction, in CNN-moe round' ${moeExpCnt}
         date +%Y,%m,%d-%H:%M:%S
-        for t in 1 2
+        for t in 3 4 5
         do
             g=0
             if [ $t -eq 2 ]
