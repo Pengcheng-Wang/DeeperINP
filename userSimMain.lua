@@ -67,10 +67,10 @@ torch.manualSeed(opt.seed)
 
 -- set the uppModelRNNDom indicator in opt, which indicates whether the model is an RNN model, and uses dropout mask from outside the model construction
 -- right now, the rhn model, and Bayesian lstm model (following Gal's implementation), and GridLSTM model use outside dropout mask
-if opt.uppModel == 'rnn_rhn' then
+if string.sub(opt.uppModel, 1, 7) == 'rnn_rhn' then
     -- rnn_rhn uses double-sized dropout mask to drop out inputs of calculation of t-gate and transformed inner cell state
     opt.uppModelRNNDom = 2
-elseif opt.uppModel == 'rnn_blstm' or opt.uppModel == 'rnn_bGridlstm' then
+elseif string.sub(opt.uppModel, 1, 9) == 'rnn_blstm' or string.sub(opt.uppModel, 1, 13) == 'rnn_bGridlstm' then
     -- lstm used quad-sized dropout mask to drop out inputs of calculation of the 3 gates and transformed inner cell state
     opt.uppModelRNNDom = 4
 else

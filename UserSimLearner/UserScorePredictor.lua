@@ -165,6 +165,44 @@ function CIUserScorePredictor:_init(CIUserSimulator, opt)
             self.model = nn.Sequencer(self.model)
             ------------------------------------------------------------
 
+        elseif opt.uppModel == 'rnn_rhn_moe' then
+            ------------------------------------------------------------
+            -- Recurrent Highway Network (dropout mask defined outside rnn model) with MOE head
+            ------------------------------------------------------------
+            require 'modules.RecurrenHighwayNetworkRNN'
+            local rhn
+            rhn = nn.RHN(self.inputFeatureNum, opt.rnnHdSizeL1, opt.rhnReccDept, opt.rnnHdLyCnt, opt.uSimLstmBackLen) --inputSize, outputSize, recurrence_depth, rhn_layers, rho
+            rhn:remember('both')
+            self.model:add(rhn)
+            self.model:add(nn.NormStabilizer())
+
+            --- moe part
+            local experts = nn.ConcatTable()
+            local numOfExp = opt.moeExpCnt
+            for i = 1, numOfExp do
+                local expert = nn.Sequential()
+                expert:add(nn.Reshape(opt.rnnHdSizeL1))
+                if opt.dropoutUSim > 0 then expert:add(nn.Dropout(opt.dropoutUSim)) end -- apply dropout, if any
+                expert:add(nn.Linear(opt.rnnHdSizeL1, #self.classes))
+                expert:add(nn.LogSoftMax())
+                experts:add(expert)
+            end
+
+            local gater = nn.Sequential()
+            gater:add(nn.Reshape(opt.rnnHdSizeL1))
+            if opt.dropoutUSim > 0 then gater:add(nn.Dropout(opt.dropoutUSim)) end -- apply dropout, if any
+            gater:add(nn.Linear(opt.rnnHdSizeL1, numOfExp))
+            gater:add(nn.SoftMax())
+
+            local trunk = nn.ConcatTable()
+            trunk:add(gater)
+            trunk:add(experts)
+
+            self.model:add(trunk)
+            self.model:add(nn.MixtureTable())   -- {gater, experts} is the form of input for MixtureTable. So, gater output should be the 1st in the output table
+            self.model = nn.Sequencer(self.model)
+            ------------------------------------------------------------
+
         elseif opt.uppModel == 'rnn_blstm' then
             ------------------------------------------------------------
             -- Bayesian LSTM implemented following Yarin Gal's code (dropout mask defined outside rnn model)
