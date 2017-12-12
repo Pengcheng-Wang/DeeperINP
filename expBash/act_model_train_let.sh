@@ -99,7 +99,7 @@
 # Dec 12, 2017.
 # Try to do score/outcome prediction using cnn moe models
 s=1
-for moeExpCnt in 16 24 32
+for moeExpCnt in 4 6 8
 do
     for recD in 5
     do
