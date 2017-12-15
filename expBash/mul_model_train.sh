@@ -191,7 +191,7 @@
 # Try to do score/outcome prediction using cnn moe models.
 # Try L2H2K1 with smaller hist scope, cnn structure v2.
 s=1
-for moeExpCnt in 4 8 16 24 32
+for moeExpCnt in 8 16 24 32
 do
     for recD in 5
     do
