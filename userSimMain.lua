@@ -19,7 +19,7 @@ opt = lapp[[
        -o,--optimization  (default "adam")       optimization: SGD | LBFGS | adam | rmsprop
        -r,--learningRate  (default 2e-4)        learning rate, for SGD only
        -b,--batchSize     (default 30)          batch size
-       -m,--momentum      (default 0)           momentum, for SGD only
+       -m,--momentum      (default 0.9)         momentum, for SGD only
        -i,--maxIter       (default 3)           maximum nb of iterations per batch, for LBFGS
        --coefL1           (default 0)           L1 penalty on the weights
        --coefL2           (default 0)           L2 penalty on the weights
