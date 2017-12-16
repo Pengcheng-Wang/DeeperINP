@@ -219,11 +219,42 @@
 #done
 
 
-# Dec 15, 2017.
+## Dec 15, 2017.
+## Try to do score/outcome prediction using cnn moe models.
+## Try L2H2K1 with even smaller hist scope of 10, cnn structure v2.
+#s=1
+#for moeExpCnt in 48 32 24 16 8
+#do
+#    for recD in 5
+#    do
+#        echo 'For outcome prediction, in CNN-moe round' ${moeExpCnt}
+#        date +%Y,%m,%d-%H:%M:%S
+#        for t in 1 2 3 4 5
+#        do
+#            g=0
+#            if [ $t -eq 2 ]
+#            then
+#                g=0
+#            fi
+#            if [ $t -eq 1 ];
+#            then
+#                th userSimMain.lua -trType sc -save sc_cnnmoe_L2H2K1E10_cv2_sgd_exp_${moeExpCnt}_sh/rnndrop.1/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 1e-2 -rnnHdSizeL1 21 -rnnHdLyCnt 2 -moeExpCnt $(($moeExpCnt)) -ciuTType train -uppModel cnn_uSimCnn_moe -optimization SGD -uSimScSoft 1 -lstmHist 2 -cnnKernelWidth 1 -usimTrIte 1500  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0.1 -learningRate 2e-3 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) -cnnConnType v2 -scorePredStateScope 10 &
+#            else
+#                th userSimMain.lua -trType sc -save sc_cnnmoe_L2H2K1E10_cv2_sgd_exp_${moeExpCnt}_sh/rnndrop.1/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 1e-2 -rnnHdSizeL1 21 -rnnHdLyCnt 2 -moeExpCnt $(($moeExpCnt)) -ciuTType train -uppModel cnn_uSimCnn_moe -optimization SGD -uSimScSoft 1 -lstmHist 2 -cnnKernelWidth 1 -usimTrIte 1500  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0.1 -learningRate 2e-3 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) -cnnConnType v2 -scorePredStateScope 10 > /dev/null &
+#            fi
+#        done
+#        wait
+#        echo 'done with 2 sets in CNN-moe L2H2K1E10_cv2'  ${moeExpCnt}
+#        date +%Y,%m,%d-%H:%M:%S
+#    done
+#done
+
+
+# Dec 16, 2017.
 # Try to do score/outcome prediction using cnn moe models.
-# Try L2H2K1 with even smaller hist scope of 10, cnn structure v2.
+# Try L2H2K1 with E30, and with different cnn structure, like v3.
 s=1
-for moeExpCnt in 48 32 24 16 8
+for moeExpCnt in 32 24 23 16 8
 do
     for recD in 5
     do
@@ -238,9 +269,9 @@ do
             fi
             if [ $t -eq 1 ];
             then
-                th userSimMain.lua -trType sc -save sc_cnnmoe_L2H2K1E10_cv2_sgd_exp_${moeExpCnt}_sh/rnndrop.1/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 1e-2 -rnnHdSizeL1 21 -rnnHdLyCnt 2 -moeExpCnt $(($moeExpCnt)) -ciuTType train -uppModel cnn_uSimCnn_moe -optimization SGD -uSimScSoft 1 -lstmHist 2 -cnnKernelWidth 1 -usimTrIte 1500  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0.1 -learningRate 2e-3 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) -cnnConnType v2 -scorePredStateScope 10 &
+                th userSimMain.lua -trType sc -save sc_cnnmoe_L2H2K1E30_cv3_exp_${moeExpCnt}_sh/rnndrop.1/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 1e-2 -rnnHdSizeL1 21 -rnnHdLyCnt 2 -moeExpCnt $(($moeExpCnt)) -ciuTType train -uppModel cnn_uSimCnn_moe -uSimScSoft 1 -lstmHist 2 -cnnKernelWidth 1 -usimTrIte 1500  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0.1 -learningRate 5e-5 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) -cnnConnType v3 -scorePredStateScope 30 &
             else
-                th userSimMain.lua -trType sc -save sc_cnnmoe_L2H2K1E10_cv2_sgd_exp_${moeExpCnt}_sh/rnndrop.1/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 1e-2 -rnnHdSizeL1 21 -rnnHdLyCnt 2 -moeExpCnt $(($moeExpCnt)) -ciuTType train -uppModel cnn_uSimCnn_moe -optimization SGD -uSimScSoft 1 -lstmHist 2 -cnnKernelWidth 1 -usimTrIte 1500  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0.1 -learningRate 2e-3 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) -cnnConnType v2 -scorePredStateScope 10 > /dev/null &
+                th userSimMain.lua -trType sc -save sc_cnnmoe_L2H2K1E30_cv3_exp_${moeExpCnt}_sh/rnndrop.1/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 1e-2 -rnnHdSizeL1 21 -rnnHdLyCnt 2 -moeExpCnt $(($moeExpCnt)) -ciuTType train -uppModel cnn_uSimCnn_moe -uSimScSoft 1 -lstmHist 2 -cnnKernelWidth 1 -usimTrIte 1500  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0.1 -learningRate 5e-5 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) -cnnConnType v3 -scorePredStateScope 30 > /dev/null &
             fi
         done
         wait
