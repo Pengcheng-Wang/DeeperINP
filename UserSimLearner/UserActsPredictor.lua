@@ -652,6 +652,8 @@ function CIUserActsPredictor:trainOneEpoch()
             sgdState = sgdState or {
                 learningRate = self.opt.learningRate,
                 momentum = self.opt.momentum,
+                nesterov = true,
+                dampening = 0,
                 learningRateDecay = 5e-7
             }
             optim.sgd(feval, self.uapParam, sgdState)
