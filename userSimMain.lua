@@ -46,7 +46,7 @@ opt = lapp[[
        --actSmpEps        (default 0)           User action sampling threshold. If rand se than this value, reture 1st pred. Otherwise, sample sim user's next action according to the predicted distribution
        --rwdSmpEps        (default 0)           User reward sampling threshold. If rand se than this value, reture 1st pred. Otherwise, sample sim user's predicted outcome according to the predicted distribution
        --uSimShLayer      (default 0)           Whether the lower layers in Action and Score prediction NNs are shared. If this value is 1, use shared layers
-       --uSimScSoft       (default 0)           Whether to use soft labels in player score prediction. 1 for using soft labels, 0 for not.
+       --uSimScSoft       (default 0)           The criterion weight of the score regression module in UserScoreSoftPrediction model. The value of this param should be in [0,1]. When it is 0, Soft prediction is off, and UserScorePrediction script is utilized
        --rlEvnIte         (default 10000)       No of iterations in rl type of evaluation
        --usimTrIte        (default 400)         No of iterations used in user simulation model training. Recom for act training is 300, score training is 3000
        --termActSmgLen    (default 50)          The length above which user termination action would be highly probably sampled. The observed avg length is about 40
@@ -85,12 +85,13 @@ fr:evaluateSurveyData()
 -- Construct CI user simulator model using real user data
 local CIUserModel = CIUserSimulator(fr, opt)
 
-if opt.trType == 'sc' and opt.uSimShLayer < 1 and opt.uSimScSoft < 1 then
+assert(opt.uSimScSoft >=0 and opt.uSimScSoft <= 1, 'opt.uSimScSoft should range in [0,1]')
+if opt.trType == 'sc' and opt.uSimShLayer == 0 and opt.uSimScSoft == 0 then
     local CIUserScorePred = CIUserScorePredictor(CIUserModel, opt)
     for i=1, opt.usimTrIte do
         CIUserScorePred:trainOneEpoch()
     end
-elseif opt.trType == 'sc' and opt.uSimShLayer < 1 and opt.uSimScSoft == 1 then
+elseif opt.trType == 'sc' and opt.uSimShLayer == 0 and opt.uSimScSoft > 0 then
     local CIUserScoreSoftPredictor = require 'UserSimLearner/UserScoreSoftPredictor'
     local CIUserScoreSoftPred = CIUserScoreSoftPredictor(CIUserModel, opt)
     for i=1, opt.usimTrIte do

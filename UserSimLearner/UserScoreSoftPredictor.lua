@@ -386,8 +386,8 @@ function CIUserScoreSoftPredictor:_init(CIUserSimulator, opt)
     self.uspPrlCriterion = nn.ParallelCriterion()
     self.uspClsCriterion = nn.ClassNLLCriterion()
     self.uspRegCriterion = nn.MSECriterion()
-    self.uspPrlCriterion:add(self.uspClsCriterion)   -- score (outcome) prediction classification loss
-    self.uspPrlCriterion:add(self.uspRegCriterion)   -- score (outcome) prediction regression loss
+    self.uspPrlCriterion:add(self.uspClsCriterion)   -- score (outcome) prediction classification loss. The weight for this classification error source is 1
+    self.uspPrlCriterion:add(self.uspRegCriterion, self.opt.uSimScSoft)   -- score (outcome) prediction regression loss, opt.uSimScSoft is the weight for this error source
     if string.sub(opt.uppModel, 1, 4) == 'rnn_' then
         self.uspPrlCriterion = nn.SequencerCriterion(self.uspPrlCriterion)
     end
