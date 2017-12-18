@@ -281,9 +281,99 @@
 #done
 
 
-# Dec 16, 2017.
+## Dec 16, 2017.
+## Try to do score/outcome prediction using cnn moe models.
+## Try L2H2K1 with E30 and v4, but without action data augmentation.
+#s=1
+#for moeExpCnt in 32 24 23 16 8
+#do
+#    for recD in 5
+#    do
+#        echo 'For outcome prediction, in CNN-moe round' ${moeExpCnt}
+#        date +%Y,%m,%d-%H:%M:%S
+#        for t in 1 2 3 4 5
+#        do
+#            g=0
+#            if [ $t -eq 2 ]
+#            then
+#                g=0
+#            fi
+#            if [ $t -eq 1 ];
+#            then
+#                th userSimMain.lua -trType sc -save sc_cnnmoe_L2H2K1E30_cv4_noaug_exp_${moeExpCnt}_sh/rnndrop.1/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 1e-2 -rnnHdSizeL1 21 -rnnHdLyCnt 2 -moeExpCnt $(($moeExpCnt)) -ciuTType train -uppModel cnn_uSimCnn_moe -uSimScSoft 1 -lstmHist 2 -cnnKernelWidth 1 -usimTrIte 1500  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0.1 -learningRate 5e-5 -uSimLstmBackLen 3 -actPredDataAug 0 -seed $(($s)) -cnnConnType v4 -scorePredStateScope 30 &
+#            else
+#                th userSimMain.lua -trType sc -save sc_cnnmoe_L2H2K1E30_cv4_noaug_exp_${moeExpCnt}_sh/rnndrop.1/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 1e-2 -rnnHdSizeL1 21 -rnnHdLyCnt 2 -moeExpCnt $(($moeExpCnt)) -ciuTType train -uppModel cnn_uSimCnn_moe -uSimScSoft 1 -lstmHist 2 -cnnKernelWidth 1 -usimTrIte 1500  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0.1 -learningRate 5e-5 -uSimLstmBackLen 3 -actPredDataAug 0 -seed $(($s)) -cnnConnType v4 -scorePredStateScope 30 > /dev/null &
+#            fi
+#        done
+#        wait
+#        echo 'done with 2 sets in CNN-moe L2H2K1E30_cv4_noaug'  ${moeExpCnt}
+#        date +%Y,%m,%d-%H:%M:%S
+#    done
+#done
+#wait
+## Dec 16, 2017.
+## Try to do score/outcome prediction using cnn moe models.
+## Try L2H2K1 with E30 and v4, but without score regression.
+#s=1
+#for moeExpCnt in 32 24 23 16 8
+#do
+#    for recD in 5
+#    do
+#        echo 'For outcome prediction, in CNN-moe round' ${moeExpCnt}
+#        date +%Y,%m,%d-%H:%M:%S
+#        for t in 1 2 3 4 5
+#        do
+#            g=0
+#            if [ $t -eq 2 ]
+#            then
+#                g=0
+#            fi
+#            if [ $t -eq 1 ];
+#            then
+#                th userSimMain.lua -trType sc -save sc_cnnmoe_L2H2K1E30_cv4_noreg_exp_${moeExpCnt}_sh/rnndrop.1/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 1e-2 -rnnHdSizeL1 21 -rnnHdLyCnt 2 -moeExpCnt $(($moeExpCnt)) -ciuTType train -uppModel cnn_uSimCnn_moe -uSimScSoft 0 -lstmHist 2 -cnnKernelWidth 1 -usimTrIte 1500  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0.1 -learningRate 5e-5 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) -cnnConnType v4 -scorePredStateScope 30 &
+#            else
+#                th userSimMain.lua -trType sc -save sc_cnnmoe_L2H2K1E30_cv4_noreg_exp_${moeExpCnt}_sh/rnndrop.1/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 1e-2 -rnnHdSizeL1 21 -rnnHdLyCnt 2 -moeExpCnt $(($moeExpCnt)) -ciuTType train -uppModel cnn_uSimCnn_moe -uSimScSoft 0 -lstmHist 2 -cnnKernelWidth 1 -usimTrIte 1500  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0.1 -learningRate 5e-5 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) -cnnConnType v4 -scorePredStateScope 30 > /dev/null &
+#            fi
+#        done
+#        wait
+#        echo 'done with 2 sets in CNN-moe L2H2K1E30_cv4_noreg'  ${moeExpCnt}
+#        date +%Y,%m,%d-%H:%M:%S
+#    done
+#done
+#wait
+## Dec 16, 2017.
+## Try to do score/outcome prediction using cnn moe models.
+## Try L2H2K1 with E30 and v4, but without score regression and without action data augmentation.
+#s=1
+#for moeExpCnt in 32 24 23 16 8
+#do
+#    for recD in 5
+#    do
+#        echo 'For outcome prediction, in CNN-moe round' ${moeExpCnt}
+#        date +%Y,%m,%d-%H:%M:%S
+#        for t in 1 2 3 4 5
+#        do
+#            g=0
+#            if [ $t -eq 2 ]
+#            then
+#                g=0
+#            fi
+#            if [ $t -eq 1 ];
+#            then
+#                th userSimMain.lua -trType sc -save sc_cnnmoe_L2H2K1E30_cv4_noreg_noaug_exp_${moeExpCnt}_sh/rnndrop.1/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 1e-2 -rnnHdSizeL1 21 -rnnHdLyCnt 2 -moeExpCnt $(($moeExpCnt)) -ciuTType train -uppModel cnn_uSimCnn_moe -uSimScSoft 0 -lstmHist 2 -cnnKernelWidth 1 -usimTrIte 1500  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0.1 -learningRate 5e-5 -uSimLstmBackLen 3 -actPredDataAug 0 -seed $(($s)) -cnnConnType v4 -scorePredStateScope 30 &
+#            else
+#                th userSimMain.lua -trType sc -save sc_cnnmoe_L2H2K1E30_cv4_noreg_noaug_exp_${moeExpCnt}_sh/rnndrop.1/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 1e-2 -rnnHdSizeL1 21 -rnnHdLyCnt 2 -moeExpCnt $(($moeExpCnt)) -ciuTType train -uppModel cnn_uSimCnn_moe -uSimScSoft 0 -lstmHist 2 -cnnKernelWidth 1 -usimTrIte 1500  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0.1 -learningRate 5e-5 -uSimLstmBackLen 3 -actPredDataAug 0 -seed $(($s)) -cnnConnType v4 -scorePredStateScope 30 > /dev/null &
+#            fi
+#        done
+#        wait
+#        echo 'done with 2 sets in CNN-moe L2H2K1E30_cv4_noreg_noaug'  ${moeExpCnt}
+#        date +%Y,%m,%d-%H:%M:%S
+#    done
+#done
+
+# Dec 17, 2017.
 # Try to do score/outcome prediction using cnn moe models.
-# Try L2H2K1 with E30 and v4, but without action data augmentation.
+# Try to utilize various error weights for the score regressor. Try 0.33 here
 s=1
 for moeExpCnt in 32 24 23 16 8
 do
@@ -300,20 +390,20 @@ do
             fi
             if [ $t -eq 1 ];
             then
-                th userSimMain.lua -trType sc -save sc_cnnmoe_L2H2K1E30_cv4_noaug_exp_${moeExpCnt}_sh/rnndrop.1/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 1e-2 -rnnHdSizeL1 21 -rnnHdLyCnt 2 -moeExpCnt $(($moeExpCnt)) -ciuTType train -uppModel cnn_uSimCnn_moe -uSimScSoft 1 -lstmHist 2 -cnnKernelWidth 1 -usimTrIte 1500  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0.1 -learningRate 5e-5 -uSimLstmBackLen 3 -actPredDataAug 0 -seed $(($s)) -cnnConnType v4 -scorePredStateScope 30 &
+                th userSimMain.lua -trType sc -save sc_cnnmoe_wt033_L2H2K1E30_cv4_exp_${moeExpCnt}_sh/rnndrop.1/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 1e-2 -rnnHdSizeL1 21 -rnnHdLyCnt 2 -moeExpCnt $(($moeExpCnt)) -ciuTType train -uppModel cnn_uSimCnn_moe -uSimScSoft 0.33 -lstmHist 2 -cnnKernelWidth 1 -usimTrIte 1500  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0.1 -learningRate 5e-5 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) -cnnConnType v4 -scorePredStateScope 30 &
             else
-                th userSimMain.lua -trType sc -save sc_cnnmoe_L2H2K1E30_cv4_noaug_exp_${moeExpCnt}_sh/rnndrop.1/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 1e-2 -rnnHdSizeL1 21 -rnnHdLyCnt 2 -moeExpCnt $(($moeExpCnt)) -ciuTType train -uppModel cnn_uSimCnn_moe -uSimScSoft 1 -lstmHist 2 -cnnKernelWidth 1 -usimTrIte 1500  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0.1 -learningRate 5e-5 -uSimLstmBackLen 3 -actPredDataAug 0 -seed $(($s)) -cnnConnType v4 -scorePredStateScope 30 > /dev/null &
+                th userSimMain.lua -trType sc -save sc_cnnmoe_wt033_L2H2K1E30_cv4_exp_${moeExpCnt}_sh/rnndrop.1/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 1e-2 -rnnHdSizeL1 21 -rnnHdLyCnt 2 -moeExpCnt $(($moeExpCnt)) -ciuTType train -uppModel cnn_uSimCnn_moe -uSimScSoft 0.33 -lstmHist 2 -cnnKernelWidth 1 -usimTrIte 1500  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0.1 -learningRate 5e-5 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) -cnnConnType v4 -scorePredStateScope 30 > /dev/null &
             fi
         done
         wait
-        echo 'done with 2 sets in CNN-moe L2H2K1E30_cv4_noaug'  ${moeExpCnt}
+        echo 'done with 2 sets in CNN-moe L2H2K1E10_cv1'  ${moeExpCnt}
         date +%Y,%m,%d-%H:%M:%S
     done
 done
 wait
-# Dec 16, 2017.
+# Dec 17, 2017.
 # Try to do score/outcome prediction using cnn moe models.
-# Try L2H2K1 with E30 and v4, but without score regression.
+# Try to utilize various error weights for the score regressor. Try 0.5 here
 s=1
 for moeExpCnt in 32 24 23 16 8
 do
@@ -330,43 +420,13 @@ do
             fi
             if [ $t -eq 1 ];
             then
-                th userSimMain.lua -trType sc -save sc_cnnmoe_L2H2K1E30_cv4_noreg_exp_${moeExpCnt}_sh/rnndrop.1/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 1e-2 -rnnHdSizeL1 21 -rnnHdLyCnt 2 -moeExpCnt $(($moeExpCnt)) -ciuTType train -uppModel cnn_uSimCnn_moe -uSimScSoft 0 -lstmHist 2 -cnnKernelWidth 1 -usimTrIte 1500  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0.1 -learningRate 5e-5 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) -cnnConnType v4 -scorePredStateScope 30 &
+                th userSimMain.lua -trType sc -save sc_cnnmoe_wt050_L2H2K1E30_cv4_exp_${moeExpCnt}_sh/rnndrop.1/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 1e-2 -rnnHdSizeL1 21 -rnnHdLyCnt 2 -moeExpCnt $(($moeExpCnt)) -ciuTType train -uppModel cnn_uSimCnn_moe -uSimScSoft 0.5 -lstmHist 2 -cnnKernelWidth 1 -usimTrIte 1500  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0.1 -learningRate 5e-5 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) -cnnConnType v4 -scorePredStateScope 30 &
             else
-                th userSimMain.lua -trType sc -save sc_cnnmoe_L2H2K1E30_cv4_noreg_exp_${moeExpCnt}_sh/rnndrop.1/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 1e-2 -rnnHdSizeL1 21 -rnnHdLyCnt 2 -moeExpCnt $(($moeExpCnt)) -ciuTType train -uppModel cnn_uSimCnn_moe -uSimScSoft 0 -lstmHist 2 -cnnKernelWidth 1 -usimTrIte 1500  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0.1 -learningRate 5e-5 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) -cnnConnType v4 -scorePredStateScope 30 > /dev/null &
+                th userSimMain.lua -trType sc -save sc_cnnmoe_wt050_L2H2K1E30_cv4_exp_${moeExpCnt}_sh/rnndrop.1/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 1e-2 -rnnHdSizeL1 21 -rnnHdLyCnt 2 -moeExpCnt $(($moeExpCnt)) -ciuTType train -uppModel cnn_uSimCnn_moe -uSimScSoft 0.5 -lstmHist 2 -cnnKernelWidth 1 -usimTrIte 1500  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0.1 -learningRate 5e-5 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) -cnnConnType v4 -scorePredStateScope 30 > /dev/null &
             fi
         done
         wait
-        echo 'done with 2 sets in CNN-moe L2H2K1E30_cv4_noreg'  ${moeExpCnt}
-        date +%Y,%m,%d-%H:%M:%S
-    done
-done
-wait
-# Dec 16, 2017.
-# Try to do score/outcome prediction using cnn moe models.
-# Try L2H2K1 with E30 and v4, but without score regression and without action data augmentation.
-s=1
-for moeExpCnt in 32 24 23 16 8
-do
-    for recD in 5
-    do
-        echo 'For outcome prediction, in CNN-moe round' ${moeExpCnt}
-        date +%Y,%m,%d-%H:%M:%S
-        for t in 1 2 3 4 5
-        do
-            g=0
-            if [ $t -eq 2 ]
-            then
-                g=0
-            fi
-            if [ $t -eq 1 ];
-            then
-                th userSimMain.lua -trType sc -save sc_cnnmoe_L2H2K1E30_cv4_noreg_noaug_exp_${moeExpCnt}_sh/rnndrop.1/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 1e-2 -rnnHdSizeL1 21 -rnnHdLyCnt 2 -moeExpCnt $(($moeExpCnt)) -ciuTType train -uppModel cnn_uSimCnn_moe -uSimScSoft 0 -lstmHist 2 -cnnKernelWidth 1 -usimTrIte 1500  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0.1 -learningRate 5e-5 -uSimLstmBackLen 3 -actPredDataAug 0 -seed $(($s)) -cnnConnType v4 -scorePredStateScope 30 &
-            else
-                th userSimMain.lua -trType sc -save sc_cnnmoe_L2H2K1E30_cv4_noreg_noaug_exp_${moeExpCnt}_sh/rnndrop.1/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 1e-2 -rnnHdSizeL1 21 -rnnHdLyCnt 2 -moeExpCnt $(($moeExpCnt)) -ciuTType train -uppModel cnn_uSimCnn_moe -uSimScSoft 0 -lstmHist 2 -cnnKernelWidth 1 -usimTrIte 1500  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0.1 -learningRate 5e-5 -uSimLstmBackLen 3 -actPredDataAug 0 -seed $(($s)) -cnnConnType v4 -scorePredStateScope 30 > /dev/null &
-            fi
-        done
-        wait
-        echo 'done with 2 sets in CNN-moe L2H2K1E30_cv4_noreg_noaug'  ${moeExpCnt}
+        echo 'done with 2 sets in CNN-moe L2H2K1E10_cv1'  ${moeExpCnt}
         date +%Y,%m,%d-%H:%M:%S
     done
 done
