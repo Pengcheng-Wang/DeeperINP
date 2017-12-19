@@ -11,7 +11,7 @@ opt = lapp[[
        --trType           (default "rl")        training type : sc (score) | ac (action) | bg (behavior generation) | rl (implement rlenvs API) | ev (evaluation of act/score prediction)
        -s,--save          (default "upplogs")   subdirectory to save logs
        -n,--ciunet        (default "")          reload pretrained CI user simulation network
-       -m,--uppModel      (default "rnn_lstm")  type of model to train: moe | mlp | linear | rnn_lstm | rnn_rhn | rnn_blstm | rnn_bGridlstm | cnn_uSimTempCnn
+       -m,--uppModel      (default "rnn_lstm")  type of model to train: moe | mlp | linear | rnn_lstm | rnn_rhn | rnn_blstm | rnn_bGridlstm | cnn_uSimTempCnn | cnn_uSimCnn_moe
        --uppModelRNNDom   (default 0)           indicator of whether the model is an RNN model and uses dropout masks from outside of the model. 0 for not using outside mask. Otherwise, this number represents the number of gates used in RNN model
        --gridLstmTieWhts  (default 1)           indicator of whether the GridLSTM will have shared, tied weights along depth dimension. 1 means with shared weights, 0 means non-shared weights
        -f,--full                                use the full dataset
@@ -47,6 +47,7 @@ opt = lapp[[
        --rwdSmpEps        (default 0)           User reward sampling threshold. If rand se than this value, reture 1st pred. Otherwise, sample sim user's predicted outcome according to the predicted distribution
        --uSimShLayer      (default 0)           Whether the lower layers in Action and Score prediction NNs are shared. If this value is 1, use shared layers
        --uSimScSoft       (default 0)           The criterion weight of the score regression module in UserScoreSoftPrediction model. The value of this param should be in [0,1]. When it is 0, Soft prediction is off, and UserScorePrediction script is utilized
+       --uSimBayesEvl     (default 0)           The Bayesian sampling method to do user simulation model evaluation. When the value is 0, no Bayesian sampling is conducted. Otherwise, it will be conducted to that number of times
        --rlEvnIte         (default 10000)       No of iterations in rl type of evaluation
        --usimTrIte        (default 400)         No of iterations used in user simulation model training. Recom for act training is 300, score training is 3000
        --termActSmgLen    (default 50)          The length above which user termination action would be highly probably sampled. The observed avg length is about 40

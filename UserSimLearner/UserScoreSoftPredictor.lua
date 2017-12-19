@@ -973,58 +973,75 @@ function CIUserScoreSoftPredictor:testScorePredOnTestDetOneEpoch()
     --    local scrPredFP = torch.Tensor(2):fill(1e-3)
     --    local scrPredFN = torch.Tensor(2):fill(1e-3)
     local _logLoss = 0
+    self.uspConfusion:zero()
+
     if string.sub(self.opt.uppModel, 1, 4) == 'rnn_' then
         -- uSimShLayer == 0 and rnn model
-        self.model:evaluate()
-        self.model:forget()
+        if self.opt.uSimBayesEvl > 0 then
+            self.model:training()
+        else
+            self.model:evaluate()
+        end
 
-        local tabState = {}
+        local tabStateOrigin = {}
         for j=1, self.opt.lstmHist do
             local prepUserState = torch.Tensor(#self.rnnRealUserDataEndsTest, self.ciUserSimulator.userStateFeatureCnt)
             for k=1, #self.rnnRealUserDataEndsTest do
                 prepUserState[k] = self.ciUserSimulator:preprocessUserStateData(self.rnnRealUserDataStatesTest[self.rnnRealUserDataEndsTest[k]][j], self.opt.prepro)
             end
-            tabState[j] = prepUserState
+            tabStateOrigin[j] = prepUserState
         end
 
-        local test_rnn_noise_i = {}
-        local test_rnn_noise_h = {}
-        local test_rnn_noise_o = {}
-        if self.opt.uppModelRNNDom > 0 then
-            TableSet.buildRNNDropoutMask(test_rnn_noise_i, test_rnn_noise_h, test_rnn_noise_o, self.inputFeatureNum, self.opt.rnnHdSizeL1, self.opt.rnnHdLyCnt, #self.rnnRealUserDataEndsTest, self.opt.lstmHist, self.opt.uppModelRNNDom)
-            TableSet.sampleRNNDropoutMask(0, test_rnn_noise_i, test_rnn_noise_h, test_rnn_noise_o, self.opt.rnnHdLyCnt, self.opt.lstmHist)
-            for j = 1, self.opt.lstmHist do
-                tabState[j] = {tabState[j], test_rnn_noise_i[j], test_rnn_noise_h[j], test_rnn_noise_o[j]}
+        -- Evaluation epochs is either self.opt.uSimBayesEvl if it is not 0, or 1
+        local evlCnt = (self.opt.uSimBayesEvl > 0 and self.opt.uSimBayesEvl or 1)
+
+        for evl_ite = 1, evlCnt do
+            self.model:forget()
+            local tabState = {}
+            local test_rnn_noise_i = {}
+            local test_rnn_noise_h = {}
+            local test_rnn_noise_o = {}
+            if self.opt.uppModelRNNDom > 0 then
+                TableSet.buildRNNDropoutMask(test_rnn_noise_i, test_rnn_noise_h, test_rnn_noise_o, self.inputFeatureNum, self.opt.rnnHdSizeL1, self.opt.rnnHdLyCnt, #self.rnnRealUserDataEndsTest, self.opt.lstmHist, self.opt.uppModelRNNDom)
+                if self.opt.uSimBayesEvl > 0 then
+                    TableSet.sampleRNNDropoutMask(self.opt.dropoutUSim, test_rnn_noise_i, test_rnn_noise_h, test_rnn_noise_o, self.opt.rnnHdLyCnt, self.opt.lstmHist)
+                else
+                    TableSet.sampleRNNDropoutMask(0, test_rnn_noise_i, test_rnn_noise_h, test_rnn_noise_o, self.opt.rnnHdLyCnt, self.opt.lstmHist)
+                end
+                for j = 1, self.opt.lstmHist do
+                    tabState[j] = {tabStateOrigin[j], test_rnn_noise_i[j], test_rnn_noise_h[j], test_rnn_noise_o[j]}
+                end
+            end
+
+            if self.opt.gpu > 0 then
+                nn.utils.recursiveType(tabState, 'torch.CudaTensor')
+            end
+            local nll_rewards = self.model:forward(tabState)
+            if string.sub(self.opt.uppModel, -3, -1) == 'moe' then
+                nll_rewards[self.opt.lstmHist] = nll_rewards[self.opt.lstmHist]:split(#self.classes, 2)  -- We assume 1st dim is batch index. Score classification is the 1st set of output, having 2 outputs. Score regression is the 2nd set of output.
+            end
+            nn.utils.recursiveType(nll_rewards, 'torch.FloatTensor')
+            if nll_rewards[self.opt.lstmHist][1]:ne(nll_rewards[self.opt.lstmHist][1]):sum() > 0 then print('nan appears in output!') os.exit() end
+            if nll_rewards[self.opt.lstmHist][2]:ne(nll_rewards[self.opt.lstmHist][2]):sum() > 0 then print('nan appears in output!') os.exit() end
+
+            for i=1, #self.rnnRealUserDataEndsTest do
+                self.uspConfusion:add(nll_rewards[self.opt.lstmHist][1][i], self.rnnRealUserDataRewardsTest[self.rnnRealUserDataEndsTest[i]][self.opt.lstmHist])
+                _logLoss = _logLoss + -1 * nll_rewards[self.opt.lstmHist][1][i][self.rnnRealUserDataRewardsTest[self.rnnRealUserDataEndsTest[i]][self.opt.lstmHist]]
             end
         end
 
-        if self.opt.gpu > 0 then
-            nn.utils.recursiveType(tabState, 'torch.CudaTensor')
-        end
-        local nll_rewards = self.model:forward(tabState)
-        if string.sub(self.opt.uppModel, -3, -1) == 'moe' then
-            nll_rewards[self.opt.lstmHist] = nll_rewards[self.opt.lstmHist]:split(#self.classes, 2)  -- We assume 1st dim is batch index. Score classification is the 1st set of output, having 2 outputs. Score regression is the 2nd set of output.
-        end
-        nn.utils.recursiveType(nll_rewards, 'torch.FloatTensor')
-        if nll_rewards[self.opt.lstmHist][1]:ne(nll_rewards[self.opt.lstmHist][1]):sum() > 0 then print('nan appears in output!') os.exit() end
-        if nll_rewards[self.opt.lstmHist][2]:ne(nll_rewards[self.opt.lstmHist][2]):sum() > 0 then print('nan appears in output!') os.exit() end
-
-        self.uspConfusion:zero()
-        local _regE = 0
-        for i=1, #self.rnnRealUserDataEndsTest do
-            self.uspConfusion:add(nll_rewards[self.opt.lstmHist][1][i], self.rnnRealUserDataRewardsTest[self.rnnRealUserDataEndsTest[i]][self.opt.lstmHist])
-            _logLoss = _logLoss + -1 * nll_rewards[self.opt.lstmHist][1][i][self.rnnRealUserDataRewardsTest[self.rnnRealUserDataEndsTest[i]][self.opt.lstmHist]]
-            _regE = _regE + math.pow((nll_rewards[self.opt.lstmHist][2][i] - self.rnnRealUserDataStandardNLG[self.rnnRealUserDataEndsTest[i]][self.opt.lstmHist])[1], 2)
-        end
-        print("For score regression, the MSE in test set is ".._regE/#self.rnnRealUserDataEndsTest)
         self.uspConfusion:updateValids()
         local tvalid = self.uspConfusion.totalValid
         self.uspConfusion:zero()
-        return {tvalid, _logLoss/#self.rnnRealUserDataEndsTest}
+        return {tvalid, _logLoss / (#self.rnnRealUserDataEndsTest * evlCnt)}
 
     elseif string.sub(self.opt.uppModel, 1, 4) == 'cnn_' then
         -- uSimShLayer == 0 and cnn models
-        self.model:evaluate()
+        if self.opt.uSimBayesEvl > 0 then
+            self.model:training()
+        else
+            self.model:evaluate()
+        end
 
         local prepUserState = torch.Tensor(#self.cnnRealUserDataEndsTest, self.opt.lstmHist, self.ciUserSimulator.userStateFeatureCnt)
         for i=1, #self.cnnRealUserDataEndsTest do
@@ -1033,30 +1050,37 @@ function CIUserScoreSoftPredictor:testScorePredOnTestDetOneEpoch()
         if self.opt.gpu > 0 then
             prepUserState = prepUserState:cuda()
         end
-        local nll_rewards = self.model:forward(prepUserState)
-        if string.sub(self.opt.uppModel, -3, -1) == 'moe' then
-            nll_rewards = nll_rewards:split(#self.classes, 2)  -- We assume 1st dim is batch index. Score classification is the 1st set of output, having 2 outputs. Score regression is the 2nd set of output.
-        end
-        nn.utils.recursiveType(nll_rewards, 'torch.FloatTensor')
-        if nll_rewards[1]:ne(nll_rewards[1]):sum() > 0 then print('nan appears in output!') os.exit() end
-        if nll_rewards[2]:ne(nll_rewards[2]):sum() > 0 then print('nan appears in output!') os.exit() end
 
-        self.uspConfusion:zero()
-        local _regE = 0
-        for i=1, #self.cnnRealUserDataEndsTest do
-            self.uspConfusion:add(nll_rewards[1][i], self.cnnRealUserDataRewardsTest[self.cnnRealUserDataEndsTest[i]])
-            _logLoss = _logLoss + -1 * nll_rewards[1][i][self.cnnRealUserDataRewardsTest[self.cnnRealUserDataEndsTest[i]]]
-            _regE = _regE + math.pow((nll_rewards[2][i] - self.cnnRealUserDataRewardsTest[self.cnnRealUserDataEndsTest[i]])[1], 2)
+        -- Evaluation epochs is either self.opt.uSimBayesEvl if it is not 0, or 1
+        local evlCnt = (self.opt.uSimBayesEvl > 0 and self.opt.uSimBayesEvl or 1)
+
+        for evl_ite = 1, evlCnt do
+            local nll_rewards = self.model:forward(prepUserState)
+            if string.sub(self.opt.uppModel, -3, -1) == 'moe' then
+                nll_rewards = nll_rewards:split(#self.classes, 2)  -- We assume 1st dim is batch index. Score classification is the 1st set of output, having 2 outputs. Score regression is the 2nd set of output.
+            end
+            nn.utils.recursiveType(nll_rewards, 'torch.FloatTensor')
+            if nll_rewards[1]:ne(nll_rewards[1]):sum() > 0 then print('nan appears in output!') os.exit() end
+            if nll_rewards[2]:ne(nll_rewards[2]):sum() > 0 then print('nan appears in output!') os.exit() end
+
+            for i=1, #self.cnnRealUserDataEndsTest do
+                self.uspConfusion:add(nll_rewards[1][i], self.cnnRealUserDataRewardsTest[self.cnnRealUserDataEndsTest[i]])
+                _logLoss = _logLoss + -1 * nll_rewards[1][i][self.cnnRealUserDataRewardsTest[self.cnnRealUserDataEndsTest[i]]]
+            end
         end
-        print("For score regression, the MSE in test set is ".._regE/#self.cnnRealUserDataEndsTest)
+
         self.uspConfusion:updateValids()
         local tvalid = self.uspConfusion.totalValid
         self.uspConfusion:zero()
-        return {tvalid, _logLoss/#self.cnnRealUserDataEndsTest}
+        return {tvalid, _logLoss / (#self.cnnRealUserDataEndsTest * evlCnt)}
 
     else
         -- uSimShLayer == 0 and non-rnn, non-cnn models
-        self.model:evaluate()
+        if self.opt.uSimBayesEvl > 0 then
+            self.model:training()
+        else
+            self.model:evaluate()
+        end
 
         local prepUserState = torch.Tensor(#self.ciUserSimulator.realUserDataEndLinesTest, self.ciUserSimulator.userStateFeatureCnt)
         for i=1, #self.ciUserSimulator.realUserDataEndLinesTest do
@@ -1065,27 +1089,30 @@ function CIUserScoreSoftPredictor:testScorePredOnTestDetOneEpoch()
         if self.opt.gpu > 0 then
             prepUserState = prepUserState:cuda()
         end
-        local nll_rewards = self.model:forward(prepUserState)
-        nn.utils.recursiveType(nll_rewards, 'torch.FloatTensor')
 
-        if string.sub(self.opt.uppModel, -3, -1) == 'moe' then
-            nll_rewards = nll_rewards:split(#self.classes, 2)  -- We assume 1st dim is batch index. Score classification is the 1st set of output, having 2 outputs. Score regression is the 2nd set of output.
-        end
-        if nll_rewards[1]:ne(nll_rewards[1]):sum() > 0 then print('nan appears in output!') os.exit() end
-        if nll_rewards[2]:ne(nll_rewards[2]):sum() > 0 then print('nan appears in output!') os.exit() end
+        -- Evaluation epochs is either self.opt.uSimBayesEvl if it is not 0, or 1
+        local evlCnt = (self.opt.uSimBayesEvl > 0 and self.opt.uSimBayesEvl or 1)
 
-        self.uspConfusion:zero()
-        local _regE = 0
-        for i=1, #self.ciUserSimulator.realUserDataEndLinesTest do
-            self.uspConfusion:add(nll_rewards[1][i], self.ciUserSimulator.realUserDataRewardsTest[self.ciUserSimulator.realUserDataEndLinesTest[i]])
-            _logLoss = _logLoss + -1 * nll_rewards[1][i][self.ciUserSimulator.realUserDataRewardsTest[self.ciUserSimulator.realUserDataEndLinesTest[i]]]
-            _regE = _regE + math.pow((nll_rewards[2][i] - self.ciUserSimulator.realUserDataRewardsTest[self.ciUserSimulator.realUserDataEndLinesTest[i]])[1], 2)
+        for evl_ite = 1, evlCnt do
+            local nll_rewards = self.model:forward(prepUserState)
+            nn.utils.recursiveType(nll_rewards, 'torch.FloatTensor')
+
+            if string.sub(self.opt.uppModel, -3, -1) == 'moe' then
+                nll_rewards = nll_rewards:split(#self.classes, 2)  -- We assume 1st dim is batch index. Score classification is the 1st set of output, having 2 outputs. Score regression is the 2nd set of output.
+            end
+            if nll_rewards[1]:ne(nll_rewards[1]):sum() > 0 then print('nan appears in output!') os.exit() end
+            if nll_rewards[2]:ne(nll_rewards[2]):sum() > 0 then print('nan appears in output!') os.exit() end
+
+            for i=1, #self.ciUserSimulator.realUserDataEndLinesTest do
+                self.uspConfusion:add(nll_rewards[1][i], self.ciUserSimulator.realUserDataRewardsTest[self.ciUserSimulator.realUserDataEndLinesTest[i]])
+                _logLoss = _logLoss + -1 * nll_rewards[1][i][self.ciUserSimulator.realUserDataRewardsTest[self.ciUserSimulator.realUserDataEndLinesTest[i]]]
+            end
         end
-        print("For score regression, the MSE in test set is ".._regE/#self.ciUserSimulator.realUserDataEndLinesTest)
+
         self.uspConfusion:updateValids()
         local tvalid = self.uspConfusion.totalValid
         self.uspConfusion:zero()
-        return {tvalid, _logLoss/#self.ciUserSimulator.realUserDataEndLinesTest}
+        return {tvalid, _logLoss / (#self.ciUserSimulator.realUserDataEndLinesTest * evlCnt)}
     end
 end
 
