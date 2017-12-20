@@ -401,7 +401,7 @@ function CIUserScoreSoftPredictor:_init(CIUserSimulator, opt)
     self.uspTestLogger = optim.Logger(paths.concat('userModelTrained', opt.save, 'scrSoft_test.log'))
     self.uspTestLogger:setNames{'Epoch', 'Score Test acc.', 'Score Test LogLoss'}
     self.uspClsRegLogger = optim.Logger(paths.concat('userModelTrained', opt.save, 'scrSoft_testClsReg.log'))
-    self.uspClsRegLogger:setNames{'Epoch', 'Real_nlg', 'Correct', 'Log_soft_max_S1', 'Log_soft_max_S2', 'Est_nlg'}
+    self.uspClsRegLogger:setNames{'Epoch', 'Rl_nlg', 'Correct', 'Ls_1', 'Ls_2', 'Est_nlg'}
 
     ----------------------------------------------------------------------
     --- initialize cunn/cutorch for training on the GPU and fall back to CPU gracefully
@@ -1174,10 +1174,12 @@ function CIUserScoreSoftPredictor:testScoreClsRegOnTestDetOneEpoch()
                 -- {'Epoch', 'Real_nlg', 'Correct', 'Log_soft_max_S1', 'Log_soft_max_S2', 'Est_nlg'}
                 local _realRewardClsLabel = self.cnnRealUserDataRewardsTest[self.cnnRealUserDataEndsTest[i]]
                 local _theOtherClsIdx = (_realRewardClsLabel == 1 and 2 or 1)
-                self.uspClsRegLogger:add{string.format('%d', self.trainEpoch), string.format('%.3f', self.cnnRealUserDataStandardNLGTest[self.cnnRealUserDataEndsTest[i]]),
+                self.uspClsRegLogger:add{
+                    string.format('%d', self.trainEpoch),
+                    string.format('%.3f', self.cnnRealUserDataStandardNLGTest[self.cnnRealUserDataEndsTest[i]]),
                     string.format('%.3f', (nll_rewards[1][i][_realRewardClsLabel] > nll_rewards[1][i][_theOtherClsIdx] and 1 or 0)),
-                    string.format('%.3f', nll_rewards[1][i][_realRewardClsLabel]),
-                    string.format('%.3f', nll_rewards[1][i][_theOtherClsIdx]),
+                    string.format('%.3f', nll_rewards[1][i][1]),
+                    string.format('%.3f', nll_rewards[1][i][2]),
                     string.format('%.3f', nll_rewards[2][i][1])}
             end
         end
