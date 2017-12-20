@@ -27,6 +27,7 @@ function CIUserSimulator:_init(CIFileReader, opt)
     self.realUserDataStatesTest = {}
     self.realUserDataActsTest = {}
     self.realUserDataRewardsTest = {}
+    self.realUserDataStandardNLGTest = {}
     self.realUserDataStartLinesTest = {}    -- this table stores the starting line of each real human user's interation
     self.realUserDataEndLinesTest = {}
 
@@ -278,6 +279,8 @@ function CIUserSimulator:_init(CIFileReader, opt)
                 else
                     self.realUserDataRewardsTest[#self.realUserDataStatesTest] = 2     -- This is (binary) reward class label, not reward value
                 end
+                self.realUserDataStandardNLGTest[#self.realUserDataStatesTest] =
+                    (CIFileReader.surveyData[userId][CIFileReader.userStateSurveyFeatureCnt+1] - 0.16666667) / 0.27016  -- 1.5 Dec 17,2017. I changed this part. Because it is not the correct way to weight errors from score regression source.    --0.27016   -- 0.27016 is the std of nlg
 
                 if act ~= CIFileReader.usrActInd_end then
                     -- set the next time step state set
@@ -475,6 +478,7 @@ function CIUserSimulator:_init(CIFileReader, opt)
     self.rnnRealUserDataStatesTest = {}
     self.rnnRealUserDataActsTest = {}
     self.rnnRealUserDataRewardsTest = {}
+    self.rnnRealUserDataStandardNLGTest = {}
     self.rnnRealUserDataStartsTest = {}
     self.rnnRealUserDataEndsTest = {}
     self.rnnRealUserDataPadTest = torch.Tensor(#self.realUserDataStartLinesTest):fill(0)    -- indicating whether data has padding at head (should be padded)
@@ -489,15 +493,18 @@ function CIUserSimulator:_init(CIFileReader, opt)
                         self.rnnRealUserDataStatesTest[#self.rnnRealUserDataStatesTest + 1] = {}
                         self.rnnRealUserDataActsTest[#self.rnnRealUserDataActsTest + 1] = {}
                         self.rnnRealUserDataRewardsTest[#self.rnnRealUserDataRewardsTest + 1] = {}
+                        self.rnnRealUserDataStandardNLGTest[#self.rnnRealUserDataStandardNLGTest + 1] = {}
                         for i=1, padi do
                             self.rnnRealUserDataStatesTest[#self.rnnRealUserDataStatesTest][i] = torch.Tensor(self.userStateFeatureCnt):fill(0)
                             self.rnnRealUserDataActsTest[#self.rnnRealUserDataActsTest][i] = self.realUserDataActsTest[indSeqHead]  -- duplicate the 1st user action for padded states
                             self.rnnRealUserDataRewardsTest[#self.rnnRealUserDataRewardsTest][i] = self.realUserDataRewardsTest[indSeqHead]
+                            self.rnnRealUserDataStandardNLGTest[#self.rnnRealUserDataStandardNLGTest][i] = self.realUserDataStandardNLGTest[indSeqHead]
                         end
                         for i=1, opt.lstmHist-padi do
                             self.rnnRealUserDataStatesTest[#self.rnnRealUserDataStatesTest][i+padi] = self.realUserDataStatesTest[indSeqHead+i-1]
                             self.rnnRealUserDataActsTest[#self.rnnRealUserDataActsTest][i+padi] = self.realUserDataActsTest[indSeqHead+i-1]
                             self.rnnRealUserDataRewardsTest[#self.rnnRealUserDataRewardsTest][i+padi] = self.realUserDataRewardsTest[indSeqHead+i-1]
+                            self.rnnRealUserDataStandardNLGTest[#self.rnnRealUserDataStandardNLGTest][i+padi] = self.realUserDataStandardNLGTest[indSeqHead+i-1]
                         end
                         if padi == opt.lstmHist-1 then
                             self.rnnRealUserDataStartsTest[#self.rnnRealUserDataStartsTest+1] = #self.rnnRealUserDataStatesTest     -- This is the start of a user's record
@@ -513,10 +520,12 @@ function CIUserSimulator:_init(CIFileReader, opt)
                         self.rnnRealUserDataStatesTest[#self.rnnRealUserDataStatesTest + 1] = {}
                         self.rnnRealUserDataActsTest[#self.rnnRealUserDataActsTest + 1] = {}
                         self.rnnRealUserDataRewardsTest[#self.rnnRealUserDataRewardsTest + 1] = {}
+                        self.rnnRealUserDataStandardNLGTest[#self.rnnRealUserDataStandardNLGTest + 1] = {}
                         for i=1, opt.lstmHist do
                             self.rnnRealUserDataStatesTest[#self.rnnRealUserDataStatesTest][i] = self.realUserDataStatesTest[indSeqHead+i-1]
                             self.rnnRealUserDataActsTest[#self.rnnRealUserDataActsTest][i] = self.realUserDataActsTest[indSeqHead+i-1]
                             self.rnnRealUserDataRewardsTest[#self.rnnRealUserDataRewardsTest][i] = self.realUserDataRewardsTest[indSeqHead+i-1]
+                            self.rnnRealUserDataStandardNLGTest[#self.rnnRealUserDataStandardNLGTest][i] = self.realUserDataStandardNLGTest[indSeqHead+i-1]
                         end
                         indSeqHead = indSeqHead + 1
                         indSeqTail = indSeqTail + 1
@@ -599,6 +608,7 @@ function CIUserSimulator:_init(CIFileReader, opt)
     self.cnnRealUserDataStatesTest = {}
     self.cnnRealUserDataActsTest = {}
     self.cnnRealUserDataRewardsTest = {}
+    self.cnnRealUserDataStandardNLGTest = {}
     self.cnnRealUserDataStartsTest = {}
     self.cnnRealUserDataEndsTest = {}
     self.cnnRealUserDataPadTest = torch.Tensor(#self.realUserDataStartLinesTest):fill(0)    -- indicating whether data has padding at head (should be padded)
@@ -613,6 +623,7 @@ function CIUserSimulator:_init(CIFileReader, opt)
                         self.cnnRealUserDataStatesTest[#self.cnnRealUserDataStatesTest + 1] = torch.Tensor(opt.lstmHist, self.userStateFeatureCnt)  -- input into TemporalConvolution is 2d or 3d tensor
                         self.cnnRealUserDataActsTest[#self.cnnRealUserDataActsTest + 1] = self.realUserDataActsTest[indSeqHead + opt.lstmHist - padi - 1]   -- act and reward were set to the value at last position in this
                         self.cnnRealUserDataRewardsTest[#self.cnnRealUserDataRewardsTest + 1] = self.realUserDataRewardsTest[indSeqHead + opt.lstmHist-padi - 1]    -- time sequence
+                        self.cnnRealUserDataStandardNLGTest[#self.cnnRealUserDataStandardNLGTest + 1] = self.realUserDataStandardNLGTest[indSeqHead + opt.lstmHist-padi - 1]    -- time sequence
                         for i=1, padi do
                             self.cnnRealUserDataStatesTest[#self.cnnRealUserDataStatesTest][i]:fill(0)
                         end
@@ -633,6 +644,7 @@ function CIUserSimulator:_init(CIFileReader, opt)
                         self.cnnRealUserDataStatesTest[#self.cnnRealUserDataStatesTest + 1] = torch.Tensor(opt.lstmHist, self.userStateFeatureCnt)  -- input into TemporalConvolution is 2d or 3d tensor
                         self.cnnRealUserDataActsTest[#self.cnnRealUserDataActsTest + 1] = self.realUserDataActsTest[indSeqHead + opt.lstmHist - 1]
                         self.cnnRealUserDataRewardsTest[#self.cnnRealUserDataRewardsTest + 1] = self.realUserDataRewardsTest[indSeqHead + opt.lstmHist - 1]
+                        self.cnnRealUserDataStandardNLGTest[#self.cnnRealUserDataStandardNLGTest + 1] = self.realUserDataStandardNLGTest[indSeqHead + opt.lstmHist - 1]
                         for i=1, opt.lstmHist do
                             self.cnnRealUserDataStatesTest[#self.cnnRealUserDataStatesTest][i] = self.realUserDataStatesTest[indSeqHead+i-1]
                         end

@@ -400,6 +400,8 @@ function CIUserScoreSoftPredictor:_init(CIUserSimulator, opt)
     self.uspTrainLogger = optim.Logger(paths.concat('userModelTrained', opt.save, 'scrSoft_train.log'))
     self.uspTestLogger = optim.Logger(paths.concat('userModelTrained', opt.save, 'scrSoft_test.log'))
     self.uspTestLogger:setNames{'Epoch', 'Score Test acc.', 'Score Test LogLoss'}
+    self.uspClsRegLogger = optim.Logger(paths.concat('userModelTrained', opt.save, 'scrSoft_testClsReg.log'))
+    self.uspClsRegLogger:setNames{'Epoch', 'Real_nlg', 'Correct', 'Log_soft_max_S1', 'Log_soft_max_S2', 'Est_nlg'}
 
     ----------------------------------------------------------------------
     --- initialize cunn/cutorch for training on the GPU and fall back to CPU gracefully
@@ -439,6 +441,7 @@ function CIUserScoreSoftPredictor:_init(CIUserSimulator, opt)
     self.rnnRealUserDataStatesTest = self.ciUserSimulator.rnnRealUserDataStatesTest
     self.rnnRealUserDataActsTest = self.ciUserSimulator.rnnRealUserDataActsTest
     self.rnnRealUserDataRewardsTest = self.ciUserSimulator.rnnRealUserDataRewardsTest
+    self.rnnRealUserDataStandardNLGTest = self.ciUserSimulator.rnnRealUserDataStandardNLGTest
     self.rnnRealUserDataEndsTest = self.ciUserSimulator.rnnRealUserDataEndsTest
 
     ----------------------------------------------------------------------
@@ -455,6 +458,7 @@ function CIUserScoreSoftPredictor:_init(CIUserSimulator, opt)
     self.cnnRealUserDataStatesTest = self.ciUserSimulator.cnnRealUserDataStatesTest
     self.cnnRealUserDataActsTest = self.ciUserSimulator.cnnRealUserDataActsTest
     self.cnnRealUserDataRewardsTest = self.ciUserSimulator.cnnRealUserDataRewardsTest
+    self.cnnRealUserDataStandardNLGTest = self.ciUserSimulator.cnnRealUserDataStandardNLGTest
     self.cnnRealUserDataEndsTest = self.ciUserSimulator.cnnRealUserDataEndsTest
 
     ----------------------------------------------------------------------
@@ -959,6 +963,10 @@ function CIUserScoreSoftPredictor:trainOneEpoch()
         self.uspTestLogger:add{string.format('%d', self.trainEpoch), string.format('%.5f%%', testEval[1]*100), string.format('%.5f', testEval[2])}
     end
 
+    if (self.opt.ciuTType == 'train' or self.opt.ciuTType == 'train_tr') and self.trainEpoch % self.opt.testOnTestSoftScoreFreq == 0 then
+        self:testScoreClsRegOnTestDetOneEpoch()
+    end
+
     self.uspConfusion:zero()
     -- next epoch
     self.trainEpoch = self.trainEpoch + 1
@@ -1113,6 +1121,69 @@ function CIUserScoreSoftPredictor:testScorePredOnTestDetOneEpoch()
         local tvalid = self.uspConfusion.totalValid
         self.uspConfusion:zero()
         return {tvalid, _logLoss / (#self.ciUserSimulator.realUserDataEndLinesTest * evlCnt)}
+    end
+end
+
+-- This is the specific evaluation function applied on UserScoreSoftPredictor module
+-- We demonstrate how the classification and regression model performs on each data point
+-- to see if we can utilize the regression module more in the classification task
+function CIUserScoreSoftPredictor:testScoreClsRegOnTestDetOneEpoch()
+    -- just in case:
+    collectgarbage()
+    -- Confusion matrix for score prediction (2-class)
+    --    local scrPredTP = torch.Tensor(2):fill(1e-3)
+    --    local scrPredFP = torch.Tensor(2):fill(1e-3)
+    --    local scrPredFN = torch.Tensor(2):fill(1e-3)
+    local _logLoss = 0
+    self.uspConfusion:zero()
+
+    --- right now only cnn_ models are supported
+    if string.sub(self.opt.uppModel, 1, 4) == 'rnn_' then
+        ---- uSimShLayer == 0 and rnn model
+    elseif string.sub(self.opt.uppModel, 1, 4) == 'cnn_' then
+        -- uSimShLayer == 0 and cnn models
+        if self.opt.uSimBayesEvl > 0 then
+            self.model:training()
+        else
+            self.model:evaluate()
+        end
+
+        local prepUserState = torch.Tensor(#self.cnnRealUserDataEndsTest, self.opt.lstmHist, self.ciUserSimulator.userStateFeatureCnt)
+        for i=1, #self.cnnRealUserDataEndsTest do
+            prepUserState[i] = self.ciUserSimulator:preprocessUserStateData(self.cnnRealUserDataStatesTest[self.cnnRealUserDataEndsTest[i]], self.opt.prepro)
+        end
+        if self.opt.gpu > 0 then
+            prepUserState = prepUserState:cuda()
+        end
+
+        -- Evaluation epochs is either self.opt.uSimBayesEvl if it is not 0, or 1
+        local evlCnt = (self.opt.uSimBayesEvl > 0 and self.opt.uSimBayesEvl or 1)
+
+        for evl_ite = 1, evlCnt do
+            local nll_rewards = self.model:forward(prepUserState)
+            if string.sub(self.opt.uppModel, -3, -1) == 'moe' then
+                nll_rewards = nll_rewards:split(#self.classes, 2)  -- We assume 1st dim is batch index. Score classification is the 1st set of output, having 2 outputs. Score regression is the 2nd set of output.
+            end
+            nn.utils.recursiveType(nll_rewards, 'torch.FloatTensor')
+            if nll_rewards[1]:ne(nll_rewards[1]):sum() > 0 then print('nan appears in output!') os.exit() end
+            if nll_rewards[2]:ne(nll_rewards[2]):sum() > 0 then print('nan appears in output!') os.exit() end
+
+            for i=1, #self.cnnRealUserDataEndsTest do
+                --self.uspConfusion:add(nll_rewards[1][i], self.cnnRealUserDataRewardsTest[self.cnnRealUserDataEndsTest[i]])
+                --_logLoss = _logLoss + -1 * nll_rewards[1][i][self.cnnRealUserDataRewardsTest[self.cnnRealUserDataEndsTest[i]]]
+                -- {'Epoch', 'Real_nlg', 'Correct', 'Log_soft_max_S1', 'Log_soft_max_S2', 'Est_nlg'}
+                local _realRewardClsLabel = self.cnnRealUserDataRewardsTest[self.cnnRealUserDataEndsTest[i]]
+                local _theOtherClsIdx = (_realRewardClsLabel == 1 and 2 or 1)
+                self.uspClsRegLogger:add{string.format('%d', self.trainEpoch), string.format('%.3f', self.cnnRealUserDataStandardNLGTest[self.cnnRealUserDataEndsTest[i]]),
+                    string.format('%.3f', (nll_rewards[1][i][_realRewardClsLabel] > nll_rewards[1][i][_theOtherClsIdx] and 1 or 0)),
+                    string.format('%.3f', nll_rewards[1][i][_realRewardClsLabel]),
+                    string.format('%.3f', nll_rewards[1][i][_theOtherClsIdx]),
+                    string.format('%.3f', nll_rewards[2][i][1])}
+            end
+        end
+
+    else
+        ---- uSimShLayer == 0 and non-rnn, non-cnn models
     end
 end
 
