@@ -1130,12 +1130,6 @@ end
 function CIUserScoreSoftPredictor:testScoreClsRegOnTestDetOneEpoch()
     -- just in case:
     collectgarbage()
-    -- Confusion matrix for score prediction (2-class)
-    --    local scrPredTP = torch.Tensor(2):fill(1e-3)
-    --    local scrPredFP = torch.Tensor(2):fill(1e-3)
-    --    local scrPredFN = torch.Tensor(2):fill(1e-3)
-    local _logLoss = 0
-    self.uspConfusion:zero()
 
     --- right now only cnn_ models are supported
     if string.sub(self.opt.uppModel, 1, 4) == 'rnn_' then
@@ -1169,9 +1163,6 @@ function CIUserScoreSoftPredictor:testScoreClsRegOnTestDetOneEpoch()
             if nll_rewards[2]:ne(nll_rewards[2]):sum() > 0 then print('nan appears in output!') os.exit() end
 
             for i=1, #self.cnnRealUserDataEndsTest do
-                --self.uspConfusion:add(nll_rewards[1][i], self.cnnRealUserDataRewardsTest[self.cnnRealUserDataEndsTest[i]])
-                --_logLoss = _logLoss + -1 * nll_rewards[1][i][self.cnnRealUserDataRewardsTest[self.cnnRealUserDataEndsTest[i]]]
-                -- {'Epoch', 'Real_nlg', 'Correct', 'Log_soft_max_S1', 'Log_soft_max_S2', 'Est_nlg'}
                 local _realRewardClsLabel = self.cnnRealUserDataRewardsTest[self.cnnRealUserDataEndsTest[i]]
                 local _theOtherClsIdx = (_realRewardClsLabel == 1 and 2 or 1)
                 self.uspClsRegLogger:add{
