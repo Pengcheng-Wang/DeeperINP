@@ -821,10 +821,38 @@
 #done
 
 
+### Testing hyper-params for action prediction models
+#for rnnHdLc in 4
+#do
+#    echo 'in Bayesian LSTM round' ${rnnHdLc}
+#    date +%Y,%m,%d-%H:%M:%S
+#    for t in 1 2;
+#    do
+#        for alr in 2e-4 5e-4 1e-3 5e-3;
+#        do
+#            g=0
+#            if [ $t -eq 2 ]
+#            then
+#                g=0
+#            fi
+#            if [ $t -eq 1 ];
+#            then
+#                th userSimMain.lua -trType ac -save blstm_alr_${alr}_hdlc_${rnnHdLc}/rnndrop.1/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 5e-3 -learningRate ${alr} -rnnHdSizeL1 21 -rnnHdLyCnt $(($rnnHdLc)) -ciuTType train -uppModel rnn_blstm -lstmHist 10 -usimTrIte 8000  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0.1 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) > /dev/null &
+#            else
+#                th userSimMain.lua -trType ac -save blstm_alr_${alr}_hdlc_${rnnHdLc}/rnndrop.1/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 5e-3 -learningRate ${alr} -rnnHdSizeL1 21 -rnnHdLyCnt $(($rnnHdLc)) -ciuTType train -uppModel rnn_blstm -lstmHist 10 -usimTrIte 8000  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0.1 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) > /dev/null &
+#            fi
+#        done
+#    done
+#    wait
+#    echo 'done with in Bayesian LSTM' ${rnnHdLc}
+#    date +%Y,%m,%d-%H:%M:%S
+#done
+
+
 ## Testing hyper-params for action prediction models
-for rnnHdLc in 4
+for rnnHdLc in 2
 do
-    echo 'in Bayesian LSTM round' ${rnnHdLc}
+    echo 'in Bayesian RHN round' ${rnnHdLc}
     date +%Y,%m,%d-%H:%M:%S
     for t in 1 2;
     do
@@ -837,13 +865,13 @@ do
             fi
             if [ $t -eq 1 ];
             then
-                th userSimMain.lua -trType ac -save blstm_alr_${alr}_hdlc_${rnnHdLc}/rnndrop.1/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 5e-3 -learningRate ${alr} -rnnHdSizeL1 21 -rnnHdLyCnt $(($rnnHdLc)) -ciuTType train -uppModel rnn_blstm -lstmHist 10 -usimTrIte 8000  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0.1 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) > /dev/null &
+                th userSimMain.lua -trType ac -save rhn_alr_${alr}_hdlc_${rnnHdLc}/rnndrop.1/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 5e-3 -learningRate ${alr} -rnnHdSizeL1 21 -rnnHdLyCnt $(($rnnHdLc)) -rhnReccDept 8 -ciuTType train -uppModel rnn_rhn -lstmHist 10 -usimTrIte 8000  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0.1 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) > /dev/null &
             else
-                th userSimMain.lua -trType ac -save blstm_alr_${alr}_hdlc_${rnnHdLc}/rnndrop.1/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 5e-3 -learningRate ${alr} -rnnHdSizeL1 21 -rnnHdLyCnt $(($rnnHdLc)) -ciuTType train -uppModel rnn_blstm -lstmHist 10 -usimTrIte 8000  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0.1 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) > /dev/null &
+                th userSimMain.lua -trType ac -save rhn_alr_${alr}_hdlc_${rnnHdLc}/rnndrop.1/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 5e-3 -learningRate ${alr} -rnnHdSizeL1 21 -rnnHdLyCnt $(($rnnHdLc)) -rhnReccDept 8 -ciuTType train -uppModel rnn_rhn -lstmHist 10 -usimTrIte 8000  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0.1 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) > /dev/null &
             fi
         done
     done
     wait
-    echo 'done with in Bayesian LSTM' ${rnnHdLc}
+    echo 'done with in Bayesian RHN' ${rnnHdLc}
     date +%Y,%m,%d-%H:%M:%S
 done
