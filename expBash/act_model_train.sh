@@ -895,9 +895,9 @@ do
                 fi
                 if [ $t -eq 1 ];
                 then
-                    th userSimMain.lua -trType ac -save rhn_alr_${alr}_hdlc_${rnnHdLc}_rhnRD_${rhnRD}/rnndrop.1/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 5e-3 -learningRate ${alr} -rnnHdSizeL1 21 -rnnHdLyCnt $(($rnnHdLc)) -rhnReccDept ${rhnRD} -ciuTType train -uppModel rnn_rhn -lstmHist 10 -usimTrIte 7000  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0.1 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) > /dev/null &
+                    th userSimMain.lua -trType ac -save ac_rhn_alr_${alr}_hdlc_${rnnHdLc}_rhnRD_${rhnRD}/rnndrop.1/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 5e-3 -learningRate ${alr} -rnnHdSizeL1 21 -rnnHdLyCnt $(($rnnHdLc)) -rhnReccDept ${rhnRD} -ciuTType train -uppModel rnn_rhn -lstmHist 10 -usimTrIte 7000  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0.1 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) > /dev/null &
                 else
-                    th userSimMain.lua -trType ac -save rhn_alr_${alr}_hdlc_${rnnHdLc}_rhnRD_${rhnRD}/rnndrop.1/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 5e-3 -learningRate ${alr} -rnnHdSizeL1 21 -rnnHdLyCnt $(($rnnHdLc)) -rhnReccDept ${rhnRD} -ciuTType train -uppModel rnn_rhn -lstmHist 10 -usimTrIte 7000  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0.1 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) > /dev/null &
+                    th userSimMain.lua -trType ac -save ac_rhn_alr_${alr}_hdlc_${rnnHdLc}_rhnRD_${rhnRD}/rnndrop.1/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 5e-3 -learningRate ${alr} -rnnHdSizeL1 21 -rnnHdLyCnt $(($rnnHdLc)) -rhnReccDept ${rhnRD} -ciuTType train -uppModel rnn_rhn -lstmHist 10 -usimTrIte 7000  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0.1 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) > /dev/null &
                 fi
             done
         done
