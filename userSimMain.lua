@@ -31,6 +31,7 @@ opt = lapp[[
        --rnnHdSizeL2      (default 0)           rnn hidden layer size in 2nd lstm layer
        --rnnHdLyCnt       (default 2)           number of rnn/cnn hidden layer. Default is 2 bcz only when rnnHdSizeL2 is not 0 this opt will be examined. The RHN and Bayesian LSTM rnn number also uses this opt param. I'm also trying to use it for CNN hidden layer counting.
        --rhnReccDept      (default 5)           The recurrent depth of RHN model in one layer
+       --rnnResidual      (default 0)           Whether apply residual connection in RNN player simulation models. 0 to turn if off, 1 to turn it on.
        --lstmHist         (default 10)          lstm hist length. This influence the rnn tensor table construction in data preparation. Attention: we also use it as history length indicator (input frame number) in CNN models
        --cnnKernelWidth   (default 3)           Temporal Convolution kernel width
        --cnnConnType      (default "v2")        Residual connection type in player simulation CNN model

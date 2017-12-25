@@ -162,7 +162,7 @@ function CIUserActsPredictor:_init(CIUserSimulator, opt)
             ------------------------------------------------------------
             require 'modules.RecurrenHighwayNetworkRNN'
             local rhn
-            rhn = nn.RHN(self.inputFeatureNum, opt.rnnHdSizeL1, opt.rhnReccDept, opt.rnnHdLyCnt, opt.uSimLstmBackLen) --inputSize, outputSize, recurrence_depth, rhn_layers, rho
+            rhn = nn.RHN(self.inputFeatureNum, opt.rnnHdSizeL1, opt.rhnReccDept, opt.rnnHdLyCnt, opt.uSimLstmBackLen, opt.rnnResidual) --inputSize, outputSize, recurrence_depth, rhn_layers, rho, rnnResidualConn
             rhn:remember('both')
             self.model:add(rhn)
             self.model:add(nn.NormStabilizer())

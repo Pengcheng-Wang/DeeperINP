@@ -15,7 +15,7 @@
 assert(not nn.RHN, "update nnx package : luarocks install nnx")
 local RHN, parent = torch.class('nn.RHN', 'nn.AbstractRecurrent')
 
-function RHN:__init(inputSize, outputSize, recurrence_depth, rhn_layers, rho)    -- p, mono in param list are deleted. not sure if mono is useful yet. mono is used in original lstm model to set Dropout
+function RHN:__init(inputSize, outputSize, recurrence_depth, rhn_layers, rho, rnnResidual)    -- p, mono in param list are deleted. not sure if mono is useful yet. mono is used in original lstm model to set Dropout
     parent.__init(self, rho or 9999)
     --self.p = p or 0   -- the param p and mono are not used right now, because we are implementing dropout outside of the RHN model,
     --self.mono = mono or false     -- it means dropout masks are passed into the RHN model as params
@@ -23,6 +23,9 @@ function RHN:__init(inputSize, outputSize, recurrence_depth, rhn_layers, rho)   
     self.outputSize = outputSize    -- do element-wise addition for x and hidden value directly. If we want to introduce residual module, then it is necessary
     self.recurrence_depth = recurrence_depth or 1    -- recurrence_depth in one RHN unit
     self.rhn_layers = rhn_layers or 1   -- this is the vertical layer number of the whole RHN. It is explicitly set up here because we want to use the output_rnn_dropout, which is not very convenient if used stacked structure in sequencer
+    self.rnnResidual = rnnResidual or 1  -- 0 to turn off residual connection, 1 to turn on residual connection
+    assert(self.rnnResidual == 1 or self.rnnResidual == 0, 'rnnResidual has be to 0(off) or 1(on)')
+    if self.rnnResidual == 1 then assert(self.inputSize == self.outputSize, 'If residual connection is utilized, input size has to equal to output size in RHN model') end
     -- build the model
     self.recurrentModule = self:buildModel()
     -- make it work with nn.Container
@@ -53,24 +56,24 @@ function RHN:buildRHNUnit(x, prev_h, noise_i, noise_h, stacked_layer_ind)
     local sliced_noise_i   = nn.SplitTable(2)(reshaped_noise_i)   -- SplitTable(2) means split the input tensor along the 2nd dim, which is the num of gates dim
     local sliced_noise_h   = nn.SplitTable(2)(reshaped_noise_h)   -- after SplitTable, the output is a table of tensors
     -- Calculate all two gates
-    local dropped_h_tab = {}
-    local h2h_tab = {}
-    local t_gate_tab = {}
-    local c_gate_tab = {}
+    local dropped_h_tab    = {}
+    local h2h_tab          = {}
+    local t_gate_tab       = {}
+    local c_gate_tab       = {}
     local in_transform_tab = {}
-    local s_tab = {}
+    local s_tab            = {}
     for layer_i = 1, self.recurrence_depth do -- Attention: pwang8. The for loop iteration count is the recurrence_depth (horizontal, in each time step), not RHN layers
         local i2h        = {}   -- i2h is a single item, bcz only one rhn unit is adopted to connect vertical layers (vertical input of x)
         h2h_tab[layer_i] = {}   -- h2h is of multiple items, bcz a large (10 in this example) recurrent depth is adopted (strictly it is not the (vertical) layers of NN, it is the horizontal depth defined in transition RNN in between one time step)
         if layer_i == 1 then
             for i = 1, 2 do
                 -- Use select table to fetch each gate
-                local dropped_x         = self:local_Dropout(x, nn.SelectTable(i)(sliced_noise_i)) -- slidced_noise_i is a table of tensors. So there are 2 gates and corresponding noise mask
+                local dropped_x        = self:local_Dropout(x, nn.SelectTable(i)(sliced_noise_i)) -- slidced_noise_i is a table of tensors. So there are 2 gates and corresponding noise mask
                 dropped_h_tab[layer_i]  = self:local_Dropout(prev_h, nn.SelectTable(i)(sliced_noise_h))  -- the 2 gates contain one gate for calc hidden state, and the other gate being the transform gate
                 if stacked_layer_ind == 1 then
-                    i2h[i]                  = nn.Linear(self.inputSize, self.outputSize)(dropped_x)    -- there are two i2h and h2h_tab bcz in equation 7 and 8 x and hidden state_h are utilized twice (2 sets of matrix multiplication)
+                    i2h[i]              = nn.Linear(self.inputSize, self.outputSize)(dropped_x)    -- there are two i2h and h2h_tab bcz in equation 7 and 8 x and hidden state_h are utilized twice (2 sets of matrix multiplication)
                 else
-                    i2h[i]                  = nn.Linear(self.outputSize, self.outputSize)(dropped_x)    -- there are two i2h and h2h_tab bcz in equation 7 and 8 x and hidden state_h are utilized twice (2 sets of matrix multiplication)
+                    i2h[i]              = nn.Linear(self.outputSize, self.outputSize)(dropped_x)    -- there are two i2h and h2h_tab bcz in equation 7 and 8 x and hidden state_h are utilized twice (2 sets of matrix multiplication)
                 end
                 h2h_tab[layer_i][i]     = nn.Linear(self.outputSize, self.outputSize)(dropped_h_tab[layer_i])
             end
@@ -97,6 +100,7 @@ function RHN:buildRHNUnit(x, prev_h, noise_i, noise_h, stacked_layer_ind)
         end
     end
     local next_h = s_tab[self.recurrence_depth]
+    if self.rnnResidual == 1 then next_h = nn.CAddTable()({next_h, x}) print('Added residual in RHN in layer '..stacked_layer_ind) end
     return next_h   -- This is the output of one RHN unit, and this output has not been processed by Dropout
 end
 
