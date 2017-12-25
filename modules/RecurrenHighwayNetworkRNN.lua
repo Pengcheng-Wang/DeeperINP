@@ -68,7 +68,7 @@ function RHN:buildRHNUnit(x, prev_h, noise_i, noise_h, stacked_layer_ind)
         if layer_i == 1 then
             for i = 1, 2 do
                 -- Use select table to fetch each gate
-                local dropped_x        = self:local_Dropout(x, nn.SelectTable(i)(sliced_noise_i)) -- slidced_noise_i is a table of tensors. So there are 2 gates and corresponding noise mask
+                local dropped_x         = self:local_Dropout(x, nn.SelectTable(i)(sliced_noise_i)) -- slidced_noise_i is a table of tensors. So there are 2 gates and corresponding noise mask
                 dropped_h_tab[layer_i]  = self:local_Dropout(prev_h, nn.SelectTable(i)(sliced_noise_h))  -- the 2 gates contain one gate for calc hidden state, and the other gate being the transform gate
                 if stacked_layer_ind == 1 then
                     i2h[i]              = nn.Linear(self.inputSize, self.outputSize)(dropped_x)    -- there are two i2h and h2h_tab bcz in equation 7 and 8 x and hidden state_h are utilized twice (2 sets of matrix multiplication)
@@ -100,7 +100,7 @@ function RHN:buildRHNUnit(x, prev_h, noise_i, noise_h, stacked_layer_ind)
         end
     end
     local next_h = s_tab[self.recurrence_depth]
-    if self.rnnResidual == 1 then next_h = nn.CAddTable()({next_h, x}) print('Added residual in RHN in layer '..stacked_layer_ind) end
+    if self.rnnResidual == 1 then next_h = nn.CAddTable()({next_h, nn.MulConstant(0.5, false)(prev_h), nn.MulConstant(0.5, false)(x)}) print('Added residual in RHN in layer '..stacked_layer_ind) end
     return next_h   -- This is the output of one RHN unit, and this output has not been processed by Dropout
 end
 
