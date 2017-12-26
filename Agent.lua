@@ -715,7 +715,7 @@ function Agent:validate()
     startIndex = (n - 1)*self.batchSize + 2
     endIndex = math.min(n*self.batchSize + 1, self.valSize + 1)
     batchSize = endIndex - startIndex + 1
-    indices = self.valMemory:sample()  --torch.linspace(startIndex, endIndex, batchSize):long()  -- This is a way to generate a tensor of # numbers ranging from startIn to endIn
+    indices = torch.linspace(startIndex, endIndex, batchSize):long()  --self.valMemory:sample() -- not sure why this was tested, or used   -- This is a way to generate a tensor of # numbers ranging from startIn to endIn
 
     -- Perform "learning" (without optimisation)
     self:learn(self.theta, indices, ISWeights:narrow(1, 1, batchSize), true)
@@ -762,26 +762,27 @@ function Agent:validate()
   gnuplot.ylabel('TD-Error')
   gnuplot.plotflush()
   torch.save(paths.concat(self.experiments, self._id, 'TDErrors.t7'), TDErrors)
-  -- Plot and save average score
-  local scores = torch.Tensor(self.valScores)
-  gnuplot.pngfigure(paths.concat(self.experiments, self._id, 'scores.png'))
-  gnuplot.plot('Score', epochIndices, scores, '-')
-  gnuplot.xlabel('Epoch')
-  gnuplot.ylabel('Average Score')
-  gnuplot.movelegend('left', 'top')
-  gnuplot.plotflush()
-  torch.save(paths.concat(self.experiments, self._id, 'scores.t7'), scores)
-    -- Plot and save normalised score
-  if #self.normScores > 0 then
-    local normScores = torch.Tensor(self.normScores)
-    gnuplot.pngfigure(paths.concat(self.experiments, self._id, 'normScores.png'))
-    gnuplot.plot('Score', epochIndices, normScores, '-')
-    gnuplot.xlabel('Epoch')
-    gnuplot.ylabel('Normalised Score')
-    gnuplot.movelegend('left', 'top')
-    gnuplot.plotflush()
-    torch.save(paths.concat(self.experiments, self._id, 'normScores.t7'), normScores)
-  end
+  -- I guess the following 2 plotting is never invoked. By pwang8
+  ---- Plot and save average score
+  --local scores = torch.Tensor(self.valScores)
+  --gnuplot.pngfigure(paths.concat(self.experiments, self._id, 'scores.png'))
+  --gnuplot.plot('Score', epochIndices, scores, '-')
+  --gnuplot.xlabel('Epoch')
+  --gnuplot.ylabel('Average Score')
+  --gnuplot.movelegend('left', 'top')
+  --gnuplot.plotflush()
+  --torch.save(paths.concat(self.experiments, self._id, 'scores.t7'), scores)
+  --  -- Plot and save normalised score
+  --if #self.normScores > 0 then
+  --  local normScores = torch.Tensor(self.normScores)
+  --  gnuplot.pngfigure(paths.concat(self.experiments, self._id, 'normScores.png'))
+  --  gnuplot.plot('Score', epochIndices, normScores, '-')
+  --  gnuplot.xlabel('Epoch')
+  --  gnuplot.ylabel('Normalised Score')
+  --  gnuplot.movelegend('left', 'top')
+  --  gnuplot.plotflush()
+  --  torch.save(paths.concat(self.experiments, self._id, 'normScores.t7'), normScores)
+  --end
   gnuplot.close()
 
   return self.avgV[#self.avgV], self.avgTdErr[#self.avgTdErr]
