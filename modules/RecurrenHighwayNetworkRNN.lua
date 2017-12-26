@@ -87,7 +87,7 @@ function RHN:buildRHNUnit(x, prev_h, noise_i, noise_h, stacked_layer_ind)
             if self.rnnResidual == 1 then
                 s_tab[layer_i]           = nn.CAddTable()({
                     nn.CMulTable()({c_gate_tab[layer_i], nn.CAddTable()({nn.MulConstant(0.5, false)(prev_h), nn.MulConstant(0.5, false)(x)})}),  -- Try to add x directly into calc when rnnResidual is 1
-                    nn.CMulTable()({t_gate_tab[layer_i], in_transform_tab[layer_i]})
+                    nn.CMulTable()({t_gate_tab[layer_i], in_transform_tab[layer_i]})    -- rnnResidual version 2. The version 1 directly added 0.5*prev_h and 0.5*x into the output
                 })  -- calc the output at time step t, as depicted in equation 6 in the paper
             else
                 s_tab[layer_i]           = nn.CAddTable()({
