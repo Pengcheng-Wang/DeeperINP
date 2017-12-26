@@ -210,7 +210,7 @@ function Agent:observe(reward, rawObservation, terminal)
       local actQValSumHeads = QHeads:sum(1):squeeze()
 
       -- Use ensemble policy with bootstrap heads (in evaluation mode)
-      local QHeadsMax, QHeadsMaxInds = QHeads:max(2) -- Find max action per head -- torch.mode() is a function returns most frequently appeared element (maths)
+      local QHeadsMax, QHeadsMaxInds
       -- If it is CI data, pick up actions according to adpType
       if self.opt.env == 'UserSimLearner/CIUserSimEnv' then   -- Todo: pwang8. Check correctness
         QHeadsMax, QHeadsMaxInds = QHeads:min(2)
@@ -234,6 +234,8 @@ function Agent:observe(reward, rawObservation, terminal)
         for j=self.CIActAdpBound[adpT][1], self.CIActAdpBound[adpT][2] do
           actDist[j] = math.exp(self.opt.actDistT * actQValSumHeads[j]) / temQsum
         end
+      else
+        QHeadsMax, QHeadsMaxInds = QHeads:max(2) -- Find max action per head -- torch.mode() is a function returns most frequently appeared element (maths)
       end
 
       aIndex = torch.mode(QHeadsMaxInds:float(), 1)[1][1] -- TODO: Torch.CudaTensor:mode is missing
@@ -247,12 +249,13 @@ function Agent:observe(reward, rawObservation, terminal)
       if self.saliency then
         self:computeSaliency(state, aIndex, true)
       end
+
     elseif torch.uniform() < epsilon then 
       -- Choose action by ε-greedy exploration (even with bootstraps)
       aIndex = torch.random(1, self.m)
 
       -- Retrieve estimates from all heads
-      local QHeads = self.policyNet:forward(state)  -- QHeads (2-dim) has size (heads_count * action_num)
+      local QHeads = self.policyNet:forward(state)  -- QHeads (2-dim) has size (heads_count * action_num). We call the forward() bcz we calculate actDist. Also it is necessary to call forward when recurrent is utilized
       -- Calculate the sum of each action's Q values over all heads
       local actQValSumHeads = QHeads:sum(1):squeeze()
 
@@ -273,15 +276,11 @@ function Agent:observe(reward, rawObservation, terminal)
         end
       end
 
-      -- Forward state anyway if recurrent
-      if self.recurrent then
-        self.policyNet:forward(state) -- This state's size is 1*24*24 for Catch. That is channel*height*width
-      end
-
       -- Reset saliency if action not chosen by network
       if self.saliency then
         self.saliencyMap:zero()
       end
+
     else
       -- Retrieve estimates from all heads
       local QHeads = self.policyNet:forward(state)
@@ -290,15 +289,6 @@ function Agent:observe(reward, rawObservation, terminal)
       local Qs = QHeads:select(1, self.head)  -- This self.head value is randomly set when Agent:training() is called
       local maxQ = Qs[1]                      --
       local bestAs = {1}
-      -- Find best actions
-      for a = 2, self.m do
-        if Qs[a] > maxQ then
-          maxQ = Qs[a]
-          bestAs = {a}
-        elseif Qs[a] == maxQ then -- Ties can occur even with floats
-          bestAs[#bestAs + 1] = a
-        end
-      end
 
       -- If it is CI data, pick up actions according to adpType
       if self.opt.env == 'UserSimLearner/CIUserSimEnv' then   -- Todo: pwang8. Check correctness
@@ -323,6 +313,17 @@ function Agent:observe(reward, rawObservation, terminal)
         end
         for j=self.CIActAdpBound[adpT][1], self.CIActAdpBound[adpT][2] do
           actDist[j] = math.exp(self.opt.actDistT * Qs[j]) / temQsum
+        end
+
+      else
+        -- Find best actions
+        for a = 2, self.m do
+          if Qs[a] > maxQ then
+            maxQ = Qs[a]
+            bestAs = {a}
+          elseif Qs[a] == maxQ then -- Ties can occur even with floats
+            bestAs[#bestAs + 1] = a
+          end
         end
       end
 
@@ -354,9 +355,10 @@ function Agent:observe(reward, rawObservation, terminal)
     self.memory:store(reward, observation, terminal, aIndex) -- TODO: Sample independent Bernoulli(p) bootstrap masks for all heads; p = 1 means no masks needed
 
     --- Todo: pwang8. test
-    if observation[1][1][-4] < 1 and observation[1][1][-3] < 1 and
+    if self.opt.env == 'UserSimLearner/CIUserSimEnv' and observation[1][1][-4] < 1 and observation[1][1][-3] < 1 and
             observation[1][1][-2] < 1 and observation[1][1][-1] < 1 and not terminal then
       print('Error ===========', observation, 'act:', aIndex, 'ter:', terminal)
+      os.exit()
     end
 
     -- Collect validation transitions at the start
@@ -384,7 +386,7 @@ function Agent:observe(reward, rawObservation, terminal)
     end
   end
 
-  if orig_terminal then -- terminal then
+  if orig_terminal then -- terminal then, orig_terminal is used because terminal is changed if raw data is used in training
     if self.bootstraps > 0 then
       -- Change bootstrap head for next episode
       self.head = torch.random(self.bootstraps)
