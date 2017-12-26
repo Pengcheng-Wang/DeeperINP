@@ -352,6 +352,8 @@ function Agent:observe(reward, rawObservation, terminal)
     end
 
     -- Store experience tuple parts (including pre-emptive action)
+    -- Attention: state is the input into NN, which contains histLen observation steps. When storing observation into
+    -- experience memory, observation is directly used. This can aviod duplicated observation stored in memory. By pwang8.
     self.memory:store(reward, observation, terminal, aIndex) -- TODO: Sample independent Bernoulli(p) bootstrap masks for all heads; p = 1 means no masks needed
 
     --- Todo: pwang8. test
