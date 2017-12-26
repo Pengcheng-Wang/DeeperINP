@@ -80,10 +80,21 @@ function RHN:buildRHNUnit(x, prev_h, noise_i, noise_h, stacked_layer_ind)
             t_gate_tab[layer_i]       = nn.Sigmoid()(nn.AddConstant(-2, False)(nn.CAddTable()({i2h[1], h2h_tab[layer_i][1]}))) -- this is the tranform module in equation 8 in the paper. I guess the AddConstant is an init step
             in_transform_tab[layer_i] = nn.Tanh()(nn.CAddTable()({i2h[2], h2h_tab[layer_i][2]}))  -- calculate the hidden module, depicted in equation 7 in the paper
             c_gate_tab[layer_i]       = nn.AddConstant(1,false)(nn.MulConstant(-1, false)(t_gate_tab[layer_i])) -- in the implementation, the c gate is designed as (1-t), in which the t gate is calculated aboved
-            s_tab[layer_i]           = nn.CAddTable()({
-                nn.CMulTable()({c_gate_tab[layer_i], prev_h}),      -- Actually the input is not directly considered here. It's interesting to see how it performs if we add it
-                nn.CMulTable()({t_gate_tab[layer_i], in_transform_tab[layer_i]})
-            })  -- calc the output at time step t, as depicted in equation 6 in the paper
+            --s_tab[layer_i]           = nn.CAddTable()({
+            --    nn.CMulTable()({c_gate_tab[layer_i], prev_h}),      -- Actually the input is not directly considered here. It's interesting to see how it performs if we add it
+            --    nn.CMulTable()({t_gate_tab[layer_i], in_transform_tab[layer_i]})
+            --})  -- calc the output at time step t, as depicted in equation 6 in the paper
+            if self.rnnResidual == 1 then
+                s_tab[layer_i]           = nn.CAddTable()({
+                    nn.CMulTable()({c_gate_tab[layer_i], nn.CAddTable()({nn.MulConstant(0.5, false)(prev_h), nn.MulConstant(0.5, false)(x)})}),  -- Try to add x directly into calc when rnnResidual is 1
+                    nn.CMulTable()({t_gate_tab[layer_i], in_transform_tab[layer_i]})
+                })  -- calc the output at time step t, as depicted in equation 6 in the paper
+            else
+                s_tab[layer_i]           = nn.CAddTable()({
+                    nn.CMulTable()({c_gate_tab[layer_i], prev_h}),      -- Actually the input is not directly considered here. It's interesting to see how it performs if we add it
+                    nn.CMulTable()({t_gate_tab[layer_i], in_transform_tab[layer_i]})
+                })  -- calc the output at time step t, as depicted in equation 6 in the paper
+            end
         else
             for i = 1, 2 do
                 -- Use select table to fetch each gate
@@ -100,7 +111,6 @@ function RHN:buildRHNUnit(x, prev_h, noise_i, noise_h, stacked_layer_ind)
         end
     end
     local next_h = s_tab[self.recurrence_depth]
-    if self.rnnResidual == 1 then next_h = nn.CAddTable()({next_h, nn.MulConstant(0.5, false)(prev_h), nn.MulConstant(0.5, false)(x)}) print('Added residual in RHN in layer '..stacked_layer_ind) end
     return next_h   -- This is the output of one RHN unit, and this output has not been processed by Dropout
 end
 
