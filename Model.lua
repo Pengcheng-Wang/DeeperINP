@@ -26,7 +26,6 @@ function Model:_init(opt)
   self.colorSpace = opt.colorSpace
   self.width = opt.width
   self.height = opt.height
-  self.modelBody = opt.modelBody
   self.hiddenSize = opt.hiddenSize  -- Default value is 512. For the Catch demo, it is 32.
   self.histLen = opt.histLen
   self.duel = opt.duel  -- bool
@@ -51,6 +50,11 @@ end
 
 -- Processes a single frame for DQN input; must not return same memory to prevent side-effects
 function Model:preprocess(observation)
+  if self.opt.env == 'UserSimLearner/CIUserSimEnv' then
+    -- In CI environment, we do not need to preprocess input feature set.
+    return observation
+  end
+
   local frame = observation:type(self.tensorType) -- Convert from CudaTensor if necessary
 
   -- Perform colour conversion if needed
