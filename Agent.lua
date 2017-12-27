@@ -762,27 +762,26 @@ function Agent:validate()
   gnuplot.ylabel('TD-Error')
   gnuplot.plotflush()
   torch.save(paths.concat(self.experiments, self._id, 'TDErrors.t7'), TDErrors)
-  -- I guess the following 2 plotting is never invoked. By pwang8
-  ---- Plot and save average score
-  --local scores = torch.Tensor(self.valScores)
-  --gnuplot.pngfigure(paths.concat(self.experiments, self._id, 'scores.png'))
-  --gnuplot.plot('Score', epochIndices, scores, '-')
-  --gnuplot.xlabel('Epoch')
-  --gnuplot.ylabel('Average Score')
-  --gnuplot.movelegend('left', 'top')
-  --gnuplot.plotflush()
-  --torch.save(paths.concat(self.experiments, self._id, 'scores.t7'), scores)
-  --  -- Plot and save normalised score
-  --if #self.normScores > 0 then
-  --  local normScores = torch.Tensor(self.normScores)
-  --  gnuplot.pngfigure(paths.concat(self.experiments, self._id, 'normScores.png'))
-  --  gnuplot.plot('Score', epochIndices, normScores, '-')
-  --  gnuplot.xlabel('Epoch')
-  --  gnuplot.ylabel('Normalised Score')
-  --  gnuplot.movelegend('left', 'top')
-  --  gnuplot.plotflush()
-  --  torch.save(paths.concat(self.experiments, self._id, 'normScores.t7'), normScores)
-  --end
+  -- Plot and save average score
+  local scores = torch.Tensor(self.valScores)
+  gnuplot.pngfigure(paths.concat(self.experiments, self._id, 'scores.png'))
+  gnuplot.plot('Score', epochIndices, scores, '-')
+  gnuplot.xlabel('Epoch')
+  gnuplot.ylabel('Average Score')
+  gnuplot.movelegend('left', 'top')
+  gnuplot.plotflush()
+  torch.save(paths.concat(self.experiments, self._id, 'scores.t7'), scores)
+  -- Plot and save normalised score
+  if #self.normScores > 0 then
+    local normScores = torch.Tensor(self.normScores)
+    gnuplot.pngfigure(paths.concat(self.experiments, self._id, 'normScores.png'))
+    gnuplot.plot('Score', epochIndices, normScores, '-')
+    gnuplot.xlabel('Epoch')
+    gnuplot.ylabel('Normalised Score')
+    gnuplot.movelegend('left', 'top')
+    gnuplot.plotflush()
+    torch.save(paths.concat(self.experiments, self._id, 'normScores.t7'), normScores)
+  end
   gnuplot.close()
 
   return self.avgV[#self.avgV], self.avgTdErr[#self.avgTdErr]
