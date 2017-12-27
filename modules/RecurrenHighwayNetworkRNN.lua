@@ -23,7 +23,7 @@ function RHN:__init(inputSize, outputSize, recurrence_depth, rhn_layers, rho, rn
     self.outputSize = outputSize    -- do element-wise addition for x and hidden value directly. If we want to introduce residual module, then it is necessary
     self.recurrence_depth = recurrence_depth or 1    -- recurrence_depth in one RHN unit
     self.rhn_layers = rhn_layers or 1   -- this is the vertical layer number of the whole RHN. It is explicitly set up here because we want to use the output_rnn_dropout, which is not very convenient if used stacked structure in sequencer
-    self.rnnResidual = rnnResidual or 1  -- 0 to turn off residual connection, 1 to turn on residual connection
+    self.rnnResidual = rnnResidual or 0  -- 0 to turn off residual connection, 1 to turn on residual connection
     assert(self.rnnResidual == 1 or self.rnnResidual == 0, 'rnnResidual has be to 0(off) or 1(on)')
     if self.rnnResidual == 1 then assert(self.inputSize == self.outputSize, 'If residual connection is utilized, input size has to equal to output size in RHN model') end
     -- build the model

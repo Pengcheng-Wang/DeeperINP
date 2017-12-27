@@ -972,33 +972,62 @@
 #date +%Y,%m,%d-%H:%M:%S
 
 
-## Testing hyper-params for action prediction models. Dec 26, 2017
-## Residual RHN is utilized here. rnnResidual version 2
-echo 'in Bayesian RHN'
+### Testing hyper-params for action prediction models. Dec 26, 2017
+### Residual RHN is utilized here. rnnResidual version 2
+#echo 'in Bayesian RHN'
+#date +%Y,%m,%d-%H:%M:%S
+#for rnnHdLc in 3 4;
+#do
+#    for rhnRD in 3 5;
+#    do
+#        for t in 1 2;
+#        do
+#            for alr in 2e-3 5e-3;
+#            do
+#                g=0
+#                if [ $t -eq 2 ]
+#                then
+#                    g=0
+#                fi
+#                if [ $t -eq 1 ];
+#                then
+#                    th userSimMain.lua -trType ac -save ac_rhn_resV2_alr_${alr}_hdlc_${rnnHdLc}_rhnRD_${rhnRD}/rnndrop.1/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 5e-3 -learningRate ${alr} -rnnHdSizeL1 21 -rnnHdLyCnt $(($rnnHdLc)) -rhnReccDept ${rhnRD} -rnnResidual 1 -ciuTType train -uppModel rnn_rhn -lstmHist 10 -usimTrIte 7000  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0.1 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) > /dev/null &
+#                else
+#                    th userSimMain.lua -trType ac -save ac_rhn_resV2_alr_${alr}_hdlc_${rnnHdLc}_rhnRD_${rhnRD}/rnndrop.1/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 5e-3 -learningRate ${alr} -rnnHdSizeL1 21 -rnnHdLyCnt $(($rnnHdLc)) -rhnReccDept ${rhnRD} -rnnResidual 1 -ciuTType train -uppModel rnn_rhn -lstmHist 10 -usimTrIte 7000  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0.1 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) > /dev/null &
+#                fi
+#            done
+#        done
+#    done
+#done
+#wait
+#echo 'Done with in Bayesian RHN'
+#date +%Y,%m,%d-%H:%M:%S
+
+
+## Testing hyper-params for action prediction models. Dec 27, 2017
+## Grid-LSTM is utilized here.
+echo 'in GridLSTM'
 date +%Y,%m,%d-%H:%M:%S
 for rnnHdLc in 3 4;
 do
-    for rhnRD in 3 5;
+    for t in 1 2;
     do
-        for t in 1 2;
+        for alr in 2e-3 5e-3;
         do
-            for alr in 2e-3 5e-3;
-            do
+            g=0
+            if [ $t -eq 2 ]
+            then
                 g=0
-                if [ $t -eq 2 ]
-                then
-                    g=0
-                fi
-                if [ $t -eq 1 ];
-                then
-                    th userSimMain.lua -trType ac -save ac_rhn_resV2_alr_${alr}_hdlc_${rnnHdLc}_rhnRD_${rhnRD}/rnndrop.1/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 5e-3 -learningRate ${alr} -rnnHdSizeL1 21 -rnnHdLyCnt $(($rnnHdLc)) -rhnReccDept ${rhnRD} -rnnResidual 1 -ciuTType train -uppModel rnn_rhn -lstmHist 10 -usimTrIte 7000  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0.1 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) > /dev/null &
-                else
-                    th userSimMain.lua -trType ac -save ac_rhn_resV2_alr_${alr}_hdlc_${rnnHdLc}_rhnRD_${rhnRD}/rnndrop.1/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 5e-3 -learningRate ${alr} -rnnHdSizeL1 21 -rnnHdLyCnt $(($rnnHdLc)) -rhnReccDept ${rhnRD} -rnnResidual 1 -ciuTType train -uppModel rnn_rhn -lstmHist 10 -usimTrIte 7000  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0.1 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) > /dev/null &
-                fi
-            done
+            fi
+            if [ $t -eq 1 ];
+            then
+                th userSimMain.lua -trType ac -save ac_gridlstm_alr_${alr}_hdlc_${rnnHdLc}/rnndrop.1/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 5e-3 -learningRate ${alr} -rnnHdSizeL1 21 -rnnHdLyCnt $(($rnnHdLc)) -ciuTType train -uppModel rnn_bGridlstm -lstmHist 10 -usimTrIte 5000  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0.1 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) > /dev/null &
+            else
+                th userSimMain.lua -trType ac -save ac_gridlstm_alr_${alr}_hdlc_${rnnHdLc}/rnndrop.1/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 5e-3 -learningRate ${alr} -rnnHdSizeL1 21 -rnnHdLyCnt $(($rnnHdLc)) -ciuTType train -uppModel rnn_bGridlstm -lstmHist 10 -usimTrIte 5000  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0.1 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) > /dev/null &
+            fi
         done
     done
 done
 wait
-echo 'Done with in Bayesian RHN'
+echo 'Done with GridLSTM'
 date +%Y,%m,%d-%H:%M:%S
