@@ -6,6 +6,9 @@
 -- This script aims at creating one script implementing the rlenvs APIs.
 -- This script is modified based on UserBehaviorGenerator.lua
 --
+-- todo:pwang8. This file needs to be updated. I'll use other opt instead of uppModel to represent action and score prediction
+-- models separately. Also I'm thinking about maintaining only rnn type of running data structure, and then
+-- use it to update one step structure or cnn type of data structure to feed into models. I've read to here. Dec 28, 2017.
 
 require 'torch'
 require 'nn'
@@ -130,7 +133,6 @@ function CIUserSimEnv:getActBoundOfAdpType(adpT)
     return self.CIUSim.CIFr.ciAdpActRanges[adpT]
 end
 
--- todo:pwang8. This file needs to be updated. I've read to here. Dec 27, 2017.
 --- This function calculates and sets self.curRnnUserAct (lstm), or self.curOneStepAct (non-lstm),
 --  which is the predicted user action according to current tabRnnStatePrep or curOneStepStatePrep value
 function CIUserSimEnv:_calcUserAct()
@@ -192,7 +194,7 @@ function CIUserSimEnv:_calcUserAct()
         end
     end
 
-    ---- The following code controls happening of ending user action
+    ---- The following code controls generation of ending user action
     --     if user action sequence is too long, we can manually add this end
     --     action to terminate the sequence, at the same time influence the
     --     action distribution a little. This can be a safe design, but does
@@ -273,7 +275,7 @@ function CIUserSimEnv:start()
                 self.rndStartInd = torch.random(1, self.realDataStartsCnt)
             until self.CIUSim.realUserDataActs[self.CIUSim.realUserDataStartLines[self.rndStartInd]] ~= self.CIUSim.CIFr.usrActInd_end
 
-            --- Get this user's state record at the 1st time stpe. This process means we sample
+            --- Get this user's state record at the 1st time step. This process means we sample
             --  user's 1st action and survey data from human user's records. Then we use our prediction
             --  model to estimate user's future ations.
             self.curOneStepStateRaw = self.CIUSim.realUserDataStates[self.CIUSim.realUserDataStartLines[self.rndStartInd]]     -- sample the 1st state
