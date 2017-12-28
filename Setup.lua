@@ -35,8 +35,8 @@ function Setup:_init(arg)
   -- Validate command-line options (logging errors)
   self:validateOptions()
 
---  -- Augment environments to meet spec
---  self:augmentEnv()
+  -- Augment environments to meet spec
+  self:augmentEnv()   -- This is a smart design
 
   -- Torch setup
   log.info('Setting up Torch7')
