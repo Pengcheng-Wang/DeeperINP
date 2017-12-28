@@ -94,7 +94,7 @@ function Model:create()
   -- Add network body
   log.info('Setting up ' .. self.modelBody)
   local Body = require(self.modelBody)
-  local body = Body(self):createBody()
+  local body = Body(self):createBody()  -- todo:pwang8. Dec 27, 2017. It's not clear whether the correct param list is used in Body(). It looks like in _init() it wants opts. Check it carefully.
 
   -- Calculate body output size
   local bodyOutputSize = torch.prod(torch.Tensor(getOutputSize(body, _.append({histLen}, self.stateSpec[2]))))  -- return of _.append({histLen}, self.stateSpec[2]) is a table of {4, 1, 24, 24} for Catch demo
@@ -103,7 +103,7 @@ function Model:create()
     body:add(nn.View(-1, bodyOutputSize))
     net:add(nn.MinDim(1, 4))  -- If input dimension < 4, then add one extra dimension at index 1
     net:add(nn.Transpose({1, 2})) -- swap 1st and 2nd dimension -- This is used for SeqLSTM when recurrent is true and async is false. SeqLSTM requires batchIndex be the 2nd dim
-    body = nn.Bottle(body, 4, 2)
+    body = nn.Bottle(body, 4, 2)  -- Bottle allows varying dimensionality input to be forwarded through any module that accepts input of nInputDim dimensions, and generates output of nOutputDim dimensions.
     net:add(body)
     net:add(nn.MinDim(1, 3))
   else
@@ -131,7 +131,7 @@ function Model:create()
       local lstm = nn.SeqLSTM(bodyOutputSize, self.hiddenSize)
       lstm:remember('both')
       valStream:add(lstm)
-      valStream:add(nn.Select(-3, -1)) -- Select last timestep
+      valStream:add(nn.Select(-3, -1)) -- Select last timestep -- This is the reason why the output is of the same format even if recurrent is utilized. It's just because only output at last time step is used, by pwang8
     else
       valStream:add(nn.Linear(bodyOutputSize, self.hiddenSize))
       valStream:add(nn.ReLU(true))
@@ -169,8 +169,8 @@ function Model:create()
     head:add(DuelAggregator(self.m))
     -- print('###', getOutputSize(head, {10, 50, 512})) os.exit() -- In case self.recurrent is true, input to one head is of size {10, 50, 512},
     -- with 10 being histLen, 50 being batchSize, and 512 be # of features from output of previous layers. Output is of size {50, 3, 1},
-    -- with 3 being # of actions. If self.recurrent is false,
-    -- input to one head module should be {50, 512}. Then output of head module is still {50, 3, 1}
+    -- with 3 being # of actions. If self.recurrent is false, input to one head module
+    -- should be {50, 512}. Then output of head module is still {50, 3, 1}
   else
     if self.recurrent and self.async then
       local lstm = nn.FastLSTM(bodyOutputSize, self.hiddenSize, self.histLen)
@@ -207,6 +207,9 @@ function Model:create()
     net:add(headConcat)
   elseif self.a3c then
     -- Actor-critic does not use the normal head but instead a concatenated value function V and policy π
+    -- Actor-critic method has is so differently implemented from other value function-based methods. The head module,
+    -- right now including potentially bootstrapped heads, recurrent module, or dule module are not included in
+    -- Actor-critic(e.g., a3c) methods.
     net:add(nn.Linear(bodyOutputSize, self.hiddenSize))
     net:add(nn.ReLU(true))
 
