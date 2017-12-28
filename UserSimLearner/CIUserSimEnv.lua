@@ -13,13 +13,10 @@ require 'nngraph'
 local _ = require 'moses'
 local class = require 'classic'
 require 'classic.torch' -- Enables serialisation
-local TableSet = require 'MyMisc.TableSetMisc'
+--local TableSet = require 'MyMisc.TableSetMisc'
 
 local CIFileReader = require 'file_reader'
 local CIUserSimulator = require 'UserSimulator'
-local CIUserActsPredictor = require 'UserSimLearner/UserActsPredictor'
-local CIUserScorePredictor = require 'UserSimLearner/UserScorePredictor'
-local CIUserActScorePredictor = require 'UserSimLearner/UserActScorePredictor'
 
 local CIUserSimEnv = classic.class('CIUserSimEnv')
 
@@ -41,6 +38,8 @@ function CIUserSimEnv:_init(opt)
 
     if opt.uSimShLayer < 1 then
         -- separate models for action and outcome (score) prediction
+        local CIUserActsPredictor = require 'UserSimLearner/UserActsPredictor'
+        local CIUserScorePredictor = require 'UserSimLearner/UserScorePredictor'
         self.CIUap = CIUserActsPredictor(self.CIUSim, opt)
         self.CIUsp = CIUserScorePredictor(self.CIUSim, opt)
         self.userActsPred = self.CIUap.model    -- set the reference of CIUserActsPredictor to the pre-loaded
@@ -56,6 +55,7 @@ function CIUserSimEnv:_init(opt)
         self.userScorePred:evaluate()
     else
         -- shared model for action and outcome (score) prediction
+        local CIUserActScorePredictor = require 'UserSimLearner/UserActScorePredictor'
         self.CIUasp = CIUserActScorePredictor(self.CIUSim, opt)
         self.userActScorePred = self.CIUasp.model   -- set the reference of CIUserActScorePredictor to the pre-loaded
 
@@ -130,7 +130,7 @@ function CIUserSimEnv:getActBoundOfAdpType(adpT)
     return self.CIUSim.CIFr.ciAdpActRanges[adpT]
 end
 
-
+-- todo:pwang8. This file needs to be updated. I've read to here. Dec 27, 2017.
 --- This function calculates and sets self.curRnnUserAct (lstm), or self.curOneStepAct (non-lstm),
 --  which is the predicted user action according to current tabRnnStatePrep or curOneStepStatePrep value
 function CIUserSimEnv:_calcUserAct()
