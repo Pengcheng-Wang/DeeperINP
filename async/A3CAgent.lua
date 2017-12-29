@@ -78,7 +78,7 @@ function A3CAgent:learn(steps, from)
   log.info('A3CAgent ended learning steps=%d', steps)
 end
 
--- todo:pwang8. Take a careful look at this implmentation. Check it against the baseline a2c code. Dec 29, 2017. Morning :D
+-- todo:pwang8. Take a careful look at this implementation. Check it against the baseline a2c code. Dec 29, 2017. Morning :D
 function A3CAgent:accumulateGradients(terminal, state)
   local R = 0
   if not terminal then
@@ -107,12 +107,12 @@ function A3CAgent:accumulateGradients(terminal, state)
       probability:add(TINY_EPSILON)
     end
 
-    self.vTarget[1] = -0.5 * (R - V)
+    self.vTarget[1] = -0.5 * (R - V)  -- this makes sense, instead of the 0.5 const. It then makes sense if we explain it as result of adopting value loss coefficient, by pwang8
 
     -- ∇θ logp(s) = 1/p(a) for chosen a, 0 otherwise
     self.policyTarget:zero()
     -- f(s) ∇θ logp(s)
-    self.policyTarget[action] = -(R - V) / probability[action] -- Negative target for gradient descent
+    self.policyTarget[action] = -(R - V) / probability[action] -- Negative target for gradient descent. This calculation should be correct. Same as in pytorch a2c repo. By pwang8.
 
     -- Calculate (negative of) gradient of entropy of policy (for gradient descent): -(-logp(s) - 1)
     local gradEntropy = torch.log(probability) + 1
