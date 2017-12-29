@@ -78,7 +78,7 @@ function A3CAgent:learn(steps, from)
   log.info('A3CAgent ended learning steps=%d', steps)
 end
 
-
+-- todo:pwang8. Take a careful look at this implmentation. Check it against the baseline a2c code. Dec 29, 2017. Morning :D
 function A3CAgent:accumulateGradients(terminal, state)
   local R = 0
   if not terminal then

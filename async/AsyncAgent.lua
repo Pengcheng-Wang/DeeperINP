@@ -41,7 +41,7 @@ function AsyncAgent:_init(opt, policyNet, targetNet, theta, targetTheta, atomic,
   self.m = actionSpec[3][2] - actionSpec[3][1] + 1
   self.actionOffset = 1 - actionSpec[3][1]
 
-  self.policyNet = policyNet:clone('weight', 'bias')
+  self.policyNet = policyNet:clone('weight', 'bias')  -- make a copy that shares the weights and biases
 
   self.theta = theta
   local __, gradParams = self.policyNet:parameters()
