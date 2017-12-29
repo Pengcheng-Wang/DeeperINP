@@ -1056,6 +1056,5 @@ do
         done
     done
     wait
-    echo 'done with 5-layer Bayesian LSTM' ${rnnHdLc}
     date +%Y,%m,%d-%H:%M:%S
 done
