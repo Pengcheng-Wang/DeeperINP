@@ -1,7 +1,6 @@
 local classic = require 'classic'
 local threads = require 'threads'
 local tds = require 'tds'
-local signal = require 'posix.signal'
 local AsyncModel = require 'async/AsyncModel'
 local AsyncAgent = require 'async/AsyncAgent'
 local QAgent = require 'async/QAgent'
@@ -205,7 +204,7 @@ function AsyncMaster:start()
           os.exit(128)
         end
       end
-      posix.sleep(1)
+      posix.sleep(1)  -- in unit of second
     end
   end
 
