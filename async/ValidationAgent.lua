@@ -394,6 +394,7 @@ function ValidationAgent:plotValidation()
   -- Plot and save average score
   local scores = torch.Tensor(self.valScores)
   gnuplot.pngfigure(paths.concat('experiments', self._id, 'scores.png'))
+  print('###'..epochIndices..', '..scores)
   gnuplot.plot('Score', epochIndices, scores, '-')
   gnuplot.xlabel('Epoch')
   gnuplot.ylabel('Average Score')

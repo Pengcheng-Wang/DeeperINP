@@ -114,6 +114,7 @@ function Experience:_init(capacity, opt, isValidation)
   self.betaGrad = (1 - opt.betaZero)/(opt.steps - opt.learnStart)
   -- Get singleton instance for step
   self.globals = Singleton.getInstance()
+  self.opt = opt
 end
 
 -- Calculates circular indices
@@ -208,7 +209,7 @@ function Experience:retrieve(indices)
     end
 
     --- Todo: pwang8. test
-    if self.transTuples.states[n][-1][1][1][-4] == 0 and self.transTuples.states[n][-1][1][1][-3] == 0 and
+    if self.opt.env == 'UserSimLearner/CIUserSimEnv' and self.transTuples.states[n][-1][1][1][-4] == 0 and self.transTuples.states[n][-1][1][1][-3] == 0 and
             self.transTuples.states[n][-1][1][1][-2] == 0 and self.transTuples.states[n][-1][1][1][-1] == 0 then
       print('Error in Experience retrieve(). An invalid transition pair is retrieved, since starting state is an ending state')
     end
