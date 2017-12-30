@@ -1033,12 +1033,39 @@
 #date +%Y,%m,%d-%H:%M:%S
 
 
-## Testing hyper-params for action prediction models, for blstm model with 5 layers.
-for rnnHdLc in 5
+### Testing hyper-params for action prediction models, for blstm model with 5 layers.
+#for rnnHdLc in 5
+#do
+#    echo 'in 5-layer Bayesian LSTM round' ${rnnHdLc}
+#    date +%Y,%m,%d-%H:%M:%S
+#    for t in 1 2;
+#    do
+#        for alr in 1e-3;
+#        do
+#            g=0
+#            if [ $t -eq 2 ]
+#            then
+#                g=0
+#            fi
+#            if [ $t -eq 1 ];
+#            then
+#                th userSimMain.lua -trType ac -save blstm_alr_${alr}_hdlc_${rnnHdLc}/rnndrop.1/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 5e-3 -learningRate ${alr} -rnnHdSizeL1 21 -rnnHdLyCnt $(($rnnHdLc)) -ciuTType train -uppModel rnn_blstm -lstmHist 10 -usimTrIte 5000  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0.1 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) > /dev/null &
+#            else
+#                th userSimMain.lua -trType ac -save blstm_alr_${alr}_hdlc_${rnnHdLc}/rnndrop.1/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 5e-3 -learningRate ${alr} -rnnHdSizeL1 21 -rnnHdLyCnt $(($rnnHdLc)) -ciuTType train -uppModel rnn_blstm -lstmHist 10 -usimTrIte 5000  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0.1 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) > /dev/null &
+#            fi
+#        done
+#    done
+#    wait
+#    date +%Y,%m,%d-%H:%M:%S
+#done
+
+
+## Get Action prediction result for fold 3-5. Dec 30, 2017.
+for rnnHdLc in 4
 do
-    echo 'in 5-layer Bayesian LSTM round' ${rnnHdLc}
+    echo 'in Bayesian LSTM fold 3-5' ${rnnHdLc}
     date +%Y,%m,%d-%H:%M:%S
-    for t in 1 2;
+    for t in 3 4 5;
     do
         for alr in 1e-3;
         do
@@ -1049,12 +1076,73 @@ do
             fi
             if [ $t -eq 1 ];
             then
-                th userSimMain.lua -trType ac -save blstm_alr_${alr}_hdlc_${rnnHdLc}/rnndrop.1/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 5e-3 -learningRate ${alr} -rnnHdSizeL1 21 -rnnHdLyCnt $(($rnnHdLc)) -ciuTType train -uppModel rnn_blstm -lstmHist 10 -usimTrIte 5000  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0.1 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) > /dev/null &
+                th userSimMain.lua -trType ac -save blstm_alr_${alr}_hdlc_${rnnHdLc}/rnndrop.1/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 5e-3 -learningRate ${alr} -rnnHdSizeL1 21 -rnnHdLyCnt $(($rnnHdLc)) -ciuTType train -uppModel rnn_blstm -lstmHist 10 -usimTrIte 3500  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0.1 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) > /dev/null &
             else
-                th userSimMain.lua -trType ac -save blstm_alr_${alr}_hdlc_${rnnHdLc}/rnndrop.1/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 5e-3 -learningRate ${alr} -rnnHdSizeL1 21 -rnnHdLyCnt $(($rnnHdLc)) -ciuTType train -uppModel rnn_blstm -lstmHist 10 -usimTrIte 5000  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0.1 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) > /dev/null &
+                th userSimMain.lua -trType ac -save blstm_alr_${alr}_hdlc_${rnnHdLc}/rnndrop.1/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 5e-3 -learningRate ${alr} -rnnHdSizeL1 21 -rnnHdLyCnt $(($rnnHdLc)) -ciuTType train -uppModel rnn_blstm -lstmHist 10 -usimTrIte 3500  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0.1 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) > /dev/null &
             fi
         done
     done
     wait
+    echo 'done with in Bayesian LSTM' ${rnnHdLc}
     date +%Y,%m,%d-%H:%M:%S
 done
+
+wait
+## Testing hyper-params for action prediction models. Dec 24, 2017
+echo 'in Bayesian RHN fold 3-5'
+date +%Y,%m,%d-%H:%M:%S
+for rnnHdLc in 3;
+do
+    for rhnRD in 3;
+    do
+        for t in 3 4 5;
+        do
+            for alr in 2e-3;
+            do
+                g=0
+                if [ $t -eq 2 ]
+                then
+                    g=0
+                fi
+                if [ $t -eq 1 ];
+                then
+                    th userSimMain.lua -trType ac -save ac_rhn_alr_${alr}_hdlc_${rnnHdLc}_rhnRD_${rhnRD}/rnndrop.1/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 5e-3 -learningRate ${alr} -rnnHdSizeL1 21 -rnnHdLyCnt $(($rnnHdLc)) -rhnReccDept ${rhnRD} -ciuTType train -uppModel rnn_rhn -lstmHist 10 -usimTrIte 2000  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0.1 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) > /dev/null &
+                else
+                    th userSimMain.lua -trType ac -save ac_rhn_alr_${alr}_hdlc_${rnnHdLc}_rhnRD_${rhnRD}/rnndrop.1/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 5e-3 -learningRate ${alr} -rnnHdSizeL1 21 -rnnHdLyCnt $(($rnnHdLc)) -rhnReccDept ${rhnRD} -ciuTType train -uppModel rnn_rhn -lstmHist 10 -usimTrIte 2000  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0.1 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) > /dev/null &
+                fi
+            done
+        done
+    done
+done
+wait
+echo 'Done with in Bayesian RHN fold 3-5'
+date +%Y,%m,%d-%H:%M:%S
+
+wait
+## Action prediction models for fold 3-5
+## Grid-LSTM is utilized here. Dec 30, 2017.
+echo 'in GridLSTM fold 3-5'
+date +%Y,%m,%d-%H:%M:%S
+for rnnHdLc in 4;
+do
+    for t in 3 4 5;
+    do
+        for alr in 2e-3;
+        do
+            g=0
+            if [ $t -eq 2 ]
+            then
+                g=0
+            fi
+            if [ $t -eq 1 ];
+            then
+                th userSimMain.lua -trType ac -save ac_gridlstm_alr_${alr}_hdlc_${rnnHdLc}/rnndrop.1/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 5e-3 -learningRate ${alr} -rnnHdSizeL1 21 -rnnHdLyCnt $(($rnnHdLc)) -ciuTType train -uppModel rnn_bGridlstm -lstmHist 10 -usimTrIte 5000  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0.1 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) > /dev/null &
+            else
+                th userSimMain.lua -trType ac -save ac_gridlstm_alr_${alr}_hdlc_${rnnHdLc}/rnndrop.1/seed$(($s))/augRnd/tdiv$(($t))/ -batchSize 160 -coefL2 5e-3 -learningRate ${alr} -rnnHdSizeL1 21 -rnnHdLyCnt $(($rnnHdLc)) -ciuTType train -uppModel rnn_bGridlstm -lstmHist 10 -usimTrIte 5000  -uSimShLayer 0 -testSetDivSeed $(($t-1)) -gpu $(($g)) -dropoutUSim 0.1 -uSimLstmBackLen 3 -actPredDataAug 1 -seed $(($s)) > /dev/null &
+            fi
+        done
+    done
+done
+wait
+echo 'Done with GridLSTM fold 3-5'
+date +%Y,%m,%d-%H:%M:%S
