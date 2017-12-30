@@ -195,6 +195,7 @@ function AsyncMaster:start()
       if globalStep < 0 then return end
 
       local countSince = globalStep - lastUpdate
+      -- Should set this valFreq to a relatively large number, otherwise there might be a problem for gnuplot
       if countSince > opt.valFreq then
         log.info('starting validation after %d steps', countSince)
         lastUpdate = globalStep

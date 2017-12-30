@@ -54,7 +54,7 @@ function ValidationAgent:_init(opt, theta, atomic)
 
   self.selectAction = self.eGreedyAction
   self.a3c = opt.async == 'A3C'
-  if self.a3c then self.selectAction = self.probabilisticAction end
+  if self.a3c then self.selectAction = self.probabilisticAction end  -- todo:pwang8. Might need to change this for all actor-critic methods. Dec 29, 2017
 
   self.opt = opt
   -- Sorry, adding ugly code here again, just for CI data compatability
@@ -233,8 +233,8 @@ function ValidationAgent:validate()
 
   self:visualiseFilters()
 
---  local avgV = self:validationStats()
---  log.info('Average V: ' .. avgV)
+  local avgV = self:validationStats()   -- I remembered there are some problems with this function invocation. But it is helpful.
+  log.info('Average V: ' .. avgV)
 
   -- Save latest weights
   log.info('Saving weights')
@@ -371,26 +371,26 @@ function ValidationAgent:plotValidation()
     gnuplot.plotflush()
     torch.save(paths.concat('experiments', self._id, 'losses.t7'), losses)
   end
-  -- Plot and save V
-  local epochIndices = torch.linspace(1, #self.avgV, #self.avgV)
-  local Vs = torch.Tensor(self.avgV)
-  gnuplot.pngfigure(paths.concat('experiments', self._id, 'Vs.png'))
-  gnuplot.plot('V', epochIndices, Vs, '-')
-  gnuplot.xlabel('Epoch')
-  gnuplot.ylabel('V')
-  gnuplot.movelegend('left', 'top')
-  gnuplot.plotflush()
-  torch.save(paths.concat('experiments', self._id, 'V.t7'), Vs)
-  -- Plot and save TD-error δ
-  if #self.avgTdErr>0 then
-    local TDErrors = torch.Tensor(self.avgTdErr)
-    gnuplot.pngfigure(paths.concat('experiments', self._id, 'TDErrors.png'))
-    gnuplot.plot('TD-Error', epochIndices, TDErrors, '-')
-    gnuplot.xlabel('Epoch')
-    gnuplot.ylabel('TD-Error')
-    gnuplot.plotflush()
-    torch.save(paths.concat('experiments', self._id, 'TDErrors.t7'), TDErrors)
-  end
+  ---- Plot and save V
+  --local epochIndices = torch.linspace(1, #self.avgV, #self.avgV)
+  --local Vs = torch.Tensor(self.avgV)
+  --gnuplot.pngfigure(paths.concat('experiments', self._id, 'Vs.png'))
+  --gnuplot.plot('V', epochIndices, Vs, '-')
+  --gnuplot.xlabel('Epoch')
+  --gnuplot.ylabel('V')
+  --gnuplot.movelegend('left', 'top')
+  --gnuplot.plotflush()
+  --torch.save(paths.concat('experiments', self._id, 'V.t7'), Vs)
+  ---- Plot and save TD-error δ
+  --if #self.avgTdErr>0 then
+  --  local TDErrors = torch.Tensor(self.avgTdErr)
+  --  gnuplot.pngfigure(paths.concat('experiments', self._id, 'TDErrors.png'))
+  --  gnuplot.plot('TD-Error', epochIndices, TDErrors, '-')
+  --  gnuplot.xlabel('Epoch')
+  --  gnuplot.ylabel('TD-Error')
+  --  gnuplot.plotflush()
+  --  torch.save(paths.concat('experiments', self._id, 'TDErrors.t7'), TDErrors)
+  --end
   -- Plot and save average score
   local scores = torch.Tensor(self.valScores)
   gnuplot.pngfigure(paths.concat('experiments', self._id, 'scores.png'))
@@ -400,17 +400,17 @@ function ValidationAgent:plotValidation()
   gnuplot.movelegend('left', 'top')
   gnuplot.plotflush()
   torch.save(paths.concat('experiments', self._id, 'scores.t7'), scores)
-    -- Plot and save normalised score
-  if #self.normScores > 0 then
-    local normScores = torch.Tensor(self.normScores)
-    gnuplot.pngfigure(paths.concat('experiments', self._id, 'normScores.png'))
-    gnuplot.plot('Score', epochIndices, normScores, '-')
-    gnuplot.xlabel('Epoch')
-    gnuplot.ylabel('Normalised Score')
-    gnuplot.movelegend('left', 'top')
-    gnuplot.plotflush()
-    torch.save(paths.concat('experiments', self._id, 'normScores.t7'), normScores)
-  end
+  --  -- Plot and save normalised score
+  --if #self.normScores > 0 then
+  --  local normScores = torch.Tensor(self.normScores)
+  --  gnuplot.pngfigure(paths.concat('experiments', self._id, 'normScores.png'))
+  --  gnuplot.plot('Score', epochIndices, normScores, '-')
+  --  gnuplot.xlabel('Epoch')
+  --  gnuplot.ylabel('Normalised Score')
+  --  gnuplot.movelegend('left', 'top')
+  --  gnuplot.plotflush()
+  --  torch.save(paths.concat('experiments', self._id, 'normScores.t7'), normScores)
+  --end
   gnuplot.close()
 end
 

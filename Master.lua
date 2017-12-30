@@ -140,7 +140,7 @@ function Master:train()
       end
     end
 
-    -- Validate
+    -- Validate. Should set this valFreq to a relatively large number. Otherwise gnuplot may have problem
     if not self.noValidation and step >= self.learnStart and step % self.valFreq == 0 then
       self.validation:validate() -- Sets env and agent to evaluation mode and then back to training mode
 
