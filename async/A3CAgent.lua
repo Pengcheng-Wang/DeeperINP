@@ -51,6 +51,7 @@ function A3CAgent:learn(steps, from)
     self.theta_:copy(self.theta)
     self.batchIdx = 0
     repeat
+      print('@@@@@@@@ terminal: ', terminal)
       self.batchIdx = self.batchIdx + 1
       self.states[self.batchIdx]:copy(state)
 
