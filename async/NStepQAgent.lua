@@ -118,10 +118,10 @@ function NStepQAgent:accumulateGradients(terminal, state)
     local Q_i = self.policyNet_:forward(self.states[i]):squeeze()
     local tdErr = R - Q_i[self.actions[i]]
     print('###### i:', i)
-    print(self.states[i])
-    print(self.actions[i])
+    print('Type R:', type(R))
+    print('Type Q_i:', type(Q_i[self.actions[i]]))
     print(tdErr)
-    print(self.policyNet_)
+    print('Type tdErr:', type(tdErr))
     self:accumulateGradientTdErr(self.states[i], self.actions[i], tdErr, self.policyNet_)
   end
 end
