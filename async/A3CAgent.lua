@@ -51,7 +51,6 @@ function A3CAgent:learn(steps, from)
     self.theta_:copy(self.theta)
     self.batchIdx = 0
     repeat
-      print('@@@@@@@@ terminal: ', terminal)
       self.batchIdx = self.batchIdx + 1
       self.states[self.batchIdx]:copy(state)
 
@@ -63,7 +62,7 @@ function A3CAgent:learn(steps, from)
 
       reward, terminal, state = self:takeAction(action)
       self.rewards[self.batchIdx] = reward
-
+      print('@@@@@@@@ terminal: ', terminal)
       self:progress(steps)
     until terminal or self.batchIdx == self.batchSize
 
