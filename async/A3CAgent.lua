@@ -24,6 +24,7 @@ function A3CAgent:_init(opt, policyNet, targetNet, theta, targetTheta, atomic, s
   self.rewards = torch.Tensor(self.batchSize)
   self.actions = torch.ByteTensor(self.batchSize)
   self.states = torch.Tensor(0)
+  self.terminal_masks = torch.Tensor(self.batchSize):fill(1)  -- this value is 0 if terminal, 1 if not
   self.beta = opt.entropyBeta
 
   self.env:training()
@@ -53,6 +54,11 @@ function A3CAgent:learn(steps, from)
     repeat
       self.batchIdx = self.batchIdx + 1
       self.states[self.batchIdx]:copy(state)
+      self.terminal_masks[self.batchIdx] = terminal and 0 or 1    -- this variable indicates whether the state at batchIdx is terminal
+      -- Debug
+      if terminal then
+        log.info('Termial captured at idx:%d', self.batchIdx)
+      end
 
 --      local V, probability = table.unpack(self.policyNet_:forward(state)) -- For CI sim, V is a 1-dim, size-1 tensor, probability is a 1-dim, size-10 (act#) tensor.
 --      local action = torch.multinomial(probability, 1):squeeze()
@@ -62,7 +68,7 @@ function A3CAgent:learn(steps, from)
 
       reward, terminal, state = self:takeAction(action)
       self.rewards[self.batchIdx] = reward
-      print('@@@@@@@@ terminal: ', terminal)
+
       self:progress(steps)
     until terminal or self.batchIdx == self.batchSize
 
@@ -86,7 +92,11 @@ function A3CAgent:accumulateGradients(terminal, state)
   end
 
   for i=self.batchIdx,1,-1 do
-    R = self.rewards[i] + self.gamma * R
+    R = self.rewards[i] + self.gamma * R * self.terminal_masks[i]
+    -- Debug
+    if self.terminal_masks[i] == 0 then
+      log.info('In accuGra, terminal cap at %d', i)
+    end
 
     local action = self.actions[i]
     local V, probability = table.unpack(self.policyNet_:forward(self.states[i]))
