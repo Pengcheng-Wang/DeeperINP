@@ -24,7 +24,7 @@ function A3CAgent:_init(opt, policyNet, targetNet, theta, targetTheta, atomic, s
   self.rewards = torch.Tensor(self.batchSize)
   self.actions = torch.ByteTensor(self.batchSize)
   self.states = torch.Tensor(0)
-  self.terminal_masks = torch.Tensor(self.batchSize):fill(1)  -- this value is 0 if terminal, 1 if not
+  self.terminal_masks = torch.Tensor(self.batchSize+1):fill(1)  -- this value is 0 if terminal, 1 if not. In s1-a-s2, ter_m[t1] represents whether s1 is terminal
   self.beta = opt.entropyBeta
 
   self.env:training()
@@ -50,16 +50,11 @@ function A3CAgent:learn(steps, from)
   self.tic = torch.tic()
   repeat
     self.theta_:copy(self.theta)
+    self.terminal_masks[1] = terminal and 0 or 1    -- this variable indicates whether the state at batchIdx is terminal
     self.batchIdx = 0
     repeat
       self.batchIdx = self.batchIdx + 1
       self.states[self.batchIdx]:copy(state)
-      self.terminal_masks[self.batchIdx] = terminal and 0 or 1    -- this variable indicates whether the state at batchIdx is terminal
-      -- Debug
-      if terminal then  -- Bug: pwang8. It does not print here. Dec 30, 2017.
-        print('**********Termial captured at idx:', self.batchIdx)
-        log.info('Termial captured at idx:%d', self.batchIdx)
-      end
 
 --      local V, probability = table.unpack(self.policyNet_:forward(state)) -- For CI sim, V is a 1-dim, size-1 tensor, probability is a 1-dim, size-10 (act#) tensor.
 --      local action = torch.multinomial(probability, 1):squeeze()
@@ -69,6 +64,15 @@ function A3CAgent:learn(steps, from)
 
       reward, terminal, state = self:takeAction(action)
       self.rewards[self.batchIdx] = reward
+      self.terminal_masks[self.batchIdx+1] = terminal and 0 or 1    -- this variable indicates whether the state at batchIdx is terminal
+      -- the indices for rewards and terminal_masks are different. For an s1-a-s2 transition, rewards[t1] represents
+      -- the reward got in this transition. But terminal_masks[t1] means whether s1 is a terminal state (0 if it is terminal).
+
+      -- Debug
+      if terminal then  -- Bug: pwang8. It does not print here. Dec 30, 2017.
+        --print('**********Termial captured at idx:', self.batchIdx)
+        log.info('**********Termial captured at idx:%d', self.batchIdx+1)
+      end
 
       self:progress(steps)
     until terminal or self.batchIdx == self.batchSize
@@ -93,11 +97,11 @@ function A3CAgent:accumulateGradients(terminal, state)
   end
 
   for i=self.batchIdx,1,-1 do
-    R = self.rewards[i] + self.gamma * R * self.terminal_masks[i]
+    R = self.rewards[i] + self.gamma * R * self.terminal_masks[i+1]
     -- Debug
-    if self.terminal_masks[i] == 0 then
-      print('#####@@@@@@'..'In accuGra, terminal cap at', i)
-      log.info('In accuGra, terminal cap at %d', i)
+    if self.terminal_masks[i+1] == 0 then
+      --print('#####@@@@@@'..'In accuGra, terminal cap at', i)
+      log.info('#####@@@@@@In accuGra, terminal cap at %d', i+1)
     end
 
     local action = self.actions[i]
