@@ -68,12 +68,6 @@ function A3CAgent:learn(steps, from)
       -- the indices for rewards and terminal_masks are different. For an s1-a-s2 transition, rewards[t1] represents
       -- the reward got in this transition. But terminal_masks[t1] means whether s1 is a terminal state (0 if it is terminal).
 
-      -- Debug
-      if terminal then  -- Bug: pwang8. It does not print here. Dec 30, 2017.
-        --print('**********Termial captured at idx:', self.batchIdx)
-        log.info('**********Termial captured at idx:%d', self.batchIdx+1)
-      end
-
       self:progress(steps)
     until terminal or self.batchIdx == self.batchSize
 
@@ -98,11 +92,6 @@ function A3CAgent:accumulateGradients(terminal, state)
 
   for i=self.batchIdx,1,-1 do
     R = self.rewards[i] + self.gamma * R * self.terminal_masks[i+1]
-    -- Debug
-    if self.terminal_masks[i+1] == 0 then
-      --print('#####@@@@@@'..'In accuGra, terminal cap at', i)
-      log.info('#####@@@@@@In accuGra, terminal cap at %d', i+1)
-    end
 
     local action = self.actions[i]
     local V, probability = table.unpack(self.policyNet_:forward(self.states[i]))
