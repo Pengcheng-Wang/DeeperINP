@@ -56,7 +56,8 @@ function A3CAgent:learn(steps, from)
       self.states[self.batchIdx]:copy(state)
       self.terminal_masks[self.batchIdx] = terminal and 0 or 1    -- this variable indicates whether the state at batchIdx is terminal
       -- Debug
-      if terminal then
+      if terminal then  -- Bug: pwang8. It does not print here. Dec 30, 2017.
+        print('**********Termial captured at idx:', self.batchIdx)
         log.info('Termial captured at idx:%d', self.batchIdx)
       end
 
@@ -95,6 +96,7 @@ function A3CAgent:accumulateGradients(terminal, state)
     R = self.rewards[i] + self.gamma * R * self.terminal_masks[i]
     -- Debug
     if self.terminal_masks[i] == 0 then
+      print('#####@@@@@@'..'In accuGra, terminal cap at', i)
       log.info('In accuGra, terminal cap at %d', i)
     end
 
