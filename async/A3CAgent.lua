@@ -91,7 +91,7 @@ function A3CAgent:accumulateGradients(terminal, state)
   end
 
   for i=self.batchIdx,1,-1 do
-    R = self.rewards[i] + self.gamma * R * self.terminal_masks[i+1]
+    R = self.rewards[i] + self.gamma * R --* self.terminal_masks[i+1]
 
     local action = self.actions[i]
     local V, probability = table.unpack(self.policyNet_:forward(self.states[i]))
