@@ -141,6 +141,7 @@ function Setup:parseOptions(arg)
   cmd:option('-async', '', 'Async agent: <none>|Sarsa|OneStepQ|NStepQ|A3C') -- TODO: Change names
   cmd:option('-rmsEpsilon', 0.1, 'Epsilon for sharedRmsProp')
   cmd:option('-entropyBeta', 0.01, 'Policy entropy regularisation β')
+  cmd:option('-asyncOptimFreq', 4, 'Param updating frequency of async RL models. This is the number of interaction sequences')
   -- ALEWrap options
   cmd:option('-fullActions', 'false', 'Use full set of 18 actions')
   cmd:option('-actRep', 4, 'Times to repeat action') -- Independent of history length

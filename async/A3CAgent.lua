@@ -39,8 +39,8 @@ end
 
 function A3CAgent:learn(steps, from)
   self.step = from or 0
-
   self.stateBuffer:clear()
+  local _trainEpisode = 0
 
   log.info('A3CAgent starting | steps=%d', steps)
   local reward, terminal, state = self:start()
@@ -71,13 +71,17 @@ function A3CAgent:learn(steps, from)
       self:progress(steps)
     until terminal or self.batchIdx == self.batchSize
 
+    _trainEpisode = _trainEpisode + 1   -- counter of training episodes
     self:accumulateGradients(terminal, state)
 
     if terminal then
       reward, terminal, state = self:start()
     end
 
-    self:applyGradients(self.policyNet_, self.dTheta_, self.theta)
+    -- Control param updating frequency. It performs as controlling batch size in training
+    if _trainEpisode % self.opt.asyncOptimFreq == 0 then
+      self:applyGradients(self.policyNet_, self.dTheta_, self.theta)
+    end
   until self.step >= steps
 
   log.info('A3CAgent ended learning steps=%d', steps)
@@ -91,7 +95,7 @@ function A3CAgent:accumulateGradients(terminal, state)
   end
 
   for i=self.batchIdx,1,-1 do
-    R = self.rewards[i] + self.gamma * R --* self.terminal_masks[i+1]
+    R = self.rewards[i] + self.gamma * R * self.terminal_masks[i+1]
 
     local action = self.actions[i]
     local V, probability = table.unpack(self.policyNet_:forward(self.states[i]))
