@@ -53,22 +53,7 @@ function A3CAgent:learn(steps, from)
     self.theta_:copy(self.theta)
     self.terminal_masks[1] = terminal and 0 or 1    -- this variable indicates whether the state at batchIdx is terminal
     self.batchIdx = 0
-    --repeat
-    --  self.batchIdx = self.batchIdx + 1
-    --  self.states[self.batchIdx]:copy(state)
-    --
-    --  local action = self:probabilisticAction(state)  -- Todo: pwang8. Check correctness
-    --
-    --  self.actions[self.batchIdx] = action
-    --
-    --  reward, terminal, state = self:takeAction(action)
-    --  self.rewards[self.batchIdx] = reward
-    --  self.terminal_masks[self.batchIdx+1] = terminal and 0 or 1    -- this variable indicates whether the state at batchIdx is terminal
-    --  -- the indices for rewards and terminal_masks are different. For an s1-a-s2 transition, rewards[t1] represents
-    --  -- the reward got in this transition. But terminal_masks[t1] means whether s1 is a terminal state (0 if it is terminal).
-    --
-    --  self:progress(steps)
-    --until terminal or self.batchIdx == self.batchSize
+
     repeat
       self.batchIdx = self.batchIdx + 1
       self.states[self.batchIdx]:copy(state)
@@ -175,6 +160,13 @@ function A3CAgent:accumulateGradients(terminal, state)
       self.policyNet_:backward(self.states[i], self.targets)
     end
   end
+  -- If we want to adopt lstm module in actor-critic models, in this accumulateGradients() here, we should
+  -- propagate info in the forward way, and call backward each time with the forward function.
+  -- We can add up rewards forward to do multi-step monte carlo policy estimation. And we also utilize the
+  -- way how R is calculated at the top of this function to get an estimation of the final state value, in
+  -- case the final state is not terminal state. This should work because we've called the forward function
+  -- of the model while capturing the batch off transition sequence while collecting data for training set.
+  -- Although I feel that adding a recurrent module may not help the performance much, if it does. By pwang8.
 end
 
 
