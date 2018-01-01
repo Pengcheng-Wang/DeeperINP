@@ -11,7 +11,8 @@ local methods = {
   OneStepQ = 'OneStepQAgent',
   Sarsa = 'SarsaAgent',
   NStepQ = 'NStepQAgent',
-  A3C = 'A3CAgent'
+  A3C = 'A3CAgent',
+  PPO = 'AsyncPpoAgent'
 }
 
 function AsyncAgent.static.build(opt, policyNet, targetNet, theta, targetTheta, atomic, sharedG)

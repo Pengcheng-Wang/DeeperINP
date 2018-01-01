@@ -10,7 +10,7 @@ local TableSet = require 'MyMisc.TableSetMisc'
 
 local ValidationAgent = classic.class('ValidationAgent')
 
-local TINY_EPSILON = 1e-20
+local TINY_EPSILON = 1e-6
 
 function ValidationAgent:_init(opt, theta, atomic)
   log.info('creating ValidationAgent')
@@ -53,8 +53,7 @@ function ValidationAgent:_init(opt, theta, atomic)
   self.bestValScore = -math.huge
 
   self.selectAction = self.eGreedyAction
-  self.a3c = opt.async == 'A3C'
-  if self.a3c then self.selectAction = self.probabilisticAction end  -- todo:pwang8. Might need to change this for all actor-critic methods. Dec 29, 2017
+  if opt.actor_critic then self.selectAction = self.probabilisticAction end  -- todo:pwang8. Might need to change this for all actor-critic methods. Dec 29, 2017
 
   self.opt = opt
   -- Sorry, adding ugly code here again, just for CI data compatability
@@ -157,7 +156,7 @@ function ValidationAgent:probabilisticAction(state)
     -- Have to make sure subAdpActRegion does not sum up to 0 (all 0s) before sent to multinomial()
     subAdpActRegion:add(TINY_EPSILON) -- add a small number to this distribution so it will not sum up to 0
     local regAct = torch.multinomial(subAdpActRegion, 1):squeeze()
-    if self.opt.a3cgreedy then _, regAct = torch.max(subAdpActRegion, 1) regAct = regAct[1] end
+    if self.opt.ac_greedy then _, regAct = torch.max(subAdpActRegion, 1) regAct = regAct[1] end
 --    print('Display act choice dist: ', subAdpActRegion:squeeze())
     return self.CIActAdpBound[adpT][1] + regAct - 1, actDist
   else
@@ -321,8 +320,8 @@ function ValidationAgent:validationStats()
   local states, actions, rewards, transitions, terminals = self.valMemory:retrieve(indices)
 
   local totalV
-  if self.a3c then
-    local Vs = self.policyNet_:forward(transitions)[1]  -- A3C has 2 outputs, 1st is a float number of V, 2nd is a 1-dim tensor of Q values
+  if self.opt.actor_critic then
+    local Vs = self.policyNet_:forward(transitions)[1]  -- actor-critic model has 2 outputs, 1st is a float number of V, 2nd is a 1-dim tensor of Q values
     totalV = Vs:sum()
   else
     local QPrimes = self.policyNet_:forward(transitions) -- in real learning targetNet but doesnt matter for validation

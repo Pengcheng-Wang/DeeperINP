@@ -46,6 +46,8 @@ function A3CAgent:learn(steps, from)
   log.info('A3CAgent starting | steps=%d', steps)
   local reward, terminal, state = self:start()
   assert(not terminal, 'Starting state should not be terminal state')
+  self.policyNet_:training()
+  if self.opt.recurrent then self.policyNet_:forget() end
 
   self.states:resize(self.batchSize, table.unpack(state:size():totable()))
 
@@ -77,6 +79,7 @@ function A3CAgent:learn(steps, from)
           self.batchIdx = self.batchIdx+1
           reward, terminal, state = self:start()
           assert(not terminal, 'Starting state should not be terminal state')
+          if self.opt.recurrent then self.policyNet_:forget() end
         end
       else
         self.terminal_masks[self.batchIdx+1] = 1    -- this variable indicates whether the state at batchIdx is terminal
@@ -98,6 +101,7 @@ function A3CAgent:learn(steps, from)
     if terminal then
       reward, terminal, state = self:start()
       assert(not terminal, 'Starting state should not be terminal state')
+      if self.opt.recurrent then self.policyNet_:forget() end
     end
   until self.step >= steps
 
@@ -107,73 +111,6 @@ end
 -- This accu() function is similar to the NStepQ's implementation, in which td error is calculated using n-step of observation
 -- So, it is not very convenient to add an lstm module. If an lstm module is demanded, we can refer to the OneStepQ implementation
 function A3CAgent:accumulateGradients(terminal, state)
-  --local R = 0
-  --if not terminal then
-  --  R = self.policyNet_:forward(state)[1]
-  --end
-  --
-  --for i=self.batchIdx,1,-1 do
-  --  if self.terminal_masks[i] < 1 then
-  --    R = 0
-  --  else
-  --    R = self.rewards[i] + self.gamma * R * self.terminal_masks[i+1]
-  --
-  --    local action = self.actions[i]
-  --    local V, probability = table.unpack(self.policyNet_:forward(self.states[i]))
-  --    probability:add(TINY_EPSILON) -- could contain 0 -> log(0)= -inf -> theta = nans
-  --
-  --    local adpT = 0
-  --    if self.opt.env == 'UserSimLearner/CIUserSimEnv' then
-  --      -- If it is CI data, pick up actions according to adpType
-  --      if self.states[i][-1][1][-4] > 0.1 then adpT = 1 elseif self.states[i][-1][1][-3] > 0.1 then adpT = 2 elseif self.states[i][-1][1][-2] > 0.1 then adpT = 3 elseif self.states[i][-1][1][-1] > 0.1 then adpT = 4 end
-  --      assert(adpT >=1 and adpT <= 4)
-  --      for i=1, probability:size(1) do
-  --        if i < self.CIActAdpBound[adpT][1] or i > self.CIActAdpBound[adpT][2] then
-  --          probability[i] = 0
-  --        end
-  --      end
-  --      local sumP = probability:sum()
-  --      probability = torch.div(probability, sumP)
-  --      probability:add(TINY_EPSILON)
-  --      for i=1, probability:size(1) do
-  --        if i < self.CIActAdpBound[adpT][1] or i > self.CIActAdpBound[adpT][2] then
-  --          probability[i] = 0
-  --        end
-  --      end
-  --    end
-  --
-  --    self.vTarget[1] = -0.5 * (R - V)  -- this makes sense, instead of the 0.5 const. It then makes sense if we explain it as result of adopting value loss coefficient, by pwang8
-  --
-  --    -- ∇θ logp(s) = 1/p(a) for chosen a, 0 otherwise
-  --    self.policyTarget:zero()
-  --    -- f(s) ∇θ logp(s)
-  --    self.policyTarget[action] = -(R - V) / probability[action] -- Negative target for gradient descent. This calculation should be correct. Same as in pytorch a2c repo. By pwang8.
-  --
-  --    -- Calculate (negative of) gradient of entropy of policy (for gradient descent): -(-logp(s) - 1)
-  --    local gradEntropy = torch.log(probability) + 1
-  --
-  --    if self.opt.env == 'UserSimLearner/CIUserSimEnv' then
-  --      for i=1, gradEntropy:size(1) do
-  --        if i < self.CIActAdpBound[adpT][1] or i > self.CIActAdpBound[adpT][2] then
-  --          gradEntropy[i] = 0
-  --        end
-  --      end
-  --    end
-  --
-  --    -- Add to target to improve exploration (prevent convergence to suboptimal deterministic policy)
-  --    self.policyTarget:add(self.beta, gradEntropy)
-  --
-  --    self.policyNet_:backward(self.states[i], self.targets)
-  --  end
-  --end
-  -- If we want to adopt lstm module in actor-critic models, in this accumulateGradients() here, we should
-  -- propagate info in the forward way, and call backward each time with the forward function.
-  -- We can add up rewards forward to do multi-step monte carlo policy estimation. And we also utilize the
-  -- way how R is calculated at the top of this function to get an estimation of the final state value, in
-  -- case the final state is not terminal state. This should work because we've called the forward function
-  -- of the model while capturing the batch off transition sequence while collecting data for training set.
-  -- Although I feel that adding a recurrent module may not help the performance much, if it does. By pwang8.
-
   -- Now it is implemented in the forward updating way. This helps the training of FastLSTM module if the
   -- actor-critic model includes one. Jan 1, 2018
 
@@ -190,6 +127,7 @@ function A3CAgent:accumulateGradients(terminal, state)
     end
   end
 
+  if self.opt.recurrent then self.policyNet_:forget() end
   -- Do the real updating
   for i=1, self.batchIdx do
     -- only do update from non-terminal state
@@ -240,6 +178,8 @@ function A3CAgent:accumulateGradients(terminal, state)
       self.policyTarget:add(self.beta, gradEntropy)
 
       self.policyNet_:backward(self.states[i], self.targets)
+    else
+      if self.opt.recurrent then self.policyNet_:forget() end
     end
   end
 end
@@ -258,10 +198,10 @@ function A3CAgent:progress(steps)
 end
 
 
-function A3CAgent:probabilisticAction(state)  -- Todo: pwang8. Check correctness. This is borrowed from ValidationAgent
+function A3CAgent:probabilisticAction(state)
   local __, probability = table.unpack(self.policyNet_:forward(state))
 
-  if self.opt.env == 'UserSimLearner/CIUserSimEnv' then   -- Todo: pwang8. Check correctness
+  if self.opt.env == 'UserSimLearner/CIUserSimEnv' then
     -- If it is CI data, pick up actions according to adpType
     local adpT = 0
     if state[-1][1][-4] > 0.1 then adpT = 1 elseif state[-1][1][-3] > 0.1 then adpT = 2 elseif state[-1][1][-2] > 0.1 then adpT = 3 elseif state[-1][1][-1] > 0.1 then adpT = 4 end

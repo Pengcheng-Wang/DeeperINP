@@ -18,7 +18,6 @@ function AsyncModel:_init(opt)
   end
 
   self.model = Model(opt)
-  self.a3c = opt.async == 'A3C'
 
   classic.strict(self)
 end

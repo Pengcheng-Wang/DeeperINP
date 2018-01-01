@@ -136,12 +136,14 @@ function Setup:parseOptions(arg)
   cmd:option('-valSize', 500, 'Number of transitions to use for calculating validation statistics')
   cmd:option('-evaTrajs', 500, 'Number of trajectories to use for evaluation')
   cmd:option('-isevaprt', 'false', 'Whether to print importance sampling based policy value for each test trajectory')
-  cmd:option('-a3cgreedy', 'false', 'Whether A3C agent should pick greedy action in evaluation')
+  cmd:option('-ac_greedy', 'false', 'Whether actor-critic agent should pick greedy action in evaluation')
   -- Async options
-  cmd:option('-async', '', 'Async agent: <none>|Sarsa|OneStepQ|NStepQ|A3C') -- TODO: Change names
+  cmd:option('-async', '', 'Async agent: <none>|Sarsa|OneStepQ|NStepQ|A3C|PPO')   -- newly adding PPO async agent
+  cmd:option('-actor_critic', '', 'Whether the DRL model is actor-critic. This opt item should not be set by user in command')
   cmd:option('-rmsEpsilon', 0.1, 'Epsilon for sharedRmsProp')
   cmd:option('-entropyBeta', 0.01, 'Policy entropy regularisation β')
   cmd:option('-asyncOptimFreq', 1, 'Param updating frequency of async RL models. This is the number of interaction sequences')
+  cmd:option('-asyncRecrRho', 4, 'The rho (maximum BPTT steps) param for FastLSTM module in async RL models.')
   -- ALEWrap options
   cmd:option('-fullActions', 'false', 'Use full set of 18 actions')
   cmd:option('-actRep', 4, 'Times to repeat action') -- Independent of history length
@@ -203,7 +205,9 @@ function Setup:parseOptions(arg)
   opt.isevaprt = opt.isevaprt == 'true'
   opt.evalRand = opt.evalRand == 'true'
   opt.trainWithRawData = opt.trainWithRawData == 'true'
-  opt.a3cgreedy = opt.a3cgreedy == 'true'
+  opt.ac_greedy = opt.ac_greedy == 'true'
+  opt.actor_critic = (self.opt.async == 'A3C' or self.opt.async == 'PPO')
+  -- this list might be extended in future. Jan 1, 2018
 
   -- Process boolean/enum options
   if opt.colorSpace == '' then opt.colorSpace = false end
@@ -297,11 +301,10 @@ function Setup:validateOptions()
 
   -- Check async options
   if self.opt.async then
-    abortIf(self.opt.recurrent and self.opt.async ~= 'OneStepQ', 'Recurrent connections only supported for OneStepQ in async for now')
     abortIf(self.opt.PALpha > 0, 'Persistent advantage learning not supported in async modes yet')
     abortIf(self.opt.bootstraps > 0, 'Bootstrap heads not supported in async mode yet')
-    abortIf(self.opt.async == 'A3C' and self.opt.duel, 'Dueling networks and A3C are incompatible')
-    abortIf(self.opt.async == 'A3C' and self.opt.doubleQ, 'Double Q-learning and A3C are incompatible')
+    abortIf(self.opt.actor_critic and self.opt.duel, 'Dueling networks and actor-critic models are incompatible')
+    abortIf(self.opt.actor_critic and self.opt.doubleQ, 'Double Q-learning and actor-critic models are incompatible')
     abortIf(self.opt.saliency, 'Saliency maps not supported in async modes yet')
   end
 end

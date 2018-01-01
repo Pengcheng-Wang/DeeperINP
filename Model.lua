@@ -35,7 +35,6 @@ function Model:_init(opt)
   self.env = opt.env  -- string. e.g., 'rlenvs.Catch'
   self.modelBody = opt.modelBody  -- string. e.g., 'models.Catch'
   self.async = opt.async  -- string. e.g., 'A3C' or 'NStepQ'
-  self.a3c = opt.async == 'A3C'
   self.stateSpec = opt.stateSpec
   self.opt = opt
 
@@ -124,7 +123,7 @@ function Model:create()
     local valStream = nn.Sequential()
     if self.recurrent and self.async then
       local lstm = nn.FastLSTM(bodyOutputSize, self.hiddenSize, self.histLen) -- the 3rd param, [rho], the maximum amount of backpropagation steps to take back in time, default value is 9999
-      TableSet.fastLSTMForgetGateInit(lstm, self.opt.rlLstmDropout, self.hiddenSize, nninit)
+      TableSet.fastLSTMForgetGateInit(lstm, 0, self.hiddenSize, nninit)
       lstm:remember('both')
       valStream:add(lstm)
     elseif self.recurrent then
@@ -142,7 +141,7 @@ function Model:create()
     local advStream = nn.Sequential()
     if self.recurrent and self.async then
       local lstm = nn.FastLSTM(bodyOutputSize, self.hiddenSize, self.histLen)
-      TableSet.fastLSTMForgetGateInit(lstm, self.opt.rlLstmDropout, self.hiddenSize, nninit)
+      TableSet.fastLSTMForgetGateInit(lstm, 0, self.hiddenSize, nninit)
       lstm:remember('both')
       advStream:add(lstm)
     elseif self.recurrent then
@@ -173,8 +172,8 @@ function Model:create()
     -- should be {50, 512}. Then output of head module is still {50, 3, 1}
   else
     if self.recurrent and self.async then
-      local lstm = nn.FastLSTM(bodyOutputSize, self.hiddenSize, self.histLen)
-      TableSet.fastLSTMForgetGateInit(lstm, self.opt.rlLstmDropout, self.hiddenSize, nninit)
+      local lstm = nn.FastLSTM(bodyOutputSize, self.hiddenSize, self.opt.asyncRecrRho)
+      TableSet.fastLSTMForgetGateInit(lstm, 0, self.hiddenSize, nninit)
       lstm:remember('both')
       head:add(lstm)
     elseif self.recurrent then
@@ -205,13 +204,23 @@ function Model:create()
     end
     net:add(nn.GradientRescale(1/self.bootstraps)) -- Normalise gradients by number of heads
     net:add(headConcat)
-  elseif self.a3c then
+  elseif self.opt.actor_critic then
     -- Actor-critic does not use the normal head but instead a concatenated value function V and policy π
-    -- Actor-critic method has is so differently implemented from other value function-based methods. The head module,
+    -- Actor-critic method is so differently implemented from other value function-based methods. The head module,
     -- right now including potentially bootstrapped heads, recurrent module, or dule module are not included in
-    -- Actor-critic(e.g., a3c) methods.
-    net:add(nn.Linear(bodyOutputSize, self.hiddenSize))
-    net:add(nn.ReLU(true))
+    -- Actor-critic(e.g., A3C, PPO) methods.
+    -- Because the theoretically meaning of dule module, dobule-Q and PAL is not compatible with actor_critic,
+    -- we will not include them in actor_critic model construction. Recurrent module should be able to added though.
+    -- Bootstrap is not considered right now for actor-critic models.
+    if self.recurrent then
+      local lstm = nn.FastLSTM(bodyOutputSize, self.hiddenSize, self.opt.asyncRecrRho)
+      TableSet.fastLSTMForgetGateInit(lstm, 0, self.hiddenSize, nninit)   --(lstm, self.opt.rlLstmDropout, self.hiddenSize, nninit). Not sure if lazy dropout is correct. So not using it
+      lstm:remember('both')
+      net:add(lstm)
+    else
+      net:add(nn.Linear(bodyOutputSize, self.hiddenSize))
+      net:add(nn.ReLU(true))
+    end
 
     local valueAndPolicy = nn.ConcatTable() -- π and V share all layers except the last
 
@@ -234,7 +243,7 @@ function Model:create()
     net:add(headConcat)
   end
 
-  if not self.a3c then
+  if not self.opt.actor_critic then
     net:add(nn.JoinTable(1, 1))
     net:add(nn.View(heads, self.m))
   end

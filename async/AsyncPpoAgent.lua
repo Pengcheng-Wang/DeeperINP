@@ -14,7 +14,7 @@ require 'modules/sharedRmsProp'
 
 local AsyncPpoAgent,super = classic.class('AsyncPpoAgent', 'AsyncAgent')
 
-local TINY_EPSILON = 1e-20
+local TINY_EPSILON = 1e-6
 
 function AsyncPpoAgent:_init(opt, policyNet, targetNet, theta, targetTheta, atomic, sharedG)
     super._init(self, opt, policyNet, targetNet, theta, targetTheta, atomic, sharedG)
