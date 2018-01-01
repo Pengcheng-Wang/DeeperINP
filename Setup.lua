@@ -206,7 +206,7 @@ function Setup:parseOptions(arg)
   opt.evalRand = opt.evalRand == 'true'
   opt.trainWithRawData = opt.trainWithRawData == 'true'
   opt.ac_greedy = opt.ac_greedy == 'true'
-  opt.actor_critic = (self.opt.async == 'A3C' or self.opt.async == 'PPO')
+  opt.actor_critic = (opt.async == 'A3C' or opt.async == 'PPO')
   -- this list might be extended in future. Jan 1, 2018
 
   -- Process boolean/enum options
