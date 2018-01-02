@@ -77,6 +77,9 @@ function AsyncPpoAgent:learn(steps, from)
 
             assert(not terminal, 'Terminal state should not be observed here')
             action, self.actAbsProbs[self.batchIdx], self.actRelativeProbs[self.batchIdx] = self:probabilisticAction(state)
+            print('##########')
+            print(self.actAbsProbs[self.batchIdx],'$#@@#$', self.actRelativeProbs[self.batchIdx])
+            print('@@@@@@@@@@')
             reward, terminal, state = self:takeAction(action)
             self.actions[self.batchIdx] = action
             self.rewards[self.batchIdx] = reward
@@ -218,7 +221,6 @@ function AsyncPpoAgent:probabilisticAction(state)
     local __, probability = table.unpack(self.policyNet_:forward(state))
     local _actAbsProb = 0
     local _actRltProb = 0
-    -- todo:pwang8. Time to add extra output of abs and relative prob of the taken action. Jan 1, 2018.
 
     if self.opt.env == 'UserSimLearner/CIUserSimEnv' then
         -- If it is CI data, pick up actions according to adpType
