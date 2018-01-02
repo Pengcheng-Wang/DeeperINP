@@ -316,43 +316,100 @@ end
 
 
 function ValidationAgent:validationStats()
-  local indices = self.valMemory:sample() -- local indices = torch.linspace(2, self.valSize+1, self.valSize):long() -- Todo: pwang8. Check correctness
+  local indices = torch.linspace(2, self.valSize+1, self.valSize):long() --local indices = self.valMemory:sample()  -- Should not sample here, especially for async recurrent models
   local states, actions, rewards, transitions, terminals = self.valMemory:retrieve(indices)
 
-  local totalV
-  if self.opt.actor_critic then
-    local Vs = self.policyNet_:forward(transitions)[1]  -- actor-critic model has 2 outputs, 1st is a float number of V, 2nd is a 1-dim tensor of Q values
-    totalV = Vs:sum()
-  else
-    local QPrimes = self.policyNet_:forward(transitions) -- in real learning targetNet but doesnt matter for validation
-    local VPrime = torch.max(QPrimes, 3)  -- for QAgent, net:forward(states) has 2-dim output of size 1*10 (10 acts), right not QPrimes is 3-dim, with 1-dim be batch index. Oh oh, the 1 value might be # of head
+  local avgV
+  if self.opt.recurrent then
+    -- Async model with recurrent modules. In setup.lua, we forced histLen to be 1 when recurrent is true and async is utilized
+    -- So, the returned transitions from valuMemory is a 5-dim tensor, whose size is like 50*1*1*24*24. 50 is size of transitions
+    -- returned from experiment memory. 2nd dim 1 is histLen, 3rd dim 1 is number of channels of input data (1*24*24 is from Catch)
+    transitions = transitions:squeeze(2)  -- squeeze the histLen dim (which has to be 1, according to restriction in setup.lua)
+    if self.opt.actor_critic then
+      local Vs = {}
+      for i=1, transitions:size(1) do
+        if terminals[i] then
+          self.policyNet_:forget()
+        else
+          Vs[#Vs+1] = self.policyNet_:forward(transitions[i])[1]  -- actor-critic model has 2 outputs, 1st is a float number of V, 2nd is a 1-dim tensor of Q values
+        end
+      end
+      avgV = torch.Tensor(Vs):mean()
+    else
+      local QPrimes = {}
+      for i=1, transitions:size(1) do
+        QPrimes[#QPrimes+1] = self.policyNet_:forward(transitions[i])
+        if terminals[i] then
+          self.policyNet_:forget()
+        end
+      end
+      local _QPrimes = torch.Tensor(#QPrimes, table.unpack(QPrimes[1]:size():totable()))
+      for i=1, #QPrimes do
+        _QPrimes[i] = QPrimes[i]
+      end
+      QPrimes = _QPrimes
+      local VPrime = torch.max(QPrimes, 3)  -- for QAgent, net:forward(states) has 2-dim output of size 1*10 (10 acts), right not QPrimes is 3-dim, with 1-dim be batch index. Oh oh, the 1 value might be # of head
 
-    -- If it is CI data, pick up actions according to adpType
-    if self.opt.env == 'UserSimLearner/CIUserSimEnv' then   -- Todo: pwang8. Check correctness
-      VPrime = torch.min(QPrimes, 3)
-      for ib=1, QPrimes:size(1) do  -- batch size
-        if terminals[ib] < 1 then -- only need to calculate Q' for non-terminated next states
-          local adpT = 0
-          if transitions[ib][-1][1][1][-4] > 0.1 then adpT = 1 elseif transitions[ib][-1][1][1][-3] > 0.1 then adpT = 2 elseif transitions[ib][-1][1][1][-2] > 0.1 then adpT = 3 elseif transitions[ib][-1][1][1][-1] > 0.1 then adpT = 4 end
-          assert(adpT >=1 and adpT <= 4)
-          for i=1, QPrimes:size(2) do    -- index of head in bootstraps in nn output
-            for j=self.CIActAdpBound[adpT][1], self.CIActAdpBound[adpT][2] do
-              if QPrimes[ib][i][j] >= VPrime[ib][i][1] then
-                VPrime[ib][i][1] = QPrimes[ib][i][j]
+      -- If it is CI data, pick up actions according to adpType
+      if self.opt.env == 'UserSimLearner/CIUserSimEnv' then   -- Todo: pwang8. Check correctness
+        VPrime = torch.min(QPrimes, 3)
+        for ib=1, QPrimes:size(1) do  -- batch size
+          if terminals[ib] < 1 then -- only need to calculate Q' for non-terminated next states
+            local adpT = 0
+            assert(transitions:dim() == 4, 'Dim of transitions should be 4, because we adopted squeeze()')
+            if transitions[ib][1][1][-4] > 0.1 then adpT = 1 elseif transitions[ib][1][1][-3] > 0.1 then adpT = 2 elseif transitions[ib][1][1][-2] > 0.1 then adpT = 3 elseif transitions[ib][1][1][-1] > 0.1 then adpT = 4 end
+            assert(adpT >=1 and adpT <= 4)
+            for i=1, QPrimes:size(2) do    -- index of head in bootstraps in nn output
+              for j=self.CIActAdpBound[adpT][1], self.CIActAdpBound[adpT][2] do
+                if QPrimes[ib][i][j] >= VPrime[ib][i][1] then
+                  VPrime[ib][i][1] = QPrimes[ib][i][j]
+                end
               end
             end
-          end
-        else
-          for i=1, QPrimes:size(2) do
-            VPrime[ib][i][1] = 0
+          else
+            for i=1, QPrimes:size(2) do
+              VPrime[ib][i][1] = 0
+            end
           end
         end
       end
+      avgV = VPrime:mean()
     end
+  else
+    -- Async model without recurrent modules
+    if self.opt.actor_critic then
+      local Vs = self.policyNet_:forward(transitions)[1]  -- actor-critic model has 2 outputs, 1st is a float number of V, 2nd is a 1-dim tensor of Q values
+      avgV = Vs:mean()
+    else
+      local QPrimes = self.policyNet_:forward(transitions) -- in real learning targetNet but doesnt matter for validation
+      local VPrime = torch.max(QPrimes, 3)  -- for QAgent, net:forward(states) has 2-dim output of size 1*10 (10 acts), right not QPrimes is 3-dim, with 1-dim be batch index. Oh oh, the 1 value might be # of head
 
-    totalV = VPrime:sum()       -- I assume both states and transitions have 5 dim, like 32*10*1*1*25, with batchSize 32, histLen 10.
+      -- If it is CI data, pick up actions according to adpType
+      if self.opt.env == 'UserSimLearner/CIUserSimEnv' then   -- Todo: pwang8. Check correctness
+        VPrime = torch.min(QPrimes, 3)
+        for ib=1, QPrimes:size(1) do  -- batch size
+          if terminals[ib] < 1 then -- only need to calculate Q' for non-terminated next states
+            local adpT = 0
+            if transitions[ib][-1][1][1][-4] > 0.1 then adpT = 1 elseif transitions[ib][-1][1][1][-3] > 0.1 then adpT = 2 elseif transitions[ib][-1][1][1][-2] > 0.1 then adpT = 3 elseif transitions[ib][-1][1][1][-1] > 0.1 then adpT = 4 end
+            assert(adpT >=1 and adpT <= 4)
+            for i=1, QPrimes:size(2) do    -- index of head in bootstraps in nn output
+              for j=self.CIActAdpBound[adpT][1], self.CIActAdpBound[adpT][2] do
+                if QPrimes[ib][i][j] >= VPrime[ib][i][1] then
+                  VPrime[ib][i][1] = QPrimes[ib][i][j]
+                end
+              end
+            end
+          else
+            for i=1, QPrimes:size(2) do
+              VPrime[ib][i][1] = 0
+            end
+          end
+        end
+      end
+      avgV = VPrime:mean()
+    end
   end
-  local avgV = totalV / self.valSize
+
   self.avgV[#self.avgV + 1] = avgV
   self:plotValidation()
   return avgV

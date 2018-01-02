@@ -216,6 +216,9 @@ function Setup:parseOptions(arg)
   if opt.saliency == '' then opt.saliency = false end
   if opt.async then opt.gpu = 0 end -- Asynchronous agents are CPU-only
 
+  -- Because recurrent module in async models utilizes FastLSTM, we need set histLen to 1 to make experience work correctly
+  if opt.async and opt.recurrent then opt.histLen = 1 log.info('Reset histLen to 1 for async recurrent models') end
+
   -- Set ID as env (plus game name) if not set
   if opt._id == '' then
     local envName = paths.basename(opt.env)

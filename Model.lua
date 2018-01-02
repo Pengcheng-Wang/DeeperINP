@@ -122,7 +122,7 @@ function Model:create()
     -- Value approximator V^(s)
     local valStream = nn.Sequential()
     if self.recurrent and self.async then
-      local lstm = nn.FastLSTM(bodyOutputSize, self.hiddenSize, self.histLen) -- the 3rd param, [rho], the maximum amount of backpropagation steps to take back in time, default value is 9999
+      local lstm = nn.FastLSTM(bodyOutputSize, self.hiddenSize, self.opt.asyncRecrRho) -- the 3rd param, [rho], the maximum amount of backpropagation steps to take back in time, default value is 9999
       TableSet.fastLSTMForgetGateInit(lstm, 0, self.hiddenSize, nninit)
       lstm:remember('both')
       valStream:add(lstm)
@@ -140,7 +140,7 @@ function Model:create()
     -- Advantage approximator A^(s, a)
     local advStream = nn.Sequential()
     if self.recurrent and self.async then
-      local lstm = nn.FastLSTM(bodyOutputSize, self.hiddenSize, self.histLen)
+      local lstm = nn.FastLSTM(bodyOutputSize, self.hiddenSize, self.opt.asyncRecrRho)
       TableSet.fastLSTMForgetGateInit(lstm, 0, self.hiddenSize, nninit)
       lstm:remember('both')
       advStream:add(lstm)
