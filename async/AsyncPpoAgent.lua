@@ -170,6 +170,8 @@ function AsyncPpoAgent:updateOnePpoStep(terminal, state)
                 self.policyTarget:zero()
                 -- For PPO optimization, we directly calculate the derivatives of policy output. The calculation should be the same effort as designing the clipped error signal
                 local _tdAdvPpo = self.tdReturns[i] - V
+                print('######')
+                print(_tdAdvPpo, ',', probability[action], ', ', self.actAbsProbs[i], ', ', self.actRelativeProbs[i], '\n@@@@@@@')
                 if self.opt.ac_relative_plc then
                     -- Use relative action probability, right now only useful for CI env
                     if _tdAdvPpo > 0 and probability[action]/self.actRelativeProbs[i] > 1+self.opt.ppo_clip_thr then
