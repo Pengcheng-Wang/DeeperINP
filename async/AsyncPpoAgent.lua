@@ -77,9 +77,6 @@ function AsyncPpoAgent:learn(steps, from)
 
             assert(not terminal, 'Terminal state should not be observed here')
             action, self.actAbsProbs[self.batchIdx], self.actRelativeProbs[self.batchIdx] = self:probabilisticAction(state)
-            print('##########')
-            print(self.actAbsProbs[self.batchIdx],'$#@@#$', self.actRelativeProbs[self.batchIdx])
-            print('@@@@@@@@@@')
             reward, terminal, state = self:takeAction(action)
             self.actions[self.batchIdx] = action
             self.rewards[self.batchIdx] = reward
@@ -155,24 +152,18 @@ function AsyncPpoAgent:accumulateGradients(terminal, state)
             -- direction. An example is that, for a 'good' action, we may still decrease its absolute probability but increase
             -- the relative probability by decreasing probability of all legal actions. By pwang8. Jan 1, 2018.
             local adpT = 0
-            --if self.opt.env == 'UserSimLearner/CIUserSimEnv' then
-            --    -- If it is CI data, pick up actions according to adpType
-            --    if self.states[i][-1][1][-4] > 0.1 then adpT = 1 elseif self.states[i][-1][1][-3] > 0.1 then adpT = 2 elseif self.states[i][-1][1][-2] > 0.1 then adpT = 3 elseif self.states[i][-1][1][-1] > 0.1 then adpT = 4 end
-            --    assert(adpT >=1 and adpT <= 4)
-            --    for i=1, probability:size(1) do
-            --        if i < self.CIActAdpBound[adpT][1] or i > self.CIActAdpBound[adpT][2] then
-            --            probability[i] = 0
-            --        end
-            --    end
-            --    local sumP = probability:sum()
-            --    probability = torch.div(probability, sumP)
-            --    probability:add(TINY_EPSILON)
-            --    for i=1, probability:size(1) do
-            --        if i < self.CIActAdpBound[adpT][1] or i > self.CIActAdpBound[adpT][2] then
-            --            probability[i] = 0
-            --        end
-            --    end
-            --end
+            if self.opt.env == 'UserSimLearner/CIUserSimEnv' and self.opt.ac_relative_plc then
+                -- If it is CI data, pick up actions according to adpType
+                if self.states[i][-1][1][-4] > 0.1 then adpT = 1 elseif self.states[i][-1][1][-3] > 0.1 then adpT = 2 elseif self.states[i][-1][1][-2] > 0.1 then adpT = 3 elseif self.states[i][-1][1][-1] > 0.1 then adpT = 4 end
+                assert(adpT >=1 and adpT <= 4)
+                for i=1, probability:size(1) do
+                    if i < self.CIActAdpBound[adpT][1] or i > self.CIActAdpBound[adpT][2] then
+                        probability[i] = 0
+                    end
+                end
+                local sumP = probability:sum()
+                probability = torch.div(probability, sumP)
+            end
 
             self.vTarget[1] = -0.5 * (self.tdReturns[i] - V)  -- this makes sense, instead of the 0.5 const. It then makes sense if we explain it as result of adopting value loss coefficient, by pwang8
 
@@ -184,13 +175,13 @@ function AsyncPpoAgent:accumulateGradients(terminal, state)
             -- Calculate (negative of) gradient of entropy of policy (for gradient descent): -(-logp(s) - 1)
             local gradEntropy = torch.log(probability) + 1
 
-            --if self.opt.env == 'UserSimLearner/CIUserSimEnv' then
-            --    for i=1, gradEntropy:size(1) do
-            --        if i < self.CIActAdpBound[adpT][1] or i > self.CIActAdpBound[adpT][2] then
-            --            gradEntropy[i] = 0
-            --        end
-            --    end
-            --end
+            if self.opt.env == 'UserSimLearner/CIUserSimEnv' and self.opt.ac_relative_plc then
+                for i=1, gradEntropy:size(1) do
+                    if i < self.CIActAdpBound[adpT][1] or i > self.CIActAdpBound[adpT][2] then
+                        gradEntropy[i] = 0
+                    end
+                end
+            end
 
             -- Add to target to improve exploration (prevent convergence to suboptimal deterministic policy)
             self.policyTarget:add(self.beta, gradEntropy)

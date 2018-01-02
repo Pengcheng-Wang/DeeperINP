@@ -140,10 +140,12 @@ function Setup:parseOptions(arg)
   -- Async options
   cmd:option('-async', '', 'Async agent: <none>|Sarsa|OneStepQ|NStepQ|A3C|PPO')   -- newly adding PPO async agent
   cmd:option('-actor_critic', '', 'Whether the DRL model is actor-critic. This opt item should not be set by user in command')
+  cmd:option('-ac_relative_plc', 'false', 'Whether to utilize relative(non-absolute policy output) in param optimization in actor-critic models for CI')
   cmd:option('-rmsEpsilon', 0.1, 'Epsilon for sharedRmsProp')
   cmd:option('-entropyBeta', 0.01, 'Policy entropy regularisation β')
   cmd:option('-asyncOptimFreq', 1, 'Param updating frequency of async RL models. This is the number of interaction sequences')
-  cmd:option('-asyncRecrRho', 4, 'The rho (maximum BPTT steps) param for FastLSTM module in async RL models.')
+  cmd:option('-asyncRecrRho', 4, 'The rho (maximum BPTT steps) param for FastLSTM module in async RL models')
+  cmd:option('-ppo_optim_epo', 4, 'Optimization epoch number using each batch of data for PPO agent')
   -- ALEWrap options
   cmd:option('-fullActions', 'false', 'Use full set of 18 actions')
   cmd:option('-actRep', 4, 'Times to repeat action') -- Independent of history length
@@ -208,6 +210,7 @@ function Setup:parseOptions(arg)
   opt.ac_greedy = opt.ac_greedy == 'true'
   opt.actor_critic = (opt.async == 'A3C' or opt.async == 'PPO')
   -- this list might be extended in future. Jan 1, 2018
+  opt.ac_relative_plc = opt.ac_relative_plc == 'true'
 
   -- Process boolean/enum options
   if opt.colorSpace == '' then opt.colorSpace = false end
