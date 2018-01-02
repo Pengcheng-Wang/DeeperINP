@@ -108,8 +108,7 @@ function A3CAgent:learn(steps, from)
   log.info('A3CAgent ended learning steps=%d', steps)
 end
 
--- This accu() function is similar to the NStepQ's implementation, in which td error is calculated using n-step of observation
--- So, it is not very convenient to add an lstm module. If an lstm module is demanded, we can refer to the OneStepQ implementation
+
 function A3CAgent:accumulateGradients(terminal, state)
   -- Now it is implemented in the forward updating way. This helps the training of FastLSTM module if the
   -- actor-critic model includes one. Jan 1, 2018
@@ -136,25 +135,31 @@ function A3CAgent:accumulateGradients(terminal, state)
       local V, probability = table.unpack(self.policyNet_:forward(self.states[i]))
       probability:add(TINY_EPSILON) -- could contain 0 -> log(0)= -inf -> theta = nans
 
+      -- For the CI problem, this is a design decision of whether to normalize action distribution during optimization
+      -- If normalize it (zero actions that should not be taken at current time step), the potential problem is that
+      -- only the relative probability will be adjusted, even though the absolute probability may be adjusted in the wrong
+      -- direction. An example is that, for a 'good' action, we may still decrease its absolute probability but increase
+      -- the relative probability by decreasing probability of all legal actions. By pwang8. Jan 1, 2018.
+      -- Even though it does not have to be a better design.
       local adpT = 0
-      if self.opt.env == 'UserSimLearner/CIUserSimEnv' then
-        -- If it is CI data, pick up actions according to adpType
-        if self.states[i][-1][1][-4] > 0.1 then adpT = 1 elseif self.states[i][-1][1][-3] > 0.1 then adpT = 2 elseif self.states[i][-1][1][-2] > 0.1 then adpT = 3 elseif self.states[i][-1][1][-1] > 0.1 then adpT = 4 end
-        assert(adpT >=1 and adpT <= 4)
-        for i=1, probability:size(1) do
-          if i < self.CIActAdpBound[adpT][1] or i > self.CIActAdpBound[adpT][2] then
-            probability[i] = 0
-          end
-        end
-        local sumP = probability:sum()
-        probability = torch.div(probability, sumP)
-        probability:add(TINY_EPSILON)
-        for i=1, probability:size(1) do
-          if i < self.CIActAdpBound[adpT][1] or i > self.CIActAdpBound[adpT][2] then
-            probability[i] = 0
-          end
-        end
-      end
+      --if self.opt.env == 'UserSimLearner/CIUserSimEnv' then
+      --  -- If it is CI data, pick up actions according to adpType
+      --  if self.states[i][-1][1][-4] > 0.1 then adpT = 1 elseif self.states[i][-1][1][-3] > 0.1 then adpT = 2 elseif self.states[i][-1][1][-2] > 0.1 then adpT = 3 elseif self.states[i][-1][1][-1] > 0.1 then adpT = 4 end
+      --  assert(adpT >=1 and adpT <= 4)
+      --  for i=1, probability:size(1) do
+      --    if i < self.CIActAdpBound[adpT][1] or i > self.CIActAdpBound[adpT][2] then
+      --      probability[i] = 0
+      --    end
+      --  end
+      --  local sumP = probability:sum()
+      --  probability = torch.div(probability, sumP)
+      --  probability:add(TINY_EPSILON)
+      --  for i=1, probability:size(1) do
+      --    if i < self.CIActAdpBound[adpT][1] or i > self.CIActAdpBound[adpT][2] then
+      --      probability[i] = 0
+      --    end
+      --  end
+      --end
 
       self.vTarget[1] = -0.5 * (self.tdReturns[i] - V)  -- this makes sense, instead of the 0.5 const. It then makes sense if we explain it as result of adopting value loss coefficient, by pwang8
 
@@ -166,13 +171,13 @@ function A3CAgent:accumulateGradients(terminal, state)
       -- Calculate (negative of) gradient of entropy of policy (for gradient descent): -(-logp(s) - 1)
       local gradEntropy = torch.log(probability) + 1
 
-      if self.opt.env == 'UserSimLearner/CIUserSimEnv' then
-        for i=1, gradEntropy:size(1) do
-          if i < self.CIActAdpBound[adpT][1] or i > self.CIActAdpBound[adpT][2] then
-            gradEntropy[i] = 0
-          end
-        end
-      end
+      --if self.opt.env == 'UserSimLearner/CIUserSimEnv' then
+      --  for i=1, gradEntropy:size(1) do
+      --    if i < self.CIActAdpBound[adpT][1] or i > self.CIActAdpBound[adpT][2] then
+      --      gradEntropy[i] = 0
+      --    end
+      --  end
+      --end
 
       -- Add to target to improve exploration (prevent convergence to suboptimal deterministic policy)
       self.policyTarget:add(self.beta, gradEntropy)

@@ -4,7 +4,7 @@
 --- In this script we implemented the PPO actor-critic method.
 --- This sciript follows the structure of A3CAgent, and follows the pytorch-a2c-ppo-acktr
 --- repo for ppo optimization implementation.
---- PPO means Proximal Policy Optimization.
+--- PPO stands for Proximal Policy Optimization.
 --- paper: https://arxiv.org/abs/1707.06347
 ---
 local classic = require 'classic'
@@ -26,15 +26,17 @@ function AsyncPpoAgent:_init(opt, policyNet, targetNet, theta, targetTheta, atom
     self.theta_, self.dTheta_ = self.policyNet_:getParameters()
     self.dTheta_:zero()
 
-    -- this set of targets store gradient of loss over output (df_do)
     self.policyTarget = self.Tensor(self.m)
     self.vTarget = self.Tensor(1)
     self.targets = { self.vTarget, self.policyTarget }
 
     self.rewards = torch.Tensor(self.batchSize)
     self.actions = torch.ByteTensor(self.batchSize)
+    self.actRelativeProbs = torch.Tensor(self.batchSize):zero()
+    self.actAbsProbs = torch.Tensor(self.batchSize):zero()
     self.states = torch.Tensor(0)
     self.terminal_masks = torch.Tensor(self.batchSize+1):fill(1)  -- this value is 0 if terminal, 1 if not. In s1-a-s2, ter_m[t1] represents whether s1 is terminal
+    self.tdReturns = torch.Tensor(self.batchSize+1):zero()   -- stores td returns used in accumulateGradients()
     self.beta = opt.entropyBeta
 
     self.env:training()
@@ -54,6 +56,9 @@ function AsyncPpoAgent:learn(steps, from)
 
     log.info('AsyncPpoAgent starting | steps=%d', steps)
     local reward, terminal, state = self:start()
+    assert(not terminal, 'Starting state should not be terminal state')
+    self.policyNet_:training()
+    if self.opt.recurrent then self.policyNet_:forget() end
 
     self.states:resize(self.batchSize, table.unpack(state:size():totable()))
 
@@ -62,88 +67,135 @@ function AsyncPpoAgent:learn(steps, from)
         self.theta_:copy(self.theta)
         self.terminal_masks[1] = terminal and 0 or 1    -- this variable indicates whether the state at batchIdx is terminal
         self.batchIdx = 0
+
         repeat
             self.batchIdx = self.batchIdx + 1
             self.states[self.batchIdx]:copy(state)
 
-            local action = self:probabilisticAction(state)
+            local action = 1
+            reward = 0
 
-            self.actions[self.batchIdx] = action
-
+            assert(not terminal, 'Terminal state should not be observed here')
+            action = self:probabilisticAction(state)
             reward, terminal, state = self:takeAction(action)
+            self.actions[self.batchIdx] = action
             self.rewards[self.batchIdx] = reward
-            self.terminal_masks[self.batchIdx+1] = terminal and 0 or 1    -- this variable indicates whether the state at batchIdx is terminal
-            -- the indices for rewards and terminal_masks are different. For an s1-a-s2 transition, rewards[t1] represents
-            -- the reward got in this transition. But terminal_masks[t1] means whether s1 is a terminal state (0 if it is terminal).
+
+            if terminal then
+                self.terminal_masks[self.batchIdx+1] = 0
+                if self.batchIdx < self.batchSize then
+                    self.states[self.batchIdx+1]:copy(state)  -- dumb place holder for ending/terminal state
+                    self.actions[self.batchIdx+1] = 1         -- dumb place holder for ending/terminal state
+                    self.rewards[self.batchIdx+1] = 0         -- dumb place holder for ending/terminal state
+                    self.batchIdx = self.batchIdx+1
+                    reward, terminal, state = self:start()
+                    assert(not terminal, 'Starting state should not be terminal state')
+                    if self.opt.recurrent then self.policyNet_:forget() end
+                end
+            else
+                self.terminal_masks[self.batchIdx+1] = 1    -- this variable indicates whether the state at batchIdx is terminal
+                -- the indices for rewards and terminal_masks are different. For an s1-a-s2 transition, rewards[t1] represents
+                -- the reward got in this transition. But terminal_masks[t1] means whether s1 is a terminal state (0 if it is terminal).
+            end
 
             self:progress(steps)
-        until terminal or self.batchIdx == self.batchSize
+        until self.batchIdx == self.batchSize
 
         _trainEpisode = _trainEpisode + 1   -- counter of training episodes
         self:accumulateGradients(terminal, state)
 
-        self:applyGradients(self.policyNet_, self.dTheta_, self.theta)
+        -- Control param updating frequency. It performs as controlling batch size in training
+        if _trainEpisode % self.opt.asyncOptimFreq == 0 then
+            self:applyGradients(self.policyNet_, self.dTheta_, self.theta)
+        end
 
         if terminal then
             reward, terminal, state = self:start()
+            assert(not terminal, 'Starting state should not be terminal state')
+            if self.opt.recurrent then self.policyNet_:forget() end
         end
     until self.step >= steps
 
     log.info('AsyncPpoAgent ended learning steps=%d', steps)
 end
 
--- This accu() function is similar to the NStepQ's implementation, in which td error is calculated using n-step of observation
--- So, it is not very convenient to add an lstm module. If an lstm module is demanded, we can refer to the OneStepQ implementation
+
 function AsyncPpoAgent:accumulateGradients(terminal, state)
-    local R = 0
+    -- Now it is implemented in the forward updating way. This helps the training of FastLSTM module if the
+    -- actor-critic model includes one. Jan 1, 2018
+
+    -- calculate TD-return
+    self.tdReturns:zero()
     if not terminal then
-        R = self.policyNet_:forward(state)[1]
+        self.tdReturns[self.batchIdx+1] = self.policyNet_:forward(state)[1]
+    end
+    for i=self.batchIdx,1,-1 do
+        if self.terminal_masks[i] < 0.5 then
+            self.tdReturns[i] = 0
+        else
+            self.tdReturns[i] = self.rewards[i] + self.gamma * self.tdReturns[i+1] * self.terminal_masks[i+1]
+        end
     end
 
-    for i=self.batchIdx,1,-1 do
-        R = self.rewards[i] + self.gamma * R * self.terminal_masks[i+1]
+    if self.opt.recurrent then self.policyNet_:forget() end
+    -- Do the real updating
+    for i=1, self.batchIdx do
+        -- only do update from non-terminal state
+        if self.terminal_masks[i] > 0.5 then
+            local action = self.actions[i]
+            local V, probability = table.unpack(self.policyNet_:forward(self.states[i]))
+            probability:add(TINY_EPSILON) -- could contain 0 -> log(0)= -inf -> theta = nans
 
-        local action = self.actions[i]
-        local V, probability = table.unpack(self.policyNet_:forward(self.states[i]))
-        probability:add(TINY_EPSILON) -- could contain 0 -> log(0)= -inf -> theta = nans
+            -- For the CI problem, this is a design decision of whether to normalize action distribution during optimization
+            -- If normalize it (zero actions that should not be taken at current time step), the potential problem is that
+            -- only the relative probability will be adjusted, even though the absolute probability may be adjusted in the wrong
+            -- direction. An example is that, for a 'good' action, we may still decrease its absolute probability but increase
+            -- the relative probability by decreasing probability of all legal actions. By pwang8. Jan 1, 2018.
+            local adpT = 0
+            --if self.opt.env == 'UserSimLearner/CIUserSimEnv' then
+            --    -- If it is CI data, pick up actions according to adpType
+            --    if self.states[i][-1][1][-4] > 0.1 then adpT = 1 elseif self.states[i][-1][1][-3] > 0.1 then adpT = 2 elseif self.states[i][-1][1][-2] > 0.1 then adpT = 3 elseif self.states[i][-1][1][-1] > 0.1 then adpT = 4 end
+            --    assert(adpT >=1 and adpT <= 4)
+            --    for i=1, probability:size(1) do
+            --        if i < self.CIActAdpBound[adpT][1] or i > self.CIActAdpBound[adpT][2] then
+            --            probability[i] = 0
+            --        end
+            --    end
+            --    local sumP = probability:sum()
+            --    probability = torch.div(probability, sumP)
+            --    probability:add(TINY_EPSILON)
+            --    for i=1, probability:size(1) do
+            --        if i < self.CIActAdpBound[adpT][1] or i > self.CIActAdpBound[adpT][2] then
+            --            probability[i] = 0
+            --        end
+            --    end
+            --end
 
-        local adpT = 0
-        if self.opt.env == 'UserSimLearner/CIUserSimEnv' then
-            -- If it is CI data, pick up actions according to adpType
-            if self.states[i][-1][1][-4] > 0.1 then adpT = 1 elseif self.states[i][-1][1][-3] > 0.1 then adpT = 2 elseif self.states[i][-1][1][-2] > 0.1 then adpT = 3 elseif self.states[i][-1][1][-1] > 0.1 then adpT = 4 end
-            assert(adpT >=1 and adpT <= 4)
-            for i=1, probability:size(1) do
-                if i < self.CIActAdpBound[adpT][1] or i > self.CIActAdpBound[adpT][2] then
-                    probability[i] = 0
-                end
-            end
-            local sumP = probability:sum()
-            probability = torch.div(probability, sumP)
-            probability:add(TINY_EPSILON)
+            self.vTarget[1] = -0.5 * (self.tdReturns[i] - V)  -- this makes sense, instead of the 0.5 const. It then makes sense if we explain it as result of adopting value loss coefficient, by pwang8
+
+            -- ∇θ logp(s) = 1/p(a) for chosen a, 0 otherwise
+            self.policyTarget:zero()
+            -- f(s) ∇θ logp(s)
+            self.policyTarget[action] = -(self.tdReturns[i] - V) / probability[action] -- Negative target for gradient descent. This calculation should be correct. Same as in pytorch a2c repo. By pwang8.
+
+            -- Calculate (negative of) gradient of entropy of policy (for gradient descent): -(-logp(s) - 1)
+            local gradEntropy = torch.log(probability) + 1
+
+            --if self.opt.env == 'UserSimLearner/CIUserSimEnv' then
+            --    for i=1, gradEntropy:size(1) do
+            --        if i < self.CIActAdpBound[adpT][1] or i > self.CIActAdpBound[adpT][2] then
+            --            gradEntropy[i] = 0
+            --        end
+            --    end
+            --end
+
+            -- Add to target to improve exploration (prevent convergence to suboptimal deterministic policy)
+            self.policyTarget:add(self.beta, gradEntropy)
+
+            self.policyNet_:backward(self.states[i], self.targets)
+        else
+            if self.opt.recurrent then self.policyNet_:forget() end
         end
-
-        self.vTarget[1] = -0.5 * (R - V)  -- this makes sense, instead of the 0.5 const. It then makes sense if we explain it as result of adopting value loss coefficient, by pwang8
-
-        -- ∇θ logp(s) = 1/p(a) for chosen a, 0 otherwise
-        self.policyTarget:zero()
-        -- f(s) ∇θ logp(s)
-        self.policyTarget[action] = -(R - V) / probability[action] -- Negative target for gradient descent. This calculation should be correct. Same as in pytorch a2c repo. By pwang8.
-
-        -- Calculate (negative of) gradient of entropy of policy (for gradient descent): -(-logp(s) - 1)
-        local gradEntropy = torch.log(probability) + 1
-
-        if self.opt.env == 'UserSimLearner/CIUserSimEnv' then
-            for i=1, gradEntropy:size(1) do
-                if i < self.CIActAdpBound[adpT][1] or i > self.CIActAdpBound[adpT][2] then
-                    gradEntropy[i] = 0
-                end
-            end
-        end
-
-        -- Add to target to improve exploration (prevent convergence to suboptimal deterministic policy)
-        self.policyTarget:add(self.beta, gradEntropy)
-
-        self.policyNet_:backward(self.states[i], self.targets)
     end
 end
 
@@ -163,6 +215,7 @@ end
 
 function AsyncPpoAgent:probabilisticAction(state)
     local __, probability = table.unpack(self.policyNet_:forward(state))
+    -- todo:pwang8. Time to add extra output of abs and relative prob of the taken action. Jan 1, 2018.
 
     if self.opt.env == 'UserSimLearner/CIUserSimEnv' then
         -- If it is CI data, pick up actions according to adpType
@@ -184,4 +237,3 @@ function AsyncPpoAgent:probabilisticAction(state)
 end
 
 return AsyncPpoAgent
-
