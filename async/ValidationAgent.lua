@@ -328,7 +328,7 @@ function ValidationAgent:validationStats()
     if self.opt.actor_critic then
       local Vs = {}
       for i=1, transitions:size(1) do
-        if terminals[i] then
+        if terminals[i] > 0.5 then
           self.policyNet_:forget()
         else
           Vs[#Vs+1] = self.policyNet_:forward(transitions[i])[1]  -- actor-critic model has 2 outputs, 1st is a float number of V, 2nd is a 1-dim tensor of Q values
@@ -339,7 +339,7 @@ function ValidationAgent:validationStats()
       local QPrimes = {}
       for i=1, transitions:size(1) do
         QPrimes[#QPrimes+1] = self.policyNet_:forward(transitions[i])
-        if terminals[i] then
+        if terminals[i] > 0.5 then
           self.policyNet_:forget()
         end
       end
@@ -354,7 +354,7 @@ function ValidationAgent:validationStats()
       if self.opt.env == 'UserSimLearner/CIUserSimEnv' then   -- Todo: pwang8. Check correctness
         VPrime = torch.min(QPrimes, 3)
         for ib=1, QPrimes:size(1) do  -- batch size
-          if terminals[ib] < 1 then -- only need to calculate Q' for non-terminated next states
+          if terminals[ib] < 0.5 then -- only need to calculate Q' for non-terminated next states
             local adpT = 0
             assert(transitions:dim() == 4, 'Dim of transitions should be 4, because we adopted squeeze()')
             if transitions[ib][1][1][-4] > 0.1 then adpT = 1 elseif transitions[ib][1][1][-3] > 0.1 then adpT = 2 elseif transitions[ib][1][1][-2] > 0.1 then adpT = 3 elseif transitions[ib][1][1][-1] > 0.1 then adpT = 4 end
@@ -388,7 +388,7 @@ function ValidationAgent:validationStats()
       if self.opt.env == 'UserSimLearner/CIUserSimEnv' then   -- Todo: pwang8. Check correctness
         VPrime = torch.min(QPrimes, 3)
         for ib=1, QPrimes:size(1) do  -- batch size
-          if terminals[ib] < 1 then -- only need to calculate Q' for non-terminated next states
+          if terminals[ib] < 0.5 then -- only need to calculate Q' for non-terminated next states
             local adpT = 0
             if transitions[ib][-1][1][1][-4] > 0.1 then adpT = 1 elseif transitions[ib][-1][1][1][-3] > 0.1 then adpT = 2 elseif transitions[ib][-1][1][1][-2] > 0.1 then adpT = 3 elseif transitions[ib][-1][1][1][-1] > 0.1 then adpT = 4 end
             assert(adpT >=1 and adpT <= 4)
