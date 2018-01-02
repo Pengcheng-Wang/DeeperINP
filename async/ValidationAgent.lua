@@ -331,10 +331,9 @@ function ValidationAgent:validationStats()
         if terminals[i] > 0.5 then
           self.policyNet_:forget()
         else
-          Vs[#Vs+1] = self.policyNet_:forward(transitions[i])[1]  -- actor-critic model has 2 outputs, 1st is a float number of V, 2nd is a 1-dim tensor of Q values
+          Vs[#Vs+1] = self.policyNet_:forward(transitions[i])[1]:squeeze()  -- actor-critic model has 2 outputs, 1st is a float number of V, 2nd is a 1-dim tensor of Q values
         end
       end
-      print(Vs[1], '#@@##@@#')
       avgV = torch.Tensor(Vs):mean()
     else
       local QPrimes = {}
