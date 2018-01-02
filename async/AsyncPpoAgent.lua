@@ -11,6 +11,7 @@ local classic = require 'classic'
 local optim = require 'optim'
 local AsyncAgent = require 'async/AsyncAgent'
 require 'modules/sharedRmsProp'
+local OptimMisc = require 'MyMisc.OptimMisc'
 
 local AsyncPpoAgent,super = classic.class('AsyncPpoAgent', 'AsyncAgent')
 
@@ -36,7 +37,7 @@ function AsyncPpoAgent:_init(opt, policyNet, targetNet, theta, targetTheta, atom
     self.actAbsProbs = torch.Tensor(self.batchSize):zero()
     self.states = torch.Tensor(0)
     self.terminal_masks = torch.Tensor(self.batchSize+1):fill(1)  -- this value is 0 if terminal, 1 if not. In s1-a-s2, ter_m[t1] represents whether s1 is terminal
-    self.tdReturns = torch.Tensor(self.batchSize+1):zero()   -- stores td returns used in accumulateGradients()
+    self.tdReturns = torch.Tensor(self.batchSize+1):zero()   -- stores td returns used in updateOnePpoStep()
     self.beta = opt.entropyBeta
 
     self.env:training()
@@ -102,12 +103,9 @@ function AsyncPpoAgent:learn(steps, from)
         until self.batchIdx == self.batchSize
 
         _trainEpisode = _trainEpisode + 1   -- counter of training episodes
-        self:accumulateGradients(terminal, state)
-
-        -- Control param updating frequency. It performs as controlling batch size in training
-        if _trainEpisode % self.opt.asyncOptimFreq == 0 then
-            self:applyGradients(self.policyNet_, self.dTheta_, self.theta)
-        end
+        self.actAbsProbs:add(TINY_EPSILON)
+        self.actRelativeProbs:add(TINY_EPSILON)
+        self:updateOnePpoStep(terminal, state)
 
         if terminal then
             reward, terminal, state = self:start()
@@ -120,7 +118,7 @@ function AsyncPpoAgent:learn(steps, from)
 end
 
 
-function AsyncPpoAgent:accumulateGradients(terminal, state)
+function AsyncPpoAgent:updateOnePpoStep(terminal, state)
     -- Now it is implemented in the forward updating way. This helps the training of FastLSTM module if the
     -- actor-critic model includes one. Jan 1, 2018
 
@@ -137,59 +135,87 @@ function AsyncPpoAgent:accumulateGradients(terminal, state)
         end
     end
 
-    if self.opt.recurrent then self.policyNet_:forget() end
-    -- Do the real updating
-    for i=1, self.batchIdx do
-        -- only do update from non-terminal state
-        if self.terminal_masks[i] > 0.5 then
-            local action = self.actions[i]
-            local V, probability = table.unpack(self.policyNet_:forward(self.states[i]))
-            probability:add(TINY_EPSILON) -- could contain 0 -> log(0)= -inf -> theta = nans
+    for ppo_iter=1, self.opt.ppo_optim_epo do
+        if self.opt.recurrent then self.policyNet_:forget() end
+        -- Do the real updating
+        for i=1, self.batchIdx do
+            -- only do update from non-terminal state
+            if self.terminal_masks[i] > 0.5 then
+                local action = self.actions[i]
+                local V, probability = table.unpack(self.policyNet_:forward(self.states[i]))
+                probability:add(TINY_EPSILON) -- could contain 0 -> log(0)= -inf -> theta = nans
 
-            -- For the CI problem, this is a design decision of whether to normalize action distribution during optimization
-            -- If normalize it (zero actions that should not be taken at current time step), the potential problem is that
-            -- only the relative probability will be adjusted, even though the absolute probability may be adjusted in the wrong
-            -- direction. An example is that, for a 'good' action, we may still decrease its absolute probability but increase
-            -- the relative probability by decreasing probability of all legal actions. By pwang8. Jan 1, 2018.
-            local adpT = 0
-            if self.opt.env == 'UserSimLearner/CIUserSimEnv' and self.opt.ac_relative_plc then
-                -- If it is CI data, pick up actions according to adpType
-                if self.states[i][-1][1][-4] > 0.1 then adpT = 1 elseif self.states[i][-1][1][-3] > 0.1 then adpT = 2 elseif self.states[i][-1][1][-2] > 0.1 then adpT = 3 elseif self.states[i][-1][1][-1] > 0.1 then adpT = 4 end
-                assert(adpT >=1 and adpT <= 4)
-                for i=1, probability:size(1) do
-                    if i < self.CIActAdpBound[adpT][1] or i > self.CIActAdpBound[adpT][2] then
-                        probability[i] = 0
+                -- For the CI problem, this is a design decision of whether to normalize action distribution during optimization
+                -- If normalize it (zero actions that should not be taken at current time step), the potential problem is that
+                -- only the relative probability will be adjusted, even though the absolute probability may be adjusted in the wrong
+                -- direction. An example is that, for a 'good' action, we may still decrease its absolute probability but increase
+                -- the relative probability by decreasing probability of all legal actions. By pwang8. Jan 1, 2018.
+                local adpT = 0
+                if self.opt.env == 'UserSimLearner/CIUserSimEnv' and self.opt.ac_relative_plc then
+                    -- If it is CI data, pick up actions according to adpType
+                    if self.states[i][-1][1][-4] > 0.1 then adpT = 1 elseif self.states[i][-1][1][-3] > 0.1 then adpT = 2 elseif self.states[i][-1][1][-2] > 0.1 then adpT = 3 elseif self.states[i][-1][1][-1] > 0.1 then adpT = 4 end
+                    assert(adpT >=1 and adpT <= 4)
+                    for i=1, probability:size(1) do
+                        if i < self.CIActAdpBound[adpT][1] or i > self.CIActAdpBound[adpT][2] then
+                            probability[i] = 0
+                        end
+                    end
+                    local sumP = probability:sum()
+                    probability = torch.div(probability, sumP)
+                end
+
+                self.vTarget[1] = -2 * self.opt.async_valErr_coef * (self.tdReturns[i] - V)  -- this makes sense, instead of the 0.5 const. It then makes sense if we explain it as result of adopting value loss coefficient, by pwang8
+
+                -- ∇θ logp(s) = 1/p(a) for chosen a, 0 otherwise for a2c. PPO changes this part
+                self.policyTarget:zero()
+                -- For PPO optimization, we directly calculate the derivatives of policy output. The calculation should be the same effort as designing the clipped error signal
+                local _tdAdvPpo = self.tdReturns[i] - V
+                if self.opt.ac_relative_plc then
+                    -- Use relative action probability, right now only useful for CI env
+                    if _tdAdvPpo > 0 and probability[action]/self.actRelativeProbs[i] > 1+self.opt.ppo_clip_thr then
+                        self.policyTarget[action] = -((1+self.opt.ppo_clip_thr) * _tdAdvPpo) / probability[action]
+                    elseif _tdAdvPpo < 0 and probability[action]/self.actRelativeProbs[i] < 1-self.opt.ppo_clip_thr then
+                        self.policyTarget[action] = -((1-self.opt.ppo_clip_thr) * _tdAdvPpo) / probability[action]
+                    else
+                        self.policyTarget[action] = -_tdAdvPpo / self.actRelativeProbs[i]
+                    end
+                else
+                    -- Use absolute action probability
+                    if _tdAdvPpo > 0 and probability[action]/self.actAbsProbs[i] > 1+self.opt.ppo_clip_thr then
+                        self.policyTarget[action] = -((1+self.opt.ppo_clip_thr) * _tdAdvPpo) / probability[action]
+                    elseif _tdAdvPpo < 0 and probability[action]/self.actAbsProbs[i] < 1-self.opt.ppo_clip_thr then
+                        self.policyTarget[action] = -((1-self.opt.ppo_clip_thr) * _tdAdvPpo) / probability[action]
+                    else
+                        self.policyTarget[action] = -_tdAdvPpo / self.actAbsProbs[i]
                     end
                 end
-                local sumP = probability:sum()
-                probability = torch.div(probability, sumP)
-            end
 
-            self.vTarget[1] = -0.5 * (self.tdReturns[i] - V)  -- this makes sense, instead of the 0.5 const. It then makes sense if we explain it as result of adopting value loss coefficient, by pwang8
+                -- Calculate (negative of) gradient of entropy of policy (for gradient descent): -(-logp(s) - 1). The entropy loss calculation is the same as appearing in the pytorch-a2c-ppo-acktr repo. By pwang8.
+                local gradEntropy = torch.log(torch.add(probability, TINY_EPSILON)) + 1
 
-            -- ∇θ logp(s) = 1/p(a) for chosen a, 0 otherwise
-            self.policyTarget:zero()
-            -- f(s) ∇θ logp(s)
-            self.policyTarget[action] = -(self.tdReturns[i] - V) / probability[action] -- Negative target for gradient descent. This calculation should be correct. Same as in pytorch a2c repo. By pwang8.
-
-            -- Calculate (negative of) gradient of entropy of policy (for gradient descent): -(-logp(s) - 1)
-            local gradEntropy = torch.log(probability) + 1
-
-            if self.opt.env == 'UserSimLearner/CIUserSimEnv' and self.opt.ac_relative_plc then
-                for i=1, gradEntropy:size(1) do
-                    if i < self.CIActAdpBound[adpT][1] or i > self.CIActAdpBound[adpT][2] then
-                        gradEntropy[i] = 0
+                if self.opt.env == 'UserSimLearner/CIUserSimEnv' and self.opt.ac_relative_plc then
+                    for i=1, gradEntropy:size(1) do
+                        if i < self.CIActAdpBound[adpT][1] or i > self.CIActAdpBound[adpT][2] then
+                            gradEntropy[i] = 0
+                        end
                     end
                 end
+
+                -- Add to target to improve exploration (prevent convergence to suboptimal deterministic policy)
+                self.policyTarget:add(self.beta, gradEntropy)
+
+                -- Clip gradient if too large
+                OptimMisc.clipGradByNorm(self.vTarget, self.opt.rl_grad_clip)
+                OptimMisc.clipGradByNorm(self.policyTarget, self.opt.rl_grad_clip)
+
+                self.policyNet_:backward(self.states[i], self.targets)
+            else
+                if self.opt.recurrent then self.policyNet_:forget() end
             end
-
-            -- Add to target to improve exploration (prevent convergence to suboptimal deterministic policy)
-            self.policyTarget:add(self.beta, gradEntropy)
-
-            self.policyNet_:backward(self.states[i], self.targets)
-        else
-            if self.opt.recurrent then self.policyNet_:forget() end
         end
+
+        -- Do one step of param updating
+        self:applyGradients(self.policyNet_, self.dTheta_, self.theta)
     end
 end
 

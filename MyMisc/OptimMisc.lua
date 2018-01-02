@@ -26,6 +26,8 @@ function OptimMisc.clipGradByNorm(gradParams, maxNorm)
     end
 
     gradNorm = math.sqrt(gradNorm)
+    -- Something added by pwang8
+    if gradNorm == 0 then gradNorm = gradNorm + 1e-8 end
 
     local clipCoef = maxNorm / gradNorm
 

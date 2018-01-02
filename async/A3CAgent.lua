@@ -2,6 +2,7 @@ local classic = require 'classic'
 local optim = require 'optim'
 local AsyncAgent = require 'async/AsyncAgent'
 require 'modules/sharedRmsProp'
+local OptimMisc = require 'MyMisc.OptimMisc'
 
 local A3CAgent,super = classic.class('A3CAgent', 'AsyncAgent')
 
@@ -155,7 +156,7 @@ function A3CAgent:accumulateGradients(terminal, state)
         probability = torch.div(probability, sumP)
       end
 
-      self.vTarget[1] = -0.5 * (self.tdReturns[i] - V)  -- this makes sense, instead of the 0.5 const. It then makes sense if we explain it as result of adopting value loss coefficient, by pwang8
+      self.vTarget[1] = -2 * self.opt.async_valErr_coef * (self.tdReturns[i] - V)  -- this makes sense, instead of the 0.5 const. It then makes sense if we explain it as result of adopting value loss coefficient, by pwang8
 
       -- ∇θ logp(s) = 1/p(a) for chosen a, 0 otherwise
       self.policyTarget:zero()
@@ -163,7 +164,7 @@ function A3CAgent:accumulateGradients(terminal, state)
       self.policyTarget[action] = -(self.tdReturns[i] - V) / probability[action] -- Negative target for gradient descent. This calculation should be correct. Same as in pytorch a2c repo. By pwang8.
 
       -- Calculate (negative of) gradient of entropy of policy (for gradient descent): -(-logp(s) - 1)
-      local gradEntropy = torch.log(probability) + 1
+      local gradEntropy = torch.log(torch.add(probability, TINY_EPSILON)) + 1
 
       if self.opt.env == 'UserSimLearner/CIUserSimEnv' and self.opt.ac_relative_plc then
         for i=1, gradEntropy:size(1) do
@@ -175,6 +176,10 @@ function A3CAgent:accumulateGradients(terminal, state)
 
       -- Add to target to improve exploration (prevent convergence to suboptimal deterministic policy)
       self.policyTarget:add(self.beta, gradEntropy)
+
+      -- Clip gradient if too large
+      OptimMisc.clipGradByNorm(self.vTarget, self.opt.rl_grad_clip)
+      OptimMisc.clipGradByNorm(self.policyTarget, self.opt.rl_grad_clip)
 
       self.policyNet_:backward(self.states[i], self.targets)
     else

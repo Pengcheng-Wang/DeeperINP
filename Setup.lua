@@ -146,6 +146,9 @@ function Setup:parseOptions(arg)
   cmd:option('-asyncOptimFreq', 1, 'Param updating frequency of async RL models. This is the number of interaction sequences')
   cmd:option('-asyncRecrRho', 4, 'The rho (maximum BPTT steps) param for FastLSTM module in async RL models')
   cmd:option('-ppo_optim_epo', 4, 'Optimization epoch number using each batch of data for PPO agent')
+  cmd:option('-ppo_clip_thr', 0.2, 'Threshold parameter for advantage-based error clipping in PPO')
+  cmd:option('-rl_grad_clip', 1, 'The maximum grad norm allowed in optimization for async RL models (not used by DQN-based models because they already got tdErr clip)')
+  cmd:option('-async_valErr_coef', 0.25, 'The coefficient of value estimation error in actor-critic models')
   -- ALEWrap options
   cmd:option('-fullActions', 'false', 'Use full set of 18 actions')
   cmd:option('-actRep', 4, 'Times to repeat action') -- Independent of history length
