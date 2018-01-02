@@ -110,24 +110,26 @@ function Agent:_init(opt, envObj)
   -- The following variables are used in reconstructing rl states/acts/rewards/terminals in raw training set.
   -- The reason that these variables need to be reconstructed is that original variables in UserSimulator have
   -- non-numerical keys in tables, so not easy to iterate when sent to store in replay memory
-  self.ruRLStates = {}
-  self.ruRLActs = {}
-  self.ruRLRewards = {}
-  self.ruRLTerms = {}
-  for kk, vv in pairs(self.envRef.CIUSim.realUserRLStatePrepInd) do
-    for ik, iv in ipairs(vv) do
-      self.ruRLStates[#self.ruRLStates+1] = iv:clone()
-      if self.envRef.CIUSim.realUserRLTerms[kk][ik] > 0 then
-        self.ruRLTerms[#self.ruRLStates] = true
-      else
-        self.ruRLTerms[#self.ruRLStates] = false
+  if self.opt.env == 'UserSimLearner/CIUserSimEnv' then
+    self.ruRLStates = {}
+    self.ruRLActs = {}
+    self.ruRLRewards = {}
+    self.ruRLTerms = {}
+    for kk, vv in pairs(self.envRef.CIUSim.realUserRLStatePrepInd) do
+      for ik, iv in ipairs(vv) do
+        self.ruRLStates[#self.ruRLStates+1] = iv:clone()
+        if self.envRef.CIUSim.realUserRLTerms[kk][ik] > 0 then
+          self.ruRLTerms[#self.ruRLStates] = true
+        else
+          self.ruRLTerms[#self.ruRLStates] = false
+        end
+        self.ruRLActs[#self.ruRLStates] = self.envRef.CIUSim.realUserRLActs[kk][ik]
+        self.ruRLRewards[#self.ruRLStates] = self.envRef.CIUSim.realUserRLRewards[kk][ik]
+        if not self.ruRLTerms[#self.ruRLTerms] then self.ruRLRewards[#self.ruRLRewards] = 0 end -- if not terminal, set reward to 0
       end
-      self.ruRLActs[#self.ruRLStates] = self.envRef.CIUSim.realUserRLActs[kk][ik]
-      self.ruRLRewards[#self.ruRLStates] = self.envRef.CIUSim.realUserRLRewards[kk][ik]
-      if not self.ruRLTerms[#self.ruRLTerms] then self.ruRLRewards[#self.ruRLRewards] = 0 end -- if not terminal, set reward to 0
     end
+    self.ruRLItemCnt = #self.ruRLStates
   end
-  self.ruRLItemCnt = #self.ruRLStates
 
 end
 
