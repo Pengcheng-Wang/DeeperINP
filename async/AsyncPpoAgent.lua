@@ -76,7 +76,7 @@ function AsyncPpoAgent:learn(steps, from)
             reward = 0
 
             assert(not terminal, 'Terminal state should not be observed here')
-            action = self:probabilisticAction(state)
+            action, self.actAbsProbs[self.batchIdx], self.actRelativeProbs[self.batchIdx] = self:probabilisticAction(state)
             reward, terminal, state = self:takeAction(action)
             self.actions[self.batchIdx] = action
             self.rewards[self.batchIdx] = reward
@@ -212,9 +212,12 @@ function AsyncPpoAgent:progress(steps)
     end
 end
 
-
+--- Return of this function:
+--- Sampled action, absolute action probability, relative action probability
 function AsyncPpoAgent:probabilisticAction(state)
     local __, probability = table.unpack(self.policyNet_:forward(state))
+    local _actAbsProb = 0
+    local _actRltProb = 0
     -- todo:pwang8. Time to add extra output of abs and relative prob of the taken action. Jan 1, 2018.
 
     if self.opt.env == 'UserSimLearner/CIUserSimEnv' then
@@ -229,10 +232,13 @@ function AsyncPpoAgent:probabilisticAction(state)
         end
         -- Have to make sure subAdpActRegion does not sum up to 0 (all 0s) before sent to multinomial()
         subAdpActRegion:add(TINY_EPSILON) -- add a small number to this distribution so it will not sum up to 0
+        local _subAdpActSum = subAdpActRegion:sum()
+        subAdpActRegion:div(_subAdpActSum)
         local regAct = torch.multinomial(subAdpActRegion, 1):squeeze()
-        return self.CIActAdpBound[adpT][1] + regAct - 1
+        return self.CIActAdpBound[adpT][1] + regAct - 1, probability[self.CIActAdpBound[adpT][1] + regAct - 1], subAdpActRegion[regAct]
     else
-        return torch.multinomial(probability, 1):squeeze()
+        local _smpAct = torch.multinomial(probability, 1):squeeze()
+        return _smpAct, probability:squeeze()[_smpAct], probability:squeeze()[_smpAct]
     end
 end
 
