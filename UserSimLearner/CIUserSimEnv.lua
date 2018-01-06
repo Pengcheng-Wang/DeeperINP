@@ -397,7 +397,7 @@ function CIUserSimEnv:start()
                 -- Need to add the user action's effect on rl state
                 self.CIUSim:applyUserActOnState(self.rlStateRaw, self.curRnnUserAct)
             else
-                -- non-lstm models
+                -- non-rnn, non-cnn models
                 self.rlStateRaw[1][1] = self.curOneStepStateRaw -- copy the last time step RAW state representation. Clone() is not needed.
 
                 -- Need to add the user action's effect on rl state
@@ -424,11 +424,11 @@ function CIUserSimEnv:start()
     end
 end
 
--- todo:pwang8. Modify from here. Jan 5, 2018
+
 function CIUserSimEnv:step(adpAct)
     assert(adpAct >= self.CIUSim.CIFr.ciAdpActRanges[self.adpType][1] and adpAct <= self.CIUSim.CIFr.ciAdpActRanges[self.adpType][2])
 
-    if self.opt.uppModel == 'lstm' then
+    if string.sub(self.opt.uppModel, 1, 4) == 'rnn_' or string.sub(self.opt.uppModel, 1, 4) == 'cnn_' then
 
         self.nextSingleStepStateRaw = self.tabRnnStateRaw[self.opt.lstmHist]:clone()
         self.CIUSim:applyAdpActOnState(self.nextSingleStepStateRaw, self.adpType, adpAct)
@@ -481,7 +481,7 @@ function CIUserSimEnv:step(adpAct)
     -- Attention: we guarantee that the ending user action will not trigger adaptation
     if self.adpTriggered then
         --        print('--- Adp triggered')
-        if self.opt.uppModel == 'lstm' then
+        if string.sub(self.opt.uppModel, 1, 4) == 'rnn_' or string.sub(self.opt.uppModel, 1, 4) == 'cnn_' then
             self.rlStateRaw[1][1] = self.tabRnnStateRaw[self.opt.lstmHist][1] -- copy the last time step RAW state representation. Clone() is not needed.
 
             -- Need to add the user action's effect on rl state
@@ -506,7 +506,7 @@ function CIUserSimEnv:step(adpAct)
 
     else    -- self.curRnnUserAct == self.CIUSim.CIFr.usrActInd_end
 
-        if self.opt.uppModel == 'lstm' then
+        if string.sub(self.opt.uppModel, 1, 4) == 'rnn_' or string.sub(self.opt.uppModel, 1, 4) == 'cnn_' then
             self.rlStateRaw[1][1] = self.tabRnnStateRaw[self.opt.lstmHist][1] -- copy the last time step RAW state representation. Clone() is not needed.
         else
             -- non-lstm models
@@ -521,12 +521,29 @@ function CIUserSimEnv:step(adpAct)
         local nll_rwd
 
         if self.opt.uSimShLayer < 0.5 then
-            -- Bipartite actoin, outcome (score) prediction models
-            if self.opt.uppModel == 'lstm' then
+            -- Bipartite action, outcome (score) prediction models
+            if string.sub(self.opt.uppModelUsp, 1, 4) == 'rnn_' then   -- uppModelUsp indicating user score predictor model
                 self:_updateRnnStatePrep()
                 self.userScorePred:forget()
-                nll_rewards = self.userScorePred:forward(self.tabRnnStatePrep)
-                nll_rwd = nll_rewards[self.opt.lstmHist]:squeeze()
+                assert(self.opt.lstmHist >= self.opt.lstmHistUsp, 'Action predictor history length should >= score (outcome) predictor history length')
+                local _rnnScorePredInputPrep
+                if self.opt.lstmHist > self.opt.lstmHistUsp then
+                    _rnnScorePredInputPrep = {}
+                    for itr=1, self.opt.lstmHistUsp do
+                        _rnnScorePredInputPrep[itr] = self.tabRnnStatePrep[self.opt.lstmHist - self.opt.lstmHistUsp + itr]
+                    end
+                else
+                    _rnnScorePredInputPrep = self.tabRnnStatePrep
+                end
+                nll_rewards = self.userScorePred:forward(_rnnScorePredInputPrep)
+
+                -- todo:pwang8. This is not correct yet.
+                -- If ScoreSoftPredictor is utilized
+                if self.opt.uSimScSoft > 0 then
+                    nll_rwd = nll_rewards[self.opt.lstmHistUsp][1]:split(2, 1)  -- nll_rewards[self.opt.lstmHistUsp] is a 2-dim tensor, with 1st dim being batch index (only 1 in a batch). split(2, 1) means split along 1st dim, and 1st set contains 2 output units
+                    nll_rwd = nll_rwd[1]    -- the 1st item is score classification resutl, 2nd is regression result in ScoreSoftPredictor
+                end
+                nll_rwd = nll_rewards[self.opt.lstmHistUsp]:squeeze()
             else
                 -- non-lstm models
                 self:_updateOneStepStatePrep()
