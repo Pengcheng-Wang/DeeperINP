@@ -8,6 +8,18 @@
 --
 -- models separately. Also I'm thinking about maintaining only rnn type of running data structure, and then
 -- use it to update one step structure or cnn type of data structure to feed into models. I've read to here. Dec 28, 2017.
+--
+-- How to use:
+-- opt.ciunet == 'rlLoad'
+-- opt.uSimShLayer: 1 for multi-task (player action, and outcome) models, 0 for bipartite player simulation model
+-- opt.uSimScSoft: 1 for applying soft labels in player score (outcome) prediction, 0 for not use it
+-- opt.uppModel: player action prediction model type
+-- opt.uppModelUsp: player score prediction model type
+-- opt.lstmHist: History length in input state representation used only in uap (user action predictor), not usp anymore
+-- opt.lstmHistUsp: History length in input state representation used only in usp only
+-- opt.rnnHdSizeL1: player action prediction RNN model layer size. We have not set up rnn layer size for score (outcome) predictor yet, because we always use layer size of 21 for all rnn/cnn models right now. This is used to construct dropout mask in this script
+-- opt.rnnHdLyCnt: player action prediction RNN model hidden layer number. The same as above opt param. We don't set it up for score (outcome) predictor yet. This is used by dropout mask construction
+--
 
 require 'torch'
 require 'nn'
@@ -131,22 +143,22 @@ function CIUserSimEnv:getActBoundOfAdpType(adpT)
     return self.CIUSim.CIFr.ciAdpActRanges[adpT]
 end
 
---- This function calculates and sets self.curRnnUserAct (lstm), or self.curOneStepAct (non-lstm),
---  which is the predicted user action according to current tabRnnStatePrep or curOneStepStatePrep value
+--- This function calculates the predicted user action according to current tabRnnStatePrep or curOneStepStatePrep value,
+--- and sets self.curRnnUserAct (rnn, will also be used for cnn model data construction), or self.curOneStepAct (non-rnn, non-cnn)
 function CIUserSimEnv:_calcUserAct()
     -- Pick an action using the action prediction model
     local nll_acts
 
     if self.opt.uSimShLayer < 0.5 then
         -- bipartite action, outcome (score) prediction models
-        if string.sub(self.opt.uppModel, 1, 4) == 'rnn_' then
+        if string.sub(self.opt.uppModel, 1, 4) == 'rnn_' then   -- uppModel only indicating user action predictor model
             self.userActsPred:forget()
             --print(self.userActsPred)
             --os.exit()
-            local simEnv_rnn_noise_i = {}
-            local simEnv_rnn_noise_h = {}
-            local simEnv_rnn_noise_o = {}
-            if self.opt.uppModelRNNDom > 0 then
+            if self.opt.uppModelRNNDom > 0 then     -- if utilizing outside rnn dropout mask
+                local simEnv_rnn_noise_i = {}
+                local simEnv_rnn_noise_h = {}
+                local simEnv_rnn_noise_o = {}
                 TableSet.buildRNNDropoutMask(simEnv_rnn_noise_i, simEnv_rnn_noise_h, simEnv_rnn_noise_o, self.CIUSim.userStateFeatureCnt, self.opt.rnnHdSizeL1, self.opt.rnnHdLyCnt, 1, self.opt.lstmHist, self.opt.uppModelRNNDom)
                 TableSet.sampleRNNDropoutMask(0, simEnv_rnn_noise_i, simEnv_rnn_noise_h, simEnv_rnn_noise_o, self.opt.rnnHdLyCnt, self.opt.lstmHist)
                 local _tabRNNStatePrepWithDom = {}
@@ -172,10 +184,10 @@ function CIUserSimEnv:_calcUserAct()
         if string.sub(self.opt.uppModel, 1, 4) == 'rnn_' then
             -- todo:pwang8. We haven't implemented multi-task act-score prediction model with rnn_moe or cnn_moe structures, so the following code does not consider rnn_moe or cnn_moe in multi-task act-score prediction model at all. Jan 5, 2018
             self.userActScorePred:forget()
-            local simEnv_rnn_noise_i = {}
-            local simEnv_rnn_noise_h = {}
-            local simEnv_rnn_noise_o = {}
             if self.opt.uppModelRNNDom > 0 then
+                local simEnv_rnn_noise_i = {}
+                local simEnv_rnn_noise_h = {}
+                local simEnv_rnn_noise_o = {}
                 TableSet.buildRNNDropoutMask(simEnv_rnn_noise_i, simEnv_rnn_noise_h, simEnv_rnn_noise_o, self.CIUSim.userStateFeatureCnt, self.opt.rnnHdSizeL1, self.opt.rnnHdLyCnt, 1, self.opt.lstmHist, self.opt.uppModelRNNDom)
                 TableSet.sampleRNNDropoutMask(0, simEnv_rnn_noise_i, simEnv_rnn_noise_h, simEnv_rnn_noise_o, self.opt.rnnHdLyCnt, self.opt.lstmHist)
                 local _tabRNNStatePrepWithDom = {}
@@ -191,7 +203,7 @@ function CIUserSimEnv:_calcUserAct()
             for hit=1, self.opt.lstmHist do
                 _cnnStatePrep[1][hit] = self.tabRnnStatePrep[hit]:squeeze()
             end
-            nll_acts = self.userActsPred:forward(_cnnStatePrep)[1][1]   -- the first index 1 is action prediction output (for multi-task output), second index 1 is batch index
+            nll_acts = self.userActScorePred:forward(_cnnStatePrep)[1][1]   -- the first index 1 is action prediction output (for multi-task output), second index 1 is batch index
         else
             -- non-lstm models
             nll_acts = self.userActScorePred:forward(self.curOneStepStatePrep)
@@ -280,7 +292,7 @@ function CIUserSimEnv:start()
 
     while not valid do
         --- randomly select one human user's record whose 1st action cannot be ending action
-        if self.opt.uppModel == 'lstm' then
+        if string.sub(self.opt.uppModel, 1, 4) == 'rnn_' or string.sub(self.opt.uppModel, 1, 4) == 'cnn_' then      -- if action predictor type is rnn or cnn
             local CIUp_model = self.CIUap
             if self.opt.uSimShLayer > 0.5 then
                 CIUp_model = self.CIUasp
@@ -307,7 +319,7 @@ function CIUserSimEnv:start()
             -- valid type value should range from 1 to 4
             self.adpTriggered, self.adpType = self.CIUSim:isAdpTriggered(self.tabRnnStateRaw[self.opt.lstmHist], self.curRnnUserAct)
         else
-            -- non-lstm models
+            -- non-rnn, non-cnn models
             repeat
                 self.rndStartInd = torch.random(1, self.realDataStartsCnt)
             until self.CIUSim.realUserDataActs[self.CIUSim.realUserDataStartLines[self.rndStartInd]] ~= self.CIUSim.CIFr.usrActInd_end
@@ -326,7 +338,7 @@ function CIUserSimEnv:start()
         self.timeStepCnt = 1
         self.tabRnnStatePrep = {}
 
-        if self.opt.uppModel == 'lstm' then
+        if string.sub(self.opt.uppModel, 1, 4) == 'rnn_' or string.sub(self.opt.uppModel, 1, 4) == 'cnn_' then
             while not self.adpTriggered and self.curRnnUserAct ~= self.CIUSim.CIFr.usrActInd_end do
                 -- apply user's action onto raw state representation
                 -- This is the state representation for next single time step
@@ -352,7 +364,7 @@ function CIUserSimEnv:start()
 
             end -- end of while
         else
-            -- non-lstm models
+            -- non-rnn, non-cnn models
             while not self.adpTriggered and self.curOneStepAct ~= self.CIUSim.CIFr.usrActInd_end do
                 -- apply user's action onto raw state representation
                 -- This is the state representation for next single time step
@@ -379,7 +391,7 @@ function CIUserSimEnv:start()
         if self.adpTriggered then
             --            print('--- Adp triggered')
 
-            if self.opt.uppModel == 'lstm' then
+            if string.sub(self.opt.uppModel, 1, 4) == 'rnn_' or string.sub(self.opt.uppModel, 1, 4) == 'cnn_' then
                 self.rlStateRaw[1][1] = self.tabRnnStateRaw[self.opt.lstmHist][1] -- copy the last time step RAW state representation. Clone() is not needed.
 
                 -- Need to add the user action's effect on rl state
@@ -412,7 +424,7 @@ function CIUserSimEnv:start()
     end
 end
 
-
+-- todo:pwang8. Modify from here. Jan 5, 2018
 function CIUserSimEnv:step(adpAct)
     assert(adpAct >= self.CIUSim.CIFr.ciAdpActRanges[self.adpType][1] and adpAct <= self.CIUSim.CIFr.ciAdpActRanges[self.adpType][2])
 
