@@ -27,7 +27,7 @@ opt = lapp[[
        -g,--gpu           (default 0)           gpu device id, 0 for using cpu
        --seed             (default 1)           Random seed
        --prepro           (default "std")       input state feature preprocessing: rsc | std
-       --rnnHdSizeL1      (default 32)          rnn hidden layer size
+       --rnnHdSizeL1      (default 21)          rnn hidden layer size
        --rnnHdSizeL2      (default 0)           rnn hidden layer size in 2nd lstm layer
        --rnnHdLyCnt       (default 2)           number of rnn/cnn hidden layer. Default is 2 bcz only when rnnHdSizeL2 is not 0 this opt will be examined. The RHN and Bayesian LSTM rnn number also uses this opt param. I'm also trying to use it for CNN hidden layer counting.
        --rhnReccDept      (default 5)           The recurrent depth of RHN model in one layer
@@ -89,23 +89,23 @@ fr:evaluateSurveyData()
 local CIUserModel = CIUserSimulator(fr, opt)
 
 assert(opt.uSimScSoft >=0 and opt.uSimScSoft <= 1, 'opt.uSimScSoft should range in [0,1]')
-if opt.trType == 'sc' and opt.uSimShLayer == 0 and opt.uSimScSoft == 0 then
+if opt.trType == 'sc' and opt.uSimShLayer < 0.5 and opt.uSimScSoft == 0 then
     local CIUserScorePred = CIUserScorePredictor(CIUserModel, opt)
     for i=1, opt.usimTrIte do
         CIUserScorePred:trainOneEpoch()
     end
-elseif opt.trType == 'sc' and opt.uSimShLayer == 0 and opt.uSimScSoft > 0 then
+elseif opt.trType == 'sc' and opt.uSimShLayer < 0.5 and opt.uSimScSoft > 0 then
     local CIUserScoreSoftPredictor = require 'UserSimLearner/UserScoreSoftPredictor'
     local CIUserScoreSoftPred = CIUserScoreSoftPredictor(CIUserModel, opt)
     for i=1, opt.usimTrIte do
         CIUserScoreSoftPred:trainOneEpoch()
     end
-elseif opt.trType == 'ac' and opt.uSimShLayer < 1 then
+elseif opt.trType == 'ac' and opt.uSimShLayer < 0.5 then
     local CIUserActsPred = CIUserActsPredictor(CIUserModel, opt)
     for i=1, opt.usimTrIte do
         CIUserActsPred:trainOneEpoch()
     end
-elseif (opt.trType == 'ac' or opt.trType == 'sc') and opt.uSimShLayer == 1 then
+elseif (opt.trType == 'ac' or opt.trType == 'sc') and opt.uSimShLayer > 0.5 then
     local CIUserActScorePred = CIUserActScorePredictor(CIUserModel, opt)
     for i=1, opt.usimTrIte do
         CIUserActScorePred:trainOneEpoch()
@@ -148,13 +148,13 @@ elseif opt.trType == 'rl' then
     print('In user behaviro generation in', gens, 'times, avg adp appearances:', adpTotLen/gens, 'Adp types:', adpLenType)
     print('Avg user action traj length: ', totalTrajLength/gens, ', Score dist: ', scoreStat, 'Avg user act length of type 1: ',
         totalLengthEachType[1]/scoreStat[1], 'Avg user act length of type 2:', totalLengthEachType[2]/scoreStat[2])
-elseif opt.trType == 'ev' and opt.uSimShLayer < 1 then
+elseif opt.trType == 'ev' and opt.uSimShLayer < 0.5 then
     local CIUserActsPred = CIUserActsPredictor(CIUserModel, opt)
     local CIUserScorePred = CIUserScorePredictor(CIUserModel, opt)
     CIUserActsPred.model:evaluate()
     CIUserScorePred.model:evaluate()
     local CIUserBehaviorGen = CIUserBehaviorGenEvaluator(CIUserModel, CIUserActsPred, CIUserScorePred, nil, opt)
-elseif opt.trType == 'ev' and opt.uSimShLayer == 1 then
+elseif opt.trType == 'ev' and opt.uSimShLayer > 0.5 then
     local CIUserActScorePred = CIUserActScorePredictor(CIUserModel, opt)
     CIUserActScorePred.model:evaluate()
     local CIUserBehaviorGen = CIUserBehaviorGenEvaluator(CIUserModel, nil, nil, CIUserActScorePred, opt)

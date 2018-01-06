@@ -6,7 +6,6 @@
 -- This script aims at creating one script implementing the rlenvs APIs.
 -- This script is modified based on UserBehaviorGenerator.lua
 --
--- todo:pwang8. This file needs to be updated. I'll use other opt instead of uppModel to represent action and score prediction
 -- models separately. Also I'm thinking about maintaining only rnn type of running data structure, and then
 -- use it to update one step structure or cnn type of data structure to feed into models. I've read to here. Dec 28, 2017.
 
@@ -16,7 +15,7 @@ require 'nngraph'
 local _ = require 'moses'
 local class = require 'classic'
 require 'classic.torch' -- Enables serialisation
---local TableSet = require 'MyMisc.TableSetMisc'
+local TableSet = require 'MyMisc.TableSetMisc'
 
 local CIFileReader = require 'file_reader'
 local CIUserSimulator = require 'UserSimulator'
@@ -39,10 +38,10 @@ function CIUserSimEnv:_init(opt)
     self.userActScorePred = nil
     self.opt = opt
 
-    if opt.uSimShLayer < 1 then
+    if opt.uSimShLayer < 0.5 then
         -- separate models for action and outcome (score) prediction
         local CIUserActsPredictor = require 'UserSimLearner/UserActsPredictor'
-        local CIUserScorePredictor = require 'UserSimLearner/UserScorePredictor'
+        local CIUserScorePredictor = self.opt.uSimScSoft == 0 and require 'UserSimLearner/UserScorePredictor' or require 'UserSimLearner/UserScoreSoftPredictor'
         self.CIUap = CIUserActsPredictor(self.CIUSim, opt)
         self.CIUsp = CIUserScorePredictor(self.CIUSim, opt)
         self.userActsPred = self.CIUap.model    -- set the reference of CIUserActsPredictor to the pre-loaded
@@ -75,22 +74,24 @@ function CIUserSimEnv:_init(opt)
 
     self.curRnnStatesRaw = nil
     self.curRnnUserAct = nil
-    if opt.uppModel == 'lstm' then
-        local CIUp_model = self.CIUap
-        if opt.uSimShLayer == 1 then
-            CIUp_model = self.CIUasp
-        end
-
-        self.curRnnStatesRaw = CIUp_model.rnnRealUserDataStates[CIUp_model.rnnRealUserDataStarts[self.rndStartInd]]     -- sample the 1st state
-        self.curRnnUserAct = CIUp_model.rnnRealUserDataActs[CIUp_model.rnnRealUserDataStarts[self.rndStartInd]][self.opt.lstmHist] -- sample the 1st action (at last time step)
-    end
-
     self.curOneStepStateRaw = nil
     self.curOneStepAct = nil
-    if opt.uppModel ~= 'lstm' then
-        self.curOneStepStateRaw = self.CIUSim.realUserDataStates[self.CIUSim.realUserDataStartLines[self.rndStartInd]]     -- sample the 1st state
-        self.curOneStepAct = self.CIUSim.realUserDataActs[self.CIUSim.realUserDataStartLines[self.rndStartInd]] -- sample the 1st action
+
+
+    -- We use the rnn form running data. Cnn form of data will be generated accordingly if needed
+    local CIUp_model = self.CIUap
+    if opt.uSimShLayer > 0.5 then
+        CIUp_model = self.CIUasp
     end
+
+    -- Both rnn and one-step form of running state will be kept, for the usage of different type of player sim models
+    -- Cnn type data will not be kept. Cnn type of data can be directly formed from RNN type running state data
+    self.curRnnStatesRaw = CIUp_model.rnnRealUserDataStates[CIUp_model.rnnRealUserDataStarts[self.rndStartInd]]     -- sample the 1st state
+    self.curRnnUserAct = CIUp_model.rnnRealUserDataActs[CIUp_model.rnnRealUserDataStarts[self.rndStartInd]][self.opt.lstmHist] -- sample the 1st action (at last time step)
+
+    self.curOneStepStateRaw = self.CIUSim.realUserDataStates[self.CIUSim.realUserDataStartLines[self.rndStartInd]]     -- sample the 1st state
+    self.curOneStepAct = self.CIUSim.realUserDataActs[self.CIUSim.realUserDataStartLines[self.rndStartInd]] -- sample the 1st action
+
 
     self.adpTriggered = false
     self.adpType = 0  -- valid type value should range from 1 to 4
@@ -100,12 +101,10 @@ function CIUserSimEnv:_init(opt)
     self.nextSingleStepStateRaw = nil
 
     self.tabRnnStateRaw = {}   -- raw state value, used for updating future states according to current actions. This is state for user act/score prediction nn, not for rl
-    if opt.uppModel == 'lstm' then
-        for j=1, self.opt.lstmHist do
-            local sinStepUserState = torch.Tensor(1, self.CIUSim.userStateFeatureCnt)
-            sinStepUserState[1] = self.curRnnStatesRaw[j]
-            self.tabRnnStateRaw[j] = sinStepUserState:clone()
-        end
+    for j=1, self.opt.lstmHist do
+        local sinStepUserState = torch.Tensor(1, self.CIUSim.userStateFeatureCnt)
+        sinStepUserState[1] = self.curRnnStatesRaw[j]
+        self.tabRnnStateRaw[j] = sinStepUserState:clone()
     end
     self.tabRnnStatePrep = {}
     self.curOneStepStatePrep = nil
@@ -117,7 +116,6 @@ end
 --- Create APIs following the format of rlenvs
 --  All the following code is used by the RL script
 
---  1 state returned, of type 'int', of dimensionality 1 x self.size x self.size, between 0 and 1
 function CIUserSimEnv:getStateSpec()
     -- Attention: for CI data used in rl training, the returned state representation contains 4-bit of adpType indicator (last 4 bit)
     return {'real', {1, 1, self.CIUSim.userStateFeatureCnt + #self.CIUSim.CIFr.ciAdpActRanges}, {0, 3}}    -- not sure about threshold of values, not guaranteed
@@ -139,22 +137,61 @@ function CIUserSimEnv:_calcUserAct()
     -- Pick an action using the action prediction model
     local nll_acts
 
-    if self.opt.uSimShLayer < 1 then
+    if self.opt.uSimShLayer < 0.5 then
         -- bipartite action, outcome (score) prediction models
-        if self.opt.uppModel == 'lstm' then
+        if string.sub(self.opt.uppModel, 1, 4) == 'rnn_' then
             self.userActsPred:forget()
             --print(self.userActsPred)
             --os.exit()
-            nll_acts = self.userActsPred:forward(self.tabRnnStatePrep)[self.opt.lstmHist]:squeeze() -- get act choice output for last time step
+            local simEnv_rnn_noise_i = {}
+            local simEnv_rnn_noise_h = {}
+            local simEnv_rnn_noise_o = {}
+            if self.opt.uppModelRNNDom > 0 then
+                TableSet.buildRNNDropoutMask(simEnv_rnn_noise_i, simEnv_rnn_noise_h, simEnv_rnn_noise_o, self.CIUSim.userStateFeatureCnt, self.opt.rnnHdSizeL1, self.opt.rnnHdLyCnt, 1, self.opt.lstmHist, self.opt.uppModelRNNDom)
+                TableSet.sampleRNNDropoutMask(0, simEnv_rnn_noise_i, simEnv_rnn_noise_h, simEnv_rnn_noise_o, self.opt.rnnHdLyCnt, self.opt.lstmHist)
+                local _tabRNNStatePrepWithDom = {}
+                for j = 1, self.opt.lstmHist do
+                    _tabRNNStatePrepWithDom[j] = {self.tabRnnStatePrep[j], simEnv_rnn_noise_i[j], simEnv_rnn_noise_h[j], simEnv_rnn_noise_o[j]}
+                end
+                nll_acts = self.userActsPred:forward(_tabRNNStatePrepWithDom)[self.opt.lstmHist]:squeeze() -- get act choice output for last time step
+            else
+                nll_acts = self.userActsPred:forward(self.tabRnnStatePrep)[self.opt.lstmHist]:squeeze() -- get act choice output for last time step
+            end
+        elseif string.sub(self.opt.uppModel, 1, 4) == 'cnn_' then
+            local _cnnStatePrep = torch.Tensor(1, self.opt.lstmHist, self.CIUSim.userStateFeatureCnt):zero()
+            for hit=1, self.opt.lstmHist do
+                _cnnStatePrep[1][hit] = self.tabRnnStatePrep[hit]:squeeze()
+            end
+            nll_acts = self.userActsPred:forward(_cnnStatePrep):squeeze()
         else
-            -- non-lstm models
+            -- non-rnn non-cnn action prediction model
             nll_acts = self.userActsPred:forward(self.curOneStepStatePrep):squeeze()
         end
     else
-        -- unified action, outcome (score) prediction models
-        if self.opt.uppModel == 'lstm' then
+        -- unified (multi-task) action, outcome (score) prediction models
+        if string.sub(self.opt.uppModel, 1, 4) == 'rnn_' then
+            -- todo:pwang8. We haven't implemented multi-task act-score prediction model with rnn_moe or cnn_moe structures, so the following code does not consider rnn_moe or cnn_moe in multi-task act-score prediction model at all. Jan 5, 2018
             self.userActScorePred:forget()
-            nll_acts = self.userActScorePred:forward(self.tabRnnStatePrep)[self.opt.lstmHist][1]:squeeze() -- get act choice output for last time step, act has index of 1
+            local simEnv_rnn_noise_i = {}
+            local simEnv_rnn_noise_h = {}
+            local simEnv_rnn_noise_o = {}
+            if self.opt.uppModelRNNDom > 0 then
+                TableSet.buildRNNDropoutMask(simEnv_rnn_noise_i, simEnv_rnn_noise_h, simEnv_rnn_noise_o, self.CIUSim.userStateFeatureCnt, self.opt.rnnHdSizeL1, self.opt.rnnHdLyCnt, 1, self.opt.lstmHist, self.opt.uppModelRNNDom)
+                TableSet.sampleRNNDropoutMask(0, simEnv_rnn_noise_i, simEnv_rnn_noise_h, simEnv_rnn_noise_o, self.opt.rnnHdLyCnt, self.opt.lstmHist)
+                local _tabRNNStatePrepWithDom = {}
+                for j = 1, self.opt.lstmHist do
+                    _tabRNNStatePrepWithDom[j] = {self.tabRnnStatePrep[j], simEnv_rnn_noise_i[j], simEnv_rnn_noise_h[j], simEnv_rnn_noise_o[j]}
+                end
+                nll_acts = self.userActScorePred:forward(_tabRNNStatePrepWithDom)[self.opt.lstmHist][1]:squeeze() -- get act choice output for last time step
+            else
+                nll_acts = self.userActScorePred:forward(self.tabRnnStatePrep)[self.opt.lstmHist][1]:squeeze() -- get act choice output for last time step, act has index of 1
+            end
+        elseif string.sub(self.opt.uppModel, 1, 4) == 'cnn_' then
+            local _cnnStatePrep = torch.Tensor(1, self.opt.lstmHist, self.CIUSim.userStateFeatureCnt):zero()
+            for hit=1, self.opt.lstmHist do
+                _cnnStatePrep[1][hit] = self.tabRnnStatePrep[hit]:squeeze()
+            end
+            nll_acts = self.userActsPred:forward(_cnnStatePrep)[1][1]   -- the first index 1 is action prediction output (for multi-task output), second index 1 is batch index
         else
             -- non-lstm models
             nll_acts = self.userActScorePred:forward(self.curOneStepStatePrep)
@@ -245,7 +282,7 @@ function CIUserSimEnv:start()
         --- randomly select one human user's record whose 1st action cannot be ending action
         if self.opt.uppModel == 'lstm' then
             local CIUp_model = self.CIUap
-            if self.opt.uSimShLayer == 1 then
+            if self.opt.uSimShLayer > 0.5 then
                 CIUp_model = self.CIUasp
             end
 
@@ -471,7 +508,7 @@ function CIUserSimEnv:step(adpAct)
         local nll_rewards
         local nll_rwd
 
-        if self.opt.uSimShLayer < 1 then
+        if self.opt.uSimShLayer < 0.5 then
             -- Bipartite actoin, outcome (score) prediction models
             if self.opt.uppModel == 'lstm' then
                 self:_updateRnnStatePrep()

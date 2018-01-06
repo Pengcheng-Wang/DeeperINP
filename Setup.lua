@@ -176,10 +176,14 @@ function Setup:parseOptions(arg)
   cmd:option('-termActSmgLen', 50, 'The length above which user termination action would be highly probably sampled. The observed avg length is about 40')
   cmd:option('-termActSmgEps', 0.9, 'The probability which user termination action would be sampled after certain length')
   cmd:option('-rwdSmpEps', 0, 'User rwd sampling threshold. If rand se than this value, reture 1st pred')
-  cmd:option('-uppModel', 'lstm', 'type of model tor train: moe | mlp | linear | lstm')
-  cmd:option('-lstmHist', 10, 'lstm history length used for uap and usp')
+  cmd:option('-uppModel', 'rnn_rhn', 'type of player simulation model for action prediction. Only uap model type')
+  cmd:option('-uppModelUsp', 'cnn_uSimCnn_moe', 'type of player simulation model for score(outcome) prediction. Only usp model type')
+  cmd:option('-uppModelRNNDom', '0', 'Only for uap model, it is an indicator of whether the model is an RNN model and uses dropout masks from outside of the model. 0 for not using outside mask. Otherwise, this number represents the number of gates used in RNN model')
+  cmd:option('-uppModelRNNDomUsp', '0', 'Only for usp model, it is an indicator of whether the model is an RNN model and uses dropout masks from outside of the model. 0 for not using outside mask. Otherwise, this number represents the number of gates used in RNN model')
+  cmd:option('-lstmHist', 10, 'History length in input state representation used only in uap (user action predictor), not usp anymore')
+  cmd:option('-lstmHistUsp', 2, 'History length in input state representation used only in usp only')
   cmd:option('-uSimLstmBackLen', 3, 'The maximum step applied in btpp in lstm')
-  cmd:option('-rnnHdSizeL1', 64, 'lstm hidden layer size')
+  cmd:option('-rnnHdSizeL1', 21, 'lstm hidden layer size')
   cmd:option('-rnnHdSizeL2', 0, 'LSTM hidden layer size in 2nd lstm layer')
   cmd:option('-rnnHdLyCnt', 2, 'number of lstm hidden layer. Default is 2 bcz only when rnnHdSizeL2 is not 0 this opt will be examined')
   cmd:option('-uSimGru', 0, 'Whether to substitue lstm with gru (0 for using lstm, 1 for GRU)')
@@ -188,6 +192,7 @@ function Setup:parseOptions(arg)
   cmd:option('-save', 'upplogs', 'subdirectory to save logs')
   cmd:option('-ciuTType', 'train', 'tell userSimulator which part of corpus to use')
   cmd:option('-uSimShLayer', 0, 'Whether the lower layers in Action and Score prediction NNs are shared. If this value is 1, use shared layers')
+  cmd:option('-uSimScSoft', 0, 'The criterion weight of the score regression module in UserScoreSoftPrediction model. The value of this param should be in [0,1]. When it is 0, Soft prediction is off, and UserScorePrediction script is utilized. This opt is used to indicate whether to use UserScoreSoftPredictor (with value > 0) or UserScorePrdictor (with 0 value)')
   cmd:option('-testSetDivSeed', 2, 'The default seed value when separating a test set from the dataset')
   cmd:option('-validSetDivSeed', 3, 'The default seed value when separating a validation set out from the training set')
 
@@ -243,6 +248,30 @@ function Setup:parseOptions(arg)
   -- Process display if available (can be used for saliency recordings even without QT)
   if env.getDisplay then
     opt.displaySpec = env:getDisplaySpec()
+  end
+
+  -- set the uppModelRNNDom indicator in opt, which indicates whether the model is an RNN model, and uses dropout mask from outside the model construction
+  -- right now, the rhn model, and Bayesian lstm model (following Gal's implementation), and GridLSTM model use outside dropout mask
+  -- In this RL Setup opt construction, uppModelRNNDom is only for uap (user action predictor) model. Usp uses another opt item
+  if string.sub(opt.uppModel, 1, 7) == 'rnn_rhn' then
+    -- rnn_rhn uses double-sized dropout mask to drop out inputs of calculation of t-gate and transformed inner cell state
+    opt.uppModelRNNDom = 2
+  elseif string.sub(opt.uppModel, 1, 9) == 'rnn_blstm' or string.sub(opt.uppModel, 1, 13) == 'rnn_bGridlstm' then
+    -- lstm used quad-sized dropout mask to drop out inputs of calculation of the 3 gates and transformed inner cell state
+    opt.uppModelRNNDom = 4
+  else
+    opt.uppModelRNNDom = 0
+  end
+
+  -- Usp RNN dropout mask setup
+  if string.sub(opt.uppModelUsp, 1, 7) == 'rnn_rhn' then
+    -- rnn_rhn uses double-sized dropout mask to drop out inputs of calculation of t-gate and transformed inner cell state
+    opt.uppModelRNNDomUsp = 2
+  elseif string.sub(opt.uppModelUsp, 1, 9) == 'rnn_blstm' or string.sub(opt.uppModelUsp, 1, 13) == 'rnn_bGridlstm' then
+    -- lstm used quad-sized dropout mask to drop out inputs of calculation of the 3 gates and transformed inner cell state
+    opt.uppModelRNNDomUsp = 4
+  else
+    opt.uppModelRNNDomUsp = 0
   end
 
   return opt
@@ -316,6 +345,9 @@ function Setup:validateOptions()
     abortIf(self.opt.actor_critic and self.opt.doubleQ, 'Double Q-learning and actor-critic models are incompatible')
     abortIf(self.opt.saliency, 'Saliency maps not supported in async modes yet')
   end
+
+  -- Check CI player simulation modeling setting
+  abortIf(self.opt.lstmHist < self.opt.lstmHistUsp, 'In CI user simulation modeling, It should be uap history length >= usp history length')
 end
 
 -- Augments environments with extra methods if missing

@@ -38,7 +38,7 @@ function CIUserBehaviorGenEvaluator:_init(CIUserSimulator, CIUserActsPred, CIUse
 
     self:userActionDistStats(CIUserSimulator)
 
-    if opt.uSimShLayer < 1 then
+    if opt.uSimShLayer < 0.5 then
 
         -- Bipartitle Act/Score prediction model
         -- The user action/score predictors for evaluation should be already trained, and loaded from files
