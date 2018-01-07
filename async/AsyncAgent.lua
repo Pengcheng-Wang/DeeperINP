@@ -73,8 +73,10 @@ end
 function AsyncAgent:start()
   local reward, terminal = 0, false
   local rawObservation, adpType = self.env:start()   -- Todo: pwang8. This has been changed a little for compatibility with CI sim
+  print('((( Start in async agent', rawObservation, adpType)
   local observation = self.model:preprocess(rawObservation)
   self.stateBuffer:push(observation)
+  print('>>> Returned from async start', self.stateBuffer:readAll())
   return reward, terminal, self.stateBuffer:readAll()
 end
 
