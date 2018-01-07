@@ -96,7 +96,7 @@ function CIUserSimEnv:_init(opt)
     if opt.uSimShLayer > 0.5 then
         CIUp_model = self.CIUasp
     end
-
+print('###', CIUp_model, '***')
     -- Both rnn and one-step form of running state will be kept, for the usage of different type of player sim models
     -- Cnn type data will not be kept. Cnn type of data can be directly formed from RNN type running state data
     self.curRnnStatesRaw = CIUp_model.rnnRealUserDataStates[CIUp_model.rnnRealUserDataStarts[self.rndStartInd]]     -- sample the 1st state
