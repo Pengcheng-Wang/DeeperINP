@@ -24,7 +24,7 @@ function Body:_init(opts)
     self.ciTemCnn = opts.ciTemCnn   -- number of temporal cnn layers added in CI-DRL model
     if self.ciTemCnn > 0.5 then require 'modules.TempConvInUserSimCNN' end
     assert(not (self.ciTemCnn > 0.5 and self.recurrent), 'Right now we do not support recurrent cnn model in DRL for CI problem')
-    self.opt = opts.opt
+    self.opt = opts
 end
 
 function Body:createBody()
