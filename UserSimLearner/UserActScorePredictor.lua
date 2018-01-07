@@ -330,6 +330,16 @@ function CIUserActScorePredictor:_init(CIUserSimulator, opt)
             uapLinearLayers[l]:init('weight', nninit.kaiming, {dist = 'uniform', gain = 1/math.sqrt(3)}):init('bias', nninit.kaiming, {dist = 'uniform', gain = 1/math.sqrt(3)})    -- This bias initialization seems a little bit conflict with FastLSTM forget gate bias init. Maybe not, bcz it's on linear modules.
         end
     elseif opt.ciunet == 'rlLoad' then  -- If need reload a trained uasp model in the RL training/evaluation, not for training uasp anymore
+        if string.sub(opt.uppModel, 1, 7) == 'rnn_rhn' then
+            require 'modules.RecurrenHighwayNetworkRNN'
+        elseif opt.uppModel == 'rnn_blstm' then
+            require 'modules.LSTMBayesianRNN'
+        elseif opt.uppModel == 'rnn_bGridlstm' then
+            require 'modules.GridLSTMBayesianRNN'
+        elseif string.sub(opt.uppModel, 1, 4) == 'cnn_' then
+            require 'modules.TempConvInUserSimCNN'
+        end
+
         self.model = torch.load(paths.concat(opt.ubgDir , opt.uapFile))
     else
         print('<trainer> reloading previously trained ciunet')

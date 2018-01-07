@@ -160,7 +160,7 @@ function CIUserActsPredictor:_init(CIUserSimulator, opt)
             ------------------------------------------------------------
             -- Recurrent Highway Network (dropout mask defined outside rnn model)
             ------------------------------------------------------------
-            --require 'modules.RecurrenHighwayNetworkRNN'
+            require 'modules.RecurrenHighwayNetworkRNN'
             local rhn
             rhn = nn.RHN(self.inputFeatureNum, opt.rnnHdSizeL1, opt.rhnReccDept, opt.rnnHdLyCnt, opt.uSimLstmBackLen, opt.rnnResidual) --inputSize, outputSize, recurrence_depth, rhn_layers, rho, rnnResidualConn
             rhn:remember('both')
@@ -175,7 +175,7 @@ function CIUserActsPredictor:_init(CIUserSimulator, opt)
             ------------------------------------------------------------
             -- Recurrent Highway Network (dropout mask defined outside rnn model) with MOE head
             ------------------------------------------------------------
-            --require 'modules.RecurrenHighwayNetworkRNN'
+            require 'modules.RecurrenHighwayNetworkRNN'
             local rhn
             rhn = nn.RHN(self.inputFeatureNum, opt.rnnHdSizeL1, opt.rhnReccDept, opt.rnnHdLyCnt, opt.uSimLstmBackLen) --inputSize, outputSize, recurrence_depth, rhn_layers, rho
             rhn:remember('both')
@@ -262,7 +262,16 @@ function CIUserActsPredictor:_init(CIUserSimulator, opt)
             uapLinearLayers[l]:init('weight', nninit.kaiming, {dist = 'uniform', gain = 1/math.sqrt(3)}):init('bias', nninit.kaiming, {dist = 'uniform', gain = 1/math.sqrt(3)})
         end
     elseif opt.ciunet == 'rlLoad' then  -- If need reload a trained uap model in the RL training/evaluation, not for training uap anymore
-        require 'modules.RecurrenHighwayNetworkRNN'
+        if string.sub(opt.uppModel, 1, 7) == 'rnn_rhn' then
+            require 'modules.RecurrenHighwayNetworkRNN'
+        elseif opt.uppModel == 'rnn_blstm' then
+            require 'modules.LSTMBayesianRNN'
+        elseif opt.uppModel == 'rnn_bGridlstm' then
+            require 'modules.GridLSTMBayesianRNN'
+        elseif string.sub(opt.uppModel, 1, 4) == 'cnn_' then
+            require 'modules.TempConvInUserSimCNN'
+        end
+
         self.model = torch.load(paths.concat(opt.ubgDir , opt.uapFile))
     else
         print('<trainer> reloading previously trained ciunet')

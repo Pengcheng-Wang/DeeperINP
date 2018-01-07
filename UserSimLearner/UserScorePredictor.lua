@@ -292,6 +292,15 @@ function CIUserScorePredictor:_init(CIUserSimulator, opt)
             uspLinearLayers[l]:init('weight', nninit.kaiming, {dist = 'uniform', gain = 1/math.sqrt(3)}):init('bias', nninit.kaiming, {dist = 'uniform', gain = 1/math.sqrt(3)})
         end
     elseif opt.ciunet == 'rlLoad' then  -- If need reload a trained usp model in the RL training/evaluation, not for training usp anymore
+        if string.sub(opt.uppModelUsp, 1, 7) == 'rnn_rhn' then
+            require 'modules.RecurrenHighwayNetworkRNN'
+        elseif opt.uppModelUsp == 'rnn_blstm' then
+            require 'modules.LSTMBayesianRNN'
+        elseif opt.uppModelUsp == 'rnn_bGridlstm' then
+            require 'modules.GridLSTMBayesianRNN'
+        elseif string.sub(opt.uppModelUsp, 1, 4) == 'cnn_' then
+            require 'modules.TempConvInUserSimCNN'
+        end
         self.model = torch.load(paths.concat(opt.ubgDir , opt.uspFile))
     else
         print('<trainer> reloading previously trained ciunet')
