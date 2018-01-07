@@ -94,7 +94,7 @@ function Setup:parseOptions(arg)
   cmd:option('-modelBody', 'models.CISim', 'Path to Torch nn model to be used as DQN "body"')
   cmd:option('-ciTemCnn', 2, 'If models.CISim is used, this is the number of temporal cnn layers added in the DRL model')
   cmd:option('-drlCnnKernelWidth', 1, 'Kernel width of temporal cnn module in DRL network')
-  cmd:option('-drlCnnConnType', 'v2', 'Temporal cnn residual connection type in DRL network')
+  cmd:option('-drlCnnConnType', 'v6', 'Temporal cnn residual connection type in DRL network, only can apply v5-v8')
   cmd:option('-hiddenSize', 512, 'Number of units in the hidden fully connected layer')
   cmd:option('-histLen', 4, 'Number of consecutive states processed/used for backpropagation-through-time') -- DQN standard is 4, DRQN is 10
   cmd:option('-duel', 'true', 'Use dueling network architecture (learns advantage function)')
