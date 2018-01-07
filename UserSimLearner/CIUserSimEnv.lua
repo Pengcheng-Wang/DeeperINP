@@ -521,7 +521,6 @@ function CIUserSimEnv:step(adpAct)
             self.rlStateRaw[1][1] = self.curOneStepStateRaw -- copy the last time step RAW state representation. Clone() is not needed.
         end
         -- Does not need to apply an ending user action. It will not change state representation.
-        -- Need to add the user action's effect on rl state
         self.rlStatePrep[1][1] = self.CIUSim:preprocessUserStateData(self.rlStateRaw[1][1], self.opt.prepro)   -- do preprocessing before sending back to RL
 
         --- Score (outcome) prediction
@@ -544,7 +543,7 @@ function CIUserSimEnv:step(adpAct)
                     _rnnScorePredInputPrep = self.tabRnnStatePrep
                 end
 
-                if self.opt.uppModelRNNDomUsp > 0 then     -- if utilizing outside rnn dropout mask
+                if self.opt.uppModelRNNDomUsp > 0 then     -- if utilizing outside rnn dropout mask for user score predictor
                     local simEnv_rnn_noise_i = {}
                     local simEnv_rnn_noise_h = {}
                     local simEnv_rnn_noise_o = {}
@@ -564,7 +563,7 @@ function CIUserSimEnv:step(adpAct)
                     if string.sub(self.opt.uppModelUsp, -3, -1) == 'moe' then
                         nll_rewards[self.opt.lstmHistUsp] = nll_rewards[self.opt.lstmHistUsp]:split(2, 2)  -- We assume 1st dim is batch index. Score classification is the 1st set of output, having 2 outputs. Score regression is the 2nd set of output.
                     end
-                    nll_rwd = nll_rewards[self.opt.lstmHistUsp][1]:squeeze()  -- nll_rewards[self.opt.lstmHistUsp] is a 2-dim tensor, with 1st dim being batch index (only 1 in a batch). split(2, 1) means split along 1st dim, and 1st set contains 2 output units
+                    nll_rwd = nll_rewards[self.opt.lstmHistUsp][1]:squeeze()  -- nll_rewards[self.opt.lstmHistUsp] is a table of 2 items. nll_rewards[self.opt.lstmHistUsp][1] is a 2-dim tensor, with 1st dim being batch index (only 1 in a batch). split(2, 1) means split along 1st dim, and 1st set contains 2 output units
                 else
                     -- If ScorePredictor is used (NOT ScoreSoftPredictor)
                     nll_rwd = nll_rewards[self.opt.lstmHistUsp]:squeeze()
@@ -574,7 +573,7 @@ function CIUserSimEnv:step(adpAct)
                 assert(self.opt.lstmHist >= self.opt.lstmHistUsp, 'Action predictor history length should >= score (outcome) predictor history length')
                 local _cnnScorePredInputPrep = torch.Tensor(1, self.opt.lstmHistUsp, self.CIUSim.userStateFeatureCnt):zero()
                 for itr=1, self.opt.lstmHistUsp do
-                    _cnnScorePredInputPrep[1][itr] = self.tabRnnStatePrep[self.opt.lstmHist - self.opt.lstmHistUsp + itr]
+                    _cnnScorePredInputPrep[1][itr] = self.tabRnnStatePrep[self.opt.lstmHist - self.opt.lstmHistUsp + itr][1]
                 end
                 nll_rewards = self.userScorePred:forward(_cnnScorePredInputPrep)
 
@@ -583,7 +582,7 @@ function CIUserSimEnv:step(adpAct)
                     if string.sub(self.opt.uppModelUsp, -3, -1) == 'moe' then
                         nll_rewards = nll_rewards:split(2, 2)  -- We assume 1st dim is batch index. Score classification is the 1st set of output, having 2 outputs. Score regression is the 2nd set of output.
                     end
-                    nll_rwd = nll_rewards[1]:squeeze()  -- nll_rewards[self.opt.lstmHistUsp] is a 2-dim tensor, with 1st dim being batch index (only 1 in a batch). split(2, 1) means split along 1st dim, and 1st set contains 2 output units
+                    nll_rwd = nll_rewards[1]:squeeze()
                 else
                     -- If ScorePredictor is used (NOT ScoreSoftPredictor)
                     nll_rwd = nll_rewards:squeeze()
@@ -615,15 +614,15 @@ function CIUserSimEnv:step(adpAct)
                     local simEnv_rnn_noise_i = {}
                     local simEnv_rnn_noise_h = {}
                     local simEnv_rnn_noise_o = {}
-                    TableSet.buildRNNDropoutMask(simEnv_rnn_noise_i, simEnv_rnn_noise_h, simEnv_rnn_noise_o, self.CIUSim.userStateFeatureCnt, self.opt.rnnHdSizeL1Usp, self.opt.rnnHdLyCntUsp, 1, self.opt.lstmHistUsp, self.opt.uppModelRNNDomUsp)
+                    TableSet.buildRNNDropoutMask(simEnv_rnn_noise_i, simEnv_rnn_noise_h, simEnv_rnn_noise_o, self.CIUSim.userStateFeatureCnt, self.opt.rnnHdSizeL1Usp, self.opt.rnnHdLyCntUsp, 1, self.opt.lstmHistUsp, self.opt.uppModelRNNDomUsp)     -- even though multi-task action score prediction models have both action and score predictions, we still use two different sets of opt params in case that the multi-task model will only be used for score prediction
                     TableSet.sampleRNNDropoutMask(0, simEnv_rnn_noise_i, simEnv_rnn_noise_h, simEnv_rnn_noise_o, self.opt.rnnHdLyCntUsp, self.opt.lstmHistUsp)
                     local _tabRNNStatePrepWithDom = {}
                     for j = 1, self.opt.lstmHistUsp do
                         _tabRNNStatePrepWithDom[j] = {_rnnScorePredInputPrep[j], simEnv_rnn_noise_i[j], simEnv_rnn_noise_h[j], simEnv_rnn_noise_o[j]}
                     end
-                    nll_rewards = self.userScorePred:forward(_tabRNNStatePrepWithDom)
+                    nll_rewards = self.userActScorePred:forward(_tabRNNStatePrepWithDom)
                 else
-                    nll_rewards = self.userScorePred:forward(_rnnScorePredInputPrep)
+                    nll_rewards = self.userActScorePred:forward(_rnnScorePredInputPrep)
                 end
 
                 if string.sub(self.opt.uppModelUsp, -3, -1) == 'moe' then
@@ -635,9 +634,9 @@ function CIUserSimEnv:step(adpAct)
                 assert(self.opt.lstmHist >= self.opt.lstmHistUsp, 'Action predictor history length should >= score (outcome) predictor history length')
                 local _cnnScorePredInputPrep = torch.Tensor(1, self.opt.lstmHistUsp, self.CIUSim.userStateFeatureCnt):zero()
                 for itr=1, self.opt.lstmHistUsp do
-                    _cnnScorePredInputPrep[1][itr] = self.tabRnnStatePrep[self.opt.lstmHist - self.opt.lstmHistUsp + itr]
+                    _cnnScorePredInputPrep[1][itr] = self.tabRnnStatePrep[self.opt.lstmHist - self.opt.lstmHistUsp + itr][1]
                 end
-                nll_rewards = self.userScorePred:forward(_cnnScorePredInputPrep)
+                nll_rewards = self.userActScorePred:forward(_cnnScorePredInputPrep)
 
                 if string.sub(self.opt.uppModelUsp, -3, -1) == 'moe' then
                     nll_rewards = nll_rewards:split(self.CIUSim.CIFr.usrActInd_end, 2)  -- We assume 1st dim is batch index. Score classification is the 1st set of output, having 2 outputs. Score regression is the 2nd set of output.
