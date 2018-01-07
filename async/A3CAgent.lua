@@ -203,6 +203,7 @@ end
 
 
 function A3CAgent:probabilisticAction(state)
+  print('##### action called') print(state[-1][1]) print('@@@')
   local __, probability = table.unpack(self.policyNet_:forward(state))
 
   if self.opt.env == 'UserSimLearner/CIUserSimEnv' then
