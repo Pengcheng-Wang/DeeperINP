@@ -76,7 +76,7 @@ function AsyncAgent:start()
   print('((( Start in async agent', rawObservation, adpType)
   local observation = self.model:preprocess(rawObservation)
   print('+++ Preprocessed', observation)
-  self.stateBuffer:push(observation)
+  self.stateBuffer:push(observation)  -- todo:pwang8. The problem is here. Cannot push data into buffer. Jan 7, 2018.
   print('>>> Returned from async start', self.stateBuffer:readAll())
   return reward, terminal, self.stateBuffer:readAll()
 end
