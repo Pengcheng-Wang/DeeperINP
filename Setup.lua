@@ -178,8 +178,8 @@ function Setup:parseOptions(arg)
   cmd:option('-rwdSmpEps', 0, 'User rwd sampling threshold. If rand se than this value, reture 1st pred')
   cmd:option('-uppModel', 'rnn_rhn', 'type of player simulation model for action prediction. Only uap model type')
   cmd:option('-uppModelUsp', 'cnn_uSimCnn_moe', 'type of player simulation model for score(outcome) prediction. Only usp model type')
-  cmd:option('-uppModelRNNDom', '0', 'Only for uap model, it is an indicator of whether the model is an RNN model and uses dropout masks from outside of the model. 0 for not using outside mask. Otherwise, this number represents the number of gates used in RNN model')
-  cmd:option('-uppModelRNNDomUsp', '0', 'Only for usp model, it is an indicator of whether the model is an RNN model and uses dropout masks from outside of the model. 0 for not using outside mask. Otherwise, this number represents the number of gates used in RNN model')
+  cmd:option('-uppModelRNNDom', 0, 'Only for uap model, it is an indicator of whether the model is an RNN model and uses dropout masks from outside of the model. 0 for not using outside mask. Otherwise, this number represents the number of gates used in RNN model')
+  cmd:option('-uppModelRNNDomUsp', 0, 'Only for usp model, it is an indicator of whether the model is an RNN model and uses dropout masks from outside of the model. 0 for not using outside mask. Otherwise, this number represents the number of gates used in RNN model')
   cmd:option('-lstmHist', 10, 'History length in input state representation used only in uap (user action predictor), not usp anymore')
   cmd:option('-lstmHistUsp', 2, 'History length in input state representation used only in usp only')
   cmd:option('-uSimLstmBackLen', 3, 'The maximum step applied in btpp in lstm')
@@ -243,16 +243,6 @@ function Setup:parseOptions(arg)
     end
   end
 
-  -- Create one environment to extract specifications
-  local Env = require(opt.env)
-  local env = Env(opt)
-  opt.stateSpec = env:getStateSpec()
-  opt.actionSpec = env:getActionSpec()
-  -- Process display if available (can be used for saliency recordings even without QT)
-  if env.getDisplay then
-    opt.displaySpec = env:getDisplaySpec()
-  end
-
   -- set the uppModelRNNDom indicator in opt, which indicates whether the model is an RNN model, and uses dropout mask from outside the model construction
   -- right now, the rhn model, and Bayesian lstm model (following Gal's implementation), and GridLSTM model use outside dropout mask
   -- In this RL Setup opt construction, uppModelRNNDom is only for uap (user action predictor) model. Usp uses another opt item
@@ -275,6 +265,16 @@ function Setup:parseOptions(arg)
     opt.uppModelRNNDomUsp = 4
   else
     opt.uppModelRNNDomUsp = 0
+  end
+
+  -- Create one environment to extract specifications
+  local Env = require(opt.env)
+  local env = Env(opt)
+  opt.stateSpec = env:getStateSpec()
+  opt.actionSpec = env:getActionSpec()
+  -- Process display if available (can be used for saliency recordings even without QT)
+  if env.getDisplay then
+    opt.displaySpec = env:getDisplaySpec()
   end
 
   return opt
