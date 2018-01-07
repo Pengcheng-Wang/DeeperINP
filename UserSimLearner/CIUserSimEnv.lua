@@ -421,7 +421,7 @@ function CIUserSimEnv:start()
             valid = true    -- not necessary
             --            return self.rlStatePrep, self.adpType
             self:_updateRLStatePrepTypeInd()
-
+print('^^^^^^^ Got output from start()', self.rlStatePrepTypeInd, self.adpType)
             return self.rlStatePrepTypeInd, self.adpType
 
         else    -- self.curRnnUserAct == self.CIUSim.CIFr.usrActInd_end
