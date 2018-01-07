@@ -509,7 +509,7 @@ function CIUserSimEnv:step(adpAct)
         -- Should get action choice from the RL agent here
 
         self:_updateRLStatePrepTypeInd()
-
+        print('@@@ Adp Triggered\n', self.rlStatePrepTypeInd, self.adpType)
         return 0, self.rlStatePrepTypeInd, false, self.adpType
 
     else    -- self.curRnnUserAct == self.CIUSim.CIFr.usrActInd_end
@@ -684,6 +684,7 @@ function CIUserSimEnv:step(adpAct)
         local score = 1
         if scoreType == 2 then score = -1 end
         self:_updateRLStatePrepTypeInd(true)    -- pass true as param to indicate ending act is reached
+        print('#^@ Terminal reached', self.rlStatePrepTypeInd, ' - ', score)
         return score, self.rlStatePrepTypeInd, true, 0
     end
 
