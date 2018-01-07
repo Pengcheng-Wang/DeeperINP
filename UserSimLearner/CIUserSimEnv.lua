@@ -422,7 +422,7 @@ function CIUserSimEnv:start()
             --            return self.rlStatePrep, self.adpType
             self:_updateRLStatePrepTypeInd()
 print('^^^^^^^ Got output from start()', self.rlStatePrepTypeInd, self.adpType)
-            return self.rlStatePrepTypeInd, self.adpType
+            return self.rlStatePrepTypeInd:clone(), self.adpType
 
         else    -- self.curRnnUserAct == self.CIUSim.CIFr.usrActInd_end
             --            print('Regenerate user behavior trajectory from start!')
