@@ -209,7 +209,6 @@ function A3CAgent:probabilisticAction(state)
     -- If it is CI data, pick up actions according to adpType
     local adpT = 0
     if state[-1][1][-4] > 0.1 then adpT = 1 elseif state[-1][1][-3] > 0.1 then adpT = 2 elseif state[-1][1][-2] > 0.1 then adpT = 3 elseif state[-1][1][-1] > 0.1 then adpT = 4 end
-    if adpT==0 then print('====== Get invalid state in A3C ', state[-1][1]) end
     assert(adpT >=1 and adpT <= 4)
     local subAdpActRegion = torch.Tensor(self.CIActAdpBound[adpT][2] - self.CIActAdpBound[adpT][1] + 1):fill(0)
     probability:squeeze()

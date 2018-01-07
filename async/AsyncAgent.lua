@@ -72,12 +72,9 @@ end
 
 function AsyncAgent:start()
   local reward, terminal = 0, false
-  local rawObservation, adpType = self.env:start()   -- Todo: pwang8. This has been changed a little for compatibility with CI sim
-  print('((( Start in async agent', rawObservation, adpType)
+  local rawObservation, adpType = self.env:start()
   local observation = self.model:preprocess(rawObservation)
-  print('+++ Preprocessed', observation)
-  self.stateBuffer:push(observation)  -- todo:pwang8. The problem is here. Cannot push data into buffer. Jan 7, 2018.
-  print('>>> Returned from async start', self.stateBuffer:readAll())
+  self.stateBuffer:push(observation)
   return reward, terminal, self.stateBuffer:readAll()
 end
 

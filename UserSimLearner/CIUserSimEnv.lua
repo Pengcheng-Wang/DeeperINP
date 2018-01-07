@@ -421,7 +421,7 @@ function CIUserSimEnv:start()
             valid = true    -- not necessary
             --            return self.rlStatePrep, self.adpType
             self:_updateRLStatePrepTypeInd()
-print('^^^^^^^ Got output from start()', self.rlStatePrepTypeInd, self.adpType)
+            -- It seems to be necessary to return a clone of rlStatePrepTypeInd, because in async models, multiple threads may use this object at the same time
             return self.rlStatePrepTypeInd:clone(), self.adpType
 
         else    -- self.curRnnUserAct == self.CIUSim.CIFr.usrActInd_end
@@ -509,8 +509,7 @@ function CIUserSimEnv:step(adpAct)
         -- Should get action choice from the RL agent here
 
         self:_updateRLStatePrepTypeInd()
-        print('@@@ Adp Triggered\n', self.rlStatePrepTypeInd, self.adpType)
-        return 0, self.rlStatePrepTypeInd, false, self.adpType
+        return 0, self.rlStatePrepTypeInd:clone(), false, self.adpType
 
     else    -- self.curRnnUserAct == self.CIUSim.CIFr.usrActInd_end
 
@@ -684,8 +683,7 @@ function CIUserSimEnv:step(adpAct)
         local score = 1
         if scoreType == 2 then score = -1 end
         self:_updateRLStatePrepTypeInd(true)    -- pass true as param to indicate ending act is reached
-        print('#^@ Terminal reached', self.rlStatePrepTypeInd, ' - ', score)
-        return score, self.rlStatePrepTypeInd, true, 0
+        return score, self.rlStatePrepTypeInd:clone(), true, 0
     end
 
 end

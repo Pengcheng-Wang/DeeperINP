@@ -103,7 +103,7 @@ function AsyncMaster:_init(opt)
   end
 
   -- Print out number of trainable parameters in NN
-  print("Number of trainable params in QN: ", self.theta:nElement())
+  print("Number of trainable params in DRL model: ", self.theta:nElement())
 
   self.atomic = tds.AtomicCounter()
 
@@ -120,26 +120,26 @@ function AsyncMaster:_init(opt)
 
   self.controlPool:addjob(setupLogging(opt, 'VA'))
   self.controlPool:addjob(torchSetup(opt))
-  --self.controlPool:addjob(function()
-  --  -- distinguish from thread 1 in the agent pool
-  --  __threadid = 0
-  --  local signal = require 'posix.signal'
-  --  local ValidationAgent = require 'async/ValidationAgent'
-  --  validAgent = ValidationAgent(opt, theta, atomic)
-  --  if not opt.noValidation then
-  --    signal.signal(signal.SIGINT, function(signum)
-  --      log.warn('SIGINT received')
-  --      log.info('Saving agent')
-  --      local globalSteps = atomic:get()
-  --      local state = { globalSteps = globalSteps }
-  --      torch.save(stateFile, state)
-  --
-  --      validAgent:saveWeights('last')
-  --      log.warn('Exiting')
-  --      os.exit(128 + signum)
-  --    end)
-  --  end
-  --end)
+  self.controlPool:addjob(function()
+    -- distinguish from thread 1 in the agent pool
+    __threadid = 0
+    local signal = require 'posix.signal'
+    local ValidationAgent = require 'async/ValidationAgent'
+    validAgent = ValidationAgent(opt, theta, atomic)
+    if not opt.noValidation then
+      signal.signal(signal.SIGINT, function(signum)
+        log.warn('SIGINT received')
+        log.info('Saving agent')
+        local globalSteps = atomic:get()
+        local state = { globalSteps = globalSteps }
+        torch.save(stateFile, state)
+
+        validAgent:saveWeights('last')
+        log.warn('Exiting')
+        os.exit(128 + signum)
+      end)
+    end
+  end)
 
   self.controlPool:synchronize()
 
