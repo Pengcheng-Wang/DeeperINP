@@ -318,6 +318,7 @@ function CIUserActsPredictor:_init(CIUserSimulator, opt)
     self.rnnRealUserDataStates = self.ciUserSimulator.rnnRealUserDataStates
     self.rnnRealUserDataActs = self.ciUserSimulator.rnnRealUserDataActs
     self.rnnRealUserDataRewards = self.ciUserSimulator.rnnRealUserDataRewards
+    self.rnnRealUserDataStarts = self.ciUserSimulator.rnnRealUserDataStarts
     self.rnnRealUserDataStandardNLG = self.ciUserSimulator.rnnRealUserDataStandardNLG
 
     ----------------------------------------------------------------------
@@ -333,6 +334,7 @@ function CIUserActsPredictor:_init(CIUserSimulator, opt)
     self.cnnRealUserDataStates = self.ciUserSimulator.cnnRealUserDataStates
     self.cnnRealUserDataActs = self.ciUserSimulator.cnnRealUserDataActs
     self.cnnRealUserDataRewards = self.ciUserSimulator.cnnRealUserDataRewards
+    self.cnnRealUserDataStarts = self.ciUserSimulator.cnnRealUserDataStarts
     self.cnnRealUserDataStandardNLG = self.ciUserSimulator.cnnRealUserDataStandardNLG
 
     ----------------------------------------------------------------------
