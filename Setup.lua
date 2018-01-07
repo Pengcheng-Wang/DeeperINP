@@ -92,6 +92,9 @@ function Setup:parseOptions(arg)
   cmd:option('-colorSpace', '', 'Colour space conversion (screen is RGB): <none>|y|lab|yuv|hsl|hsv|nrgb')
   -- Model options
   cmd:option('-modelBody', 'models.CISim', 'Path to Torch nn model to be used as DQN "body"')
+  cmd:option('-ciTemCnn', 2, 'If models.CISim is used, this is the number of temporal cnn layers added in the DRL model')
+  cmd:option('-drlCnnKernelWidth', 1, 'Kernel width of temporal cnn module in DRL network')
+  cmd:option('-drlCnnConnType', 'v2', 'Temporal cnn residual connection type in DRL network')
   cmd:option('-hiddenSize', 512, 'Number of units in the hidden fully connected layer')
   cmd:option('-histLen', 4, 'Number of consecutive states processed/used for backpropagation-through-time') -- DQN standard is 4, DRQN is 10
   cmd:option('-duel', 'true', 'Use dueling network architecture (learns advantage function)')
@@ -126,7 +129,7 @@ function Setup:parseOptions(arg)
   cmd:option('-steps', 5e7, 'Training iterations (steps)') -- Frame := step in ALE; Time step := consecutive frames treated atomically by the agent
   cmd:option('-learnStart', 50000, 'Number of steps after which learning starts')
   cmd:option('-gradClip', 10, 'Clips L2 norm of gradients at gradClip (0 to disable)')
-  cmd:option('-rlLstmDropout', 0.3, 'Dropout value for Recurrent Q-net')
+  cmd:option('-rlDropout', 0.1, 'Dropout value for DRL network')
   -- Evaluation options
   cmd:option('-progFreq', 10000, 'Interval of steps between reporting progress')
   cmd:option('-reportWeights', 'false', 'Report weight and weight gradient statistics')

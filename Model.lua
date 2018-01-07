@@ -93,7 +93,7 @@ function Model:create()
   -- Add network body
   log.info('Setting up ' .. self.modelBody)
   local Body = require(self.modelBody)
-  local body = Body(self):createBody()  -- todo:pwang8. Dec 27, 2017. It's not clear whether the correct param list is used in Body(). It looks like in _init() it wants opts. Check it carefully.
+  local body = Body(self):createBody()
 
   -- Calculate body output size
   local bodyOutputSize = torch.prod(torch.Tensor(getOutputSize(body, _.append({histLen}, self.stateSpec[2]))))  -- return of _.append({histLen}, self.stateSpec[2]) is a table of {4, 1, 24, 24} for Catch demo
@@ -214,7 +214,7 @@ function Model:create()
     -- Bootstrap is not considered right now for actor-critic models.
     if self.recurrent then
       local lstm = nn.FastLSTM(bodyOutputSize, self.hiddenSize, self.opt.asyncRecrRho)
-      TableSet.fastLSTMForgetGateInit(lstm, 0, self.hiddenSize, nninit)   --(lstm, self.opt.rlLstmDropout, self.hiddenSize, nninit). Not sure if lazy dropout is correct. So not using it
+      TableSet.fastLSTMForgetGateInit(lstm, 0, self.hiddenSize, nninit)   --Not sure if lazy dropout is correct. So not using dropout for recurrent module in DRL right now
       lstm:remember('both')
       net:add(lstm)
     else
