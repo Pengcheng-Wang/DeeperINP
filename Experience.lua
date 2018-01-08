@@ -211,7 +211,7 @@ function Experience:retrieve(indices)
     --- Todo: pwang8. test
     if self.opt.env == 'UserSimLearner/CIUserSimEnv' and self.transTuples.states[n][-1][1][1][-4] == 0 and self.transTuples.states[n][-1][1][1][-3] == 0 and
             self.transTuples.states[n][-1][1][1][-2] == 0 and self.transTuples.states[n][-1][1][1][-1] == 0 then
-      print('Error in Experience retrieve(). An invalid transition pair is retrieved, since starting state is an ending state')
+      log.error('Error in Experience retrieve(). An invalid transition pair is retrieved, since starting state is an ending state')
     end
   end
 
