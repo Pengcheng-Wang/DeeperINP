@@ -70,19 +70,18 @@ function ValidationAgent:start()
   local action = 1
   for i=1,self.valSize+1 do
     local observation = self.model:preprocess(rawObservation)
-    self.valMemory:store(reward, observation, terminal, action)
     if not terminal then
       action = torch.random(1,self.m)
-
       if self.opt.env == 'UserSimLearner/CIUserSimEnv' then   -- Todo: pwang8. Check correctness for CI sim compatibility
         local adpT = 0
         if observation[-1][1][-4] > 0.1 then adpT = 1 elseif observation[-1][1][-3] > 0.1 then adpT = 2 elseif observation[-1][1][-2] > 0.1 then adpT = 3 elseif observation[-1][1][-1] > 0.1 then adpT = 4 end
         assert(adpT >=1 and adpT <= 4)
         action = torch.random(self.CIActAdpBound[adpT][1], self.CIActAdpBound[adpT][2])
       end
-
+      self.valMemory:store(reward, observation, terminal, action)
       reward, rawObservation, terminal, adpType = self.env:step(action - self.actionOffset)
     else
+      self.valMemory:store(reward, observation, terminal, action)
       reward, terminal = 0, false
       rawObservation, adpType = self.env:start()    -- Todo: pwang8. This has been changed a little for compatibility with CI sim
     end
