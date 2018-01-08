@@ -34,7 +34,7 @@ opt = lapp[[
        --rnnResidual      (default 0)           Whether apply residual connection in RNN player simulation models. 0 to turn if off, 1 to turn it on.
        --lstmHist         (default 10)          lstm hist length. This influence the rnn tensor table construction in data preparation. Attention: we also use it as history length indicator (input frame number) in CNN models
        --cnnKernelWidth   (default 3)           Temporal Convolution kernel width
-       --cnnConnType      (default "v2")        Residual connection type in player simulation CNN model
+       --cnnConnType      (default "v4")        Residual connection type in player simulation CNN model
        --moeExpCnt        (default 32)          Number of expert modules used in moe model
        --uSimGru          (default 0)           whether to substitue lstm with gru (0 for using lstm, 1 for GRU)
        --uSimLstmBackLen  (default 3)           The maximum step applied in bptt in lstm
@@ -55,6 +55,7 @@ opt = lapp[[
        --termActSmgEps    (default 0.9)         The probability which user termination action would be sampled after certain length
        --testSetDivSeed   (default 2)           The default seed value when separating a test set from the dataset
        --validSetDivSeed  (default 3)           The default seed value when separating a validation set out from the training set
+       --trainTwoFoldSim  (default 0)           If this item is 1, we train player simulation model using 50% of data, meaning constructing player sim model for 2-fold cross validation in DRL evaluation
        --dropoutUSim      (default 0.1)         The dropout rate used in user simulation model building. Set 0 to turn off droput
        --testOnTestFreq   (default 1)           The frequency of testing user simulation model's performance on test/train_valid set
        --testOnTestSoftScoreFreq   (default 30) The frequency of testing soft user outcome model's performance on test/train_valid set

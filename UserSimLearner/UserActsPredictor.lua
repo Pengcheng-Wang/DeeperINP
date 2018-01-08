@@ -737,12 +737,11 @@ function CIUserActsPredictor:trainOneEpoch()
     --    print('<trainer> saving ciunet to '..filename)
     --    torch.save(filename, self.model)
 
-    if self.trainEpoch % 10 == 0 and self.opt.ciuTType == 'train' then
-        -- todo: pwang8. Oct 20, 2017. For test purpose, this model saving func is temporarily ceased
-        --filename = paths.concat('userModelTrained', self.opt.save, string.format('%d', self.trainEpoch)..'_'..string.format('%.2f', self.uapConfusion.totalValid*100)..'_uap.t7')
-        --os.execute('mkdir -p ' .. sys.dirname(filename))
-        --print('<trainer> saving periodly trained ciunet to '..filename)
-        --torch.save(filename, self.model)
+    if self.trainEpoch > 1000 and self.trainEpoch % 200 == 0 and self.opt.ciuTType == 'train' then
+        filename = paths.concat('userModelTrained', self.opt.save, string.format('%d', self.trainEpoch)..'_'..string.format('%.2f', self.uapConfusion.totalValid*100)..'_uap.t7')
+        os.execute('mkdir -p ' .. sys.dirname(filename))
+        print('<trainer> saving periodly trained ciunet to '..filename)
+        torch.save(filename, self.model)
     end
 
     if self.trainEpoch == self.opt.usimTrIte and self.opt.ciuTType == 'train' then
