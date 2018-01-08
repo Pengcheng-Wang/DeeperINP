@@ -147,9 +147,9 @@ function A3CAgent:accumulateGradients(terminal, state)
         -- If it is CI data, pick up actions according to adpType
         if self.states[i][-1][1][-4] > 0.1 then adpT = 1 elseif self.states[i][-1][1][-3] > 0.1 then adpT = 2 elseif self.states[i][-1][1][-2] > 0.1 then adpT = 3 elseif self.states[i][-1][1][-1] > 0.1 then adpT = 4 end
         assert(adpT >=1 and adpT <= 4)
-        for i=1, probability:size(1) do
-          if i < self.CIActAdpBound[adpT][1] or i > self.CIActAdpBound[adpT][2] then
-            probability[i] = 0
+        for j=1, probability:size(1) do
+          if j < self.CIActAdpBound[adpT][1] or j > self.CIActAdpBound[adpT][2] then
+            probability[j] = 0
           end
         end
         local sumP = probability:sum()
@@ -167,9 +167,9 @@ function A3CAgent:accumulateGradients(terminal, state)
       local gradEntropy = torch.log(torch.add(probability, TINY_EPSILON)) + 1
 
       if self.opt.env == 'UserSimLearner/CIUserSimEnv' and self.opt.ac_relative_plc then
-        for i=1, gradEntropy:size(1) do
-          if i < self.CIActAdpBound[adpT][1] or i > self.CIActAdpBound[adpT][2] then
-            gradEntropy[i] = 0
+        for j=1, gradEntropy:size(1) do
+          if j < self.CIActAdpBound[adpT][1] or j > self.CIActAdpBound[adpT][2] then
+            gradEntropy[j] = 0
           end
         end
       end
@@ -181,7 +181,7 @@ function A3CAgent:accumulateGradients(terminal, state)
       OptimMisc.clipGradByNorm(self.vTarget, self.opt.rl_grad_clip)
       OptimMisc.clipGradByNorm(self.policyTarget, self.opt.rl_grad_clip)
 
-      self.policyNet_:backward(self.states[i], self.targets)
+      self.policyNet_:backward(self.states[i], self.targets, 1/self.batchIdx)
     else
       if self.opt.recurrent then self.policyNet_:forget() end
     end

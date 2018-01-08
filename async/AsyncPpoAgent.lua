@@ -139,7 +139,7 @@ function AsyncPpoAgent:updateOnePpoStep(terminal, state)
 
     -- Calculate the standardized advantage loss that will be used by PPO policy loss
     local _smpAdv = self.tdReturns[{{1, self.batchIdx}}] - self.stateValuesAtSmp
-    self.ppoAdvValsForPlyAdv = _smpAdv  --(_smpAdv - _smpAdv:mean()) / (_smpAdv:std() + TINY_EPSILON)
+    self.ppoAdvValsForPlyAdv = (_smpAdv - _smpAdv:mean()) / (_smpAdv:std() + TINY_EPSILON)  --_smpAdv
 
     for ppo_iter=1, self.opt.ppo_optim_epo do
         if self.opt.recurrent then self.policyNet_:forget() end
@@ -214,7 +214,7 @@ function AsyncPpoAgent:updateOnePpoStep(terminal, state)
                 OptimMisc.clipGradByNorm(self.vTarget, self.opt.rl_grad_clip)
                 OptimMisc.clipGradByNorm(self.policyTarget, self.opt.rl_grad_clip)
 
-                self.policyNet_:backward(self.states[i], self.targets)
+                self.policyNet_:backward(self.states[i], self.targets, 1/self.batchIdx)
             else
                 if self.opt.recurrent then self.policyNet_:forget() end
             end
