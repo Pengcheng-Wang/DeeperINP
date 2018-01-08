@@ -236,6 +236,12 @@ function Model:create()
     valueAndPolicy:add(policy)
 
     net:add(valueAndPolicy)
+
+    -- Each head should use a different random initialisation to construct bootstrap (currently Torch default)
+    local _linearLayers = net:findModules('nn.Linear')
+    for l = 1, #linearLayers do
+      _linearLayers[l]:init('weight', nninit.kaiming, {dist = 'uniform', gain = 1/math.sqrt(3)}):init('bias', nninit.kaiming, {dist = 'uniform', gain = 1/math.sqrt(3)})
+    end
   else
     -- Add head via ConcatTable (simplifies bootstrap code in agent)
     local headConcat = nn.ConcatTable()
