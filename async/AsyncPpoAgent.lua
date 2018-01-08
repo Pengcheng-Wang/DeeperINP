@@ -140,7 +140,8 @@ function AsyncPpoAgent:updateOnePpoStep(terminal, state)
 
     -- Calculate the standardized advantage loss that will be used by PPO policy loss
     local _smpAdv = self.tdReturns[{{1, self.batchIdx}}] - self.stateValuesAtSmp
-    self.ppoAdvValsForPlyAdv = _smpAdv  --(_smpAdv - _smpAdv:mean()) / (_smpAdv:std() + TINY_EPSILON)
+    self.ppoAdvValsForPlyAdv = _smpAdv  --(_smpAdv - _smpAdv:mean()) / (_smpAdv:std() + TINY_EPSILON)   -- this part is standardized in openai baseline implementation. It does not work here. Minus mean may
+                                        -- make sense because for environment like atari, only positive rewards are available. But we have negative rewards, which makes it not necessary.
 
     for ppo_iter=1, self.opt.ppo_optim_epo do
         if self.opt.recurrent then self.policyNet_:forget() end
