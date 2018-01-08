@@ -145,6 +145,11 @@ function Experience:store(reward, state, terminal, action)
   self.actions[self.index] = action
   self.invalid[self.index] = 0
 
+  if self.opt.env == 'UserSimLearner/CIUserSimEnv' and self.states[self.index][1][1][-4] == 0 and self.states[self.index][1][1][-3] == 0 and
+          self.states[self.index][1][1][-2] == 0 and self.states[self.index][1][1][-1] == 0 and self.terminals[self.index] < 0 then
+    log.error('Error during Storing into Experience Memory for CI env. Terminal state is seen but terminal signal is not given!')
+  end
+
   -- Store with maximal priority
   if self.memPriority then
     -- TODO: Correct PER by not storing terminal states at all
@@ -208,11 +213,8 @@ function Experience:retrieve(indices)
       end
     end
 
-    --- Todo: pwang8. test
-    if self.opt.env == 'UserSimLearner/CIUserSimEnv' and self.transTuples.states[n][-1][1][1][-4] == 0 and self.transTuples.states[n][-1][1][1][-3] == 0 and
-            self.transTuples.states[n][-1][1][1][-2] == 0 and self.transTuples.states[n][-1][1][1][-1] == 0 then
-      log.error('Error in Experience retrieve(). An invalid transition pair is retrieved, since starting state is an ending state')
-    end
+    --- Attention: this retrieve() will return invalid transitions. Within s1-a-s2, s1 may be terinal states. It might not be a huge problem, because in Atari,
+    --- one episode is very long, and this type transition will not be very hurtful. I will not check the correctness of CI data here anymore.
   end
 
   return self.transTuples.states[{{1, N}}], self.transTuples.actions[{{1, N}}], self.transTuples.rewards[{{1, N}}], self.transTuples.transitions[{{1, N}}], self.transTuples.terminals[{{1, N}}]
@@ -302,7 +304,7 @@ function Experience:updatePriorities(indices, delta)
     end
 
     for p = 1, indices:size(1) do
-      self.priorityQueue:updateByVal(indices[p], priorities[p], indices[p]) 
+      self.priorityQueue:updateByVal(indices[p], priorities[p], indices[p])
     end
   end
 end
