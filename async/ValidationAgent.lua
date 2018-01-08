@@ -68,7 +68,7 @@ function ValidationAgent:start()
   local reward, terminal = 0, false
   local rawObservation, adpType = self.env:start()   -- Todo: pwang8. This has been changed a little for compatibility with CI sim
   local action = 1
-  for i=1,self.valSize+1 do
+  for i=1,self.valSize+3 do
     local observation = self.model:preprocess(rawObservation)
     if not terminal then
       action = torch.random(1,self.m)
