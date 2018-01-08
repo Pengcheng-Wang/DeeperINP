@@ -90,6 +90,7 @@ function AsyncPpoAgent:learn(steps, from)
                     self.states[self.batchIdx+1]:copy(state)  -- dumb place holder for ending/terminal state
                     self.actions[self.batchIdx+1] = 1         -- dumb place holder for ending/terminal state
                     self.rewards[self.batchIdx+1] = 0         -- dumb place holder for ending/terminal state
+                    self.stateValuesAtSmp[self.batchIdx+1] = 0  -- have to reset it back to 0 to erase the stored state value in the prior sampling loop
                     self.batchIdx = self.batchIdx+1
                     reward, terminal, state = self:start()
                     assert(not terminal, 'Starting state should not be terminal state')
