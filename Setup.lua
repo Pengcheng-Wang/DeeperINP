@@ -201,6 +201,7 @@ function Setup:parseOptions(arg)
   cmd:option('-uSimScSoft', 0, 'The criterion weight of the score regression module in UserScoreSoftPrediction model. The value of this param should be in [0,1]. When it is 0, Soft prediction is off, and UserScorePrediction script is utilized. This opt is used to indicate whether to use UserScoreSoftPredictor (with value > 0) or UserScorePrdictor (with 0 value)')
   cmd:option('-testSetDivSeed', 2, 'The default seed value when separating a test set from the dataset')
   cmd:option('-validSetDivSeed', 3, 'The default seed value when separating a validation set out from the training set')
+  cmd:option('-trainTwoFoldSim', 0, 'If this item is 1, we train player simulation model using 50% of data, meaning constructing player sim model for 2-fold cross validation in DRL evaluation')
 
 
   local opt = cmd:parse(arg)
