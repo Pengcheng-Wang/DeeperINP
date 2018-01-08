@@ -35,9 +35,11 @@ function AsyncPpoAgent:_init(opt, policyNet, targetNet, theta, targetTheta, atom
     self.actions = torch.ByteTensor(self.batchSize)
     self.actRelativeProbs = torch.Tensor(self.batchSize):zero()
     self.actAbsProbs = torch.Tensor(self.batchSize):zero()
+    self.stateValuesAtSmp = torch.Tensor(self.batchSize):zero()   -- record the return action values while the RL agent calculated it
     self.states = torch.Tensor(0)
     self.terminal_masks = torch.Tensor(self.batchSize+1):fill(1)  -- this value is 0 if terminal, 1 if not. In s1-a-s2, ter_m[t1] represents whether s1 is terminal
     self.tdReturns = torch.Tensor(self.batchSize+1):zero()   -- stores td returns used in updateOnePpoStep()
+    self.ppoAdvValsForPlyAdv = torch.Tensor(self.batchSize):zero()      -- This is the standardized advantage values used for calculating policy loss in PPO
     self.beta = opt.entropyBeta
 
     self.env:training()
@@ -77,7 +79,7 @@ function AsyncPpoAgent:learn(steps, from)
             reward = 0
 
             assert(not terminal, 'Terminal state should not be observed here')
-            action, self.actAbsProbs[self.batchIdx], self.actRelativeProbs[self.batchIdx] = self:probabilisticAction(state)
+            action, self.actAbsProbs[self.batchIdx], self.actRelativeProbs[self.batchIdx], self.stateValuesAtSmp[self.batchIdx] = self:probabilisticAction(state)
             reward, terminal, state = self:takeAction(action)
             self.actions[self.batchIdx] = action
             self.rewards[self.batchIdx] = reward
@@ -135,6 +137,10 @@ function AsyncPpoAgent:updateOnePpoStep(terminal, state)
         end
     end
 
+    -- Calculate the standardized advantage loss that will be used by PPO policy loss
+    local _smpAdv = self.tdReturns[{{1, self.batchIdx}}] - self.stateValuesAtSmp
+    self.ppoAdvValsForPlyAdv = (_smpAdv - _smpAdv:mean()) / (_smpAdv:std() + TINY_EPSILON)
+
     for ppo_iter=1, self.opt.ppo_optim_epo do
         if self.opt.recurrent then self.policyNet_:forget() end
         -- Do the real updating
@@ -155,9 +161,9 @@ function AsyncPpoAgent:updateOnePpoStep(terminal, state)
                     -- If it is CI data, pick up actions according to adpType
                     if self.states[i][-1][1][-4] > 0.1 then adpT = 1 elseif self.states[i][-1][1][-3] > 0.1 then adpT = 2 elseif self.states[i][-1][1][-2] > 0.1 then adpT = 3 elseif self.states[i][-1][1][-1] > 0.1 then adpT = 4 end
                     assert(adpT >=1 and adpT <= 4)
-                    for i=1, probability:size(1) do
-                        if i < self.CIActAdpBound[adpT][1] or i > self.CIActAdpBound[adpT][2] then
-                            probability[i] = 0
+                    for j=1, probability:size(1) do
+                        if j < self.CIActAdpBound[adpT][1] or j > self.CIActAdpBound[adpT][2] then
+                            probability[j] = 0
                         end
                     end
                     local sumP = probability:sum()
@@ -169,7 +175,7 @@ function AsyncPpoAgent:updateOnePpoStep(terminal, state)
                 -- ∇θ logp(s) = 1/p(a) for chosen a, 0 otherwise for a2c. PPO changes this part
                 self.policyTarget:zero()
                 -- For PPO optimization, we directly calculate the derivatives of policy output. The calculation should be the same effort as designing the clipped error signal
-                local _tdAdvPpo = self.tdReturns[i] - V:squeeze()
+                local _tdAdvPpo = self.ppoAdvValsForPlyAdv[i]
                 if self.opt.ac_relative_plc then
                     -- Use relative action probability, right now only useful for CI env
                     if _tdAdvPpo > 0 and probability[action]/self.actRelativeProbs[i] > 1+self.opt.ppo_clip_thr then
@@ -194,9 +200,9 @@ function AsyncPpoAgent:updateOnePpoStep(terminal, state)
                 local gradEntropy = torch.log(torch.add(probability, TINY_EPSILON)) + 1
 
                 if self.opt.env == 'UserSimLearner/CIUserSimEnv' and self.opt.ac_relative_plc then
-                    for i=1, gradEntropy:size(1) do
-                        if i < self.CIActAdpBound[adpT][1] or i > self.CIActAdpBound[adpT][2] then
-                            gradEntropy[i] = 0
+                    for j=1, gradEntropy:size(1) do
+                        if j < self.CIActAdpBound[adpT][1] or j > self.CIActAdpBound[adpT][2] then
+                            gradEntropy[j] = 0
                         end
                     end
                 end
@@ -233,11 +239,9 @@ function AsyncPpoAgent:progress(steps)
 end
 
 --- Return of this function:
---- Sampled action, absolute action probability, relative action probability
+--- Sampled action, absolute action probability, relative action probability, state value
 function AsyncPpoAgent:probabilisticAction(state)
-    local __, probability = table.unpack(self.policyNet_:forward(state))
-    local _actAbsProb = 0
-    local _actRltProb = 0
+    local _stateVal, probability = table.unpack(self.policyNet_:forward(state))
 
     if self.opt.env == 'UserSimLearner/CIUserSimEnv' then
         -- If it is CI data, pick up actions according to adpType
@@ -254,10 +258,10 @@ function AsyncPpoAgent:probabilisticAction(state)
         local _subAdpActSum = subAdpActRegion:sum()
         subAdpActRegion:div(_subAdpActSum)
         local regAct = torch.multinomial(subAdpActRegion, 1):squeeze()
-        return self.CIActAdpBound[adpT][1] + regAct - 1, probability[self.CIActAdpBound[adpT][1] + regAct - 1], subAdpActRegion[regAct]
+        return self.CIActAdpBound[adpT][1] + regAct - 1, probability[self.CIActAdpBound[adpT][1] + regAct - 1], subAdpActRegion[regAct], _stateVal
     else
         local _smpAct = torch.multinomial(probability, 1):squeeze()
-        return _smpAct, probability:squeeze()[_smpAct], probability:squeeze()[_smpAct]
+        return _smpAct, probability:squeeze()[_smpAct], probability:squeeze()[_smpAct], _stateVal
     end
 end
 
