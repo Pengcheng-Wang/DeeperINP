@@ -236,18 +236,18 @@ function ValidationAgent:validate()
 
   -- Save latest weights
   log.info('Saving weights')
-  self:saveWeights('last'..self.atomic:get())
+  self:saveWeights('last')
 
   if valAvgScore > self.bestValScore then
     log.info('New best average score')
     self.bestValScore = valAvgScore
-    self:saveWeights('best'..self.atomic:get())
+    self:saveWeights('best')
   end
 
 
   log.info('Saving weights on training step')
   local avs = string.format('%.5f', valAvgScore) or 'nvl'
-  self:saveWeights(avs..self.atomic:get())
+  self:saveWeights(avs..'_'..self.atomic:get())
 
   if self.reportWeights then
     local reports = self:weightsReport()
