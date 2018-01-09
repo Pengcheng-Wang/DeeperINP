@@ -11,7 +11,8 @@ opt = lapp[[
        --trType           (default "rl")        training type : sc (score) | ac (action) | bg (behavior generation) | rl (implement rlenvs API) | ev (evaluation of act/score prediction)
        -s,--save          (default "upplogs")   subdirectory to save logs
        -n,--ciunet        (default "")          reload pretrained CI user simulation network
-       -m,--uppModel      (default "rnn_lstm")  type of model to train: moe | mlp | linear | rnn_lstm | rnn_rhn | rnn_blstm | rnn_bGridlstm | cnn_uSimTempCnn | cnn_uSimCnn_moe
+       -m,--uppModel      (default "rnn_rhn")   type of model to train: moe | mlp | linear | rnn_lstm | rnn_rhn | rnn_blstm | rnn_bGridlstm | cnn_uSimTempCnn | cnn_uSimCnn_moe
+       -m,--uppModelUsp   (default "cnn_moe")   type of model to train: moe | mlp | linear | rnn_lstm | rnn_rhn | rnn_blstm | rnn_bGridlstm | cnn_uSimTempCnn | cnn_uSimCnn_moe. This is used only in rl mode for evaluating player simulaiton model
        --uppModelRNNDom   (default 0)           indicator of whether the model is an RNN model and uses dropout masks from outside of the model. 0 for not using outside mask. Otherwise, this number represents the number of gates used in RNN model
        --gridLstmTieWhts  (default 1)           indicator of whether the GridLSTM will have shared, tied weights along depth dimension. 1 means with shared weights, 0 means non-shared weights
        -f,--full                                use the full dataset
@@ -30,9 +31,13 @@ opt = lapp[[
        --rnnHdSizeL1      (default 21)          rnn hidden layer size
        --rnnHdSizeL2      (default 0)           rnn hidden layer size in 2nd lstm layer
        --rnnHdLyCnt       (default 2)           number of rnn/cnn hidden layer. Default is 2 bcz only when rnnHdSizeL2 is not 0 this opt will be examined. The RHN and Bayesian LSTM rnn number also uses this opt param. I'm also trying to use it for CNN hidden layer counting.
+       --rnnHdSizeL1Usp   (default 21)          rnn hidden layer size for usp model, only used when mode is rl, for purpose of player simulator evaluation
+       --rnnHdSizeL2Usp   (default 0)           rnn hidden layer size in 2nd lstm layer for usp model, only used when mode is rl, for purpose of player simulator evaluation
+       --rnnHdLyCntUsp    (default 2)           number of rnn/cnn hidden layer. for usp model, only used when mode is rl, for purpose of player simulator evaluation
        --rhnReccDept      (default 5)           The recurrent depth of RHN model in one layer
        --rnnResidual      (default 0)           Whether apply residual connection in RNN player simulation models. 0 to turn if off, 1 to turn it on.
        --lstmHist         (default 10)          lstm hist length. This influence the rnn tensor table construction in data preparation. Attention: we also use it as history length indicator (input frame number) in CNN models
+       --lstmHistUsp      (default 2)           lstm hist length for User score predictor. This is only used when mode is rl, for the purpose of evaluating player simulater
        --cnnKernelWidth   (default 3)           Temporal Convolution kernel width
        --cnnConnType      (default "v4")        Residual connection type in player simulation CNN model
        --moeExpCnt        (default 32)          Number of expert modules used in moe model
