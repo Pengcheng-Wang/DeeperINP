@@ -153,11 +153,12 @@ elseif opt.trType == 'rl' then
             totalLengthEachType[2] = totalLengthEachType[2] + CIUserSimEnvModel.timeStepCnt
         end
         if i % 50 == 0 then
-            _playerSimEvlLogger:add{string.format('%d', i), string.format('%.3f', _playerSimEvlLogger/i), string.format('%d', adpLenType[1]),
+            _playerSimEvlLogger:add{string.format('%d', i), string.format('%.3f', adpTotLen/i), string.format('%d', adpLenType[1]),
                 string.format('%d', adpLenType[2]), string.format('%d', adpLenType[3]), string.format('%d', adpLenType[4]),
                 string.format('%.3f', totalTrajLength/i), string.format('%d', scoreStat[1]), string.format('%d', scoreStat[2]),
                 string.format('%.3f', totalLengthEachType[1]/scoreStat[1]), string.format('%.3f', totalLengthEachType[2]/scoreStat[2]),
                 string.format('%.3f', (scoreStat[1] - scoreStat[2]) / i)}
+            print('Avg_score: ', (scoreStat[1] - scoreStat[2]) / i)
         end
     end
     print('In user behaviro generation in', gens, 'times, avg adp appearances:', adpTotLen/gens, 'Adp types:', adpLenType)
