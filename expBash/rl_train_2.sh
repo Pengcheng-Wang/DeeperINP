@@ -4,7 +4,7 @@
 # Try histLen of 2. Jan 9, 2018
 echo 'RL training test'
 date +%Y,%m,%d-%H:%M:%S
-hist=2
+hist=3
 for thrN in 4 2;
 do
     for lrt in 7e-4 2e-4 1e-3;
