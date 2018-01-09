@@ -55,6 +55,7 @@ opt = lapp[[
        --uSimScSoft       (default 0)           The criterion weight of the score regression module in UserScoreSoftPrediction model. The value of this param should be in [0,1]. When it is 0, Soft prediction is off, and UserScorePrediction script is utilized
        --uSimBayesEvl     (default 0)           The Bayesian sampling method to do user simulation model evaluation. When the value is 0, no Bayesian sampling is conducted. Otherwise, it will be conducted to that number of times
        --rlEvnIte         (default 10000)       No of iterations in rl type of evaluation
+       --ciGroup2rwd      (default -1)          Reward signal design at terminal for 2nd group (below nlg median). It can be either 0 or -1
        --usimTrIte        (default 400)         No of iterations used in user simulation model training. Recom for act training is 300, score training is 3000
        --termActSmgLen    (default 50)          The length above which user termination action would be highly probably sampled. The observed avg length is about 40
        --termActSmgEps    (default 0.9)         The probability which user termination action would be sampled after certain length
@@ -145,7 +146,7 @@ elseif opt.trType == 'rl' then
         end
         adpTotLen = adpTotLen + adpCnt
         totalTrajLength = totalTrajLength + CIUserSimEnvModel.timeStepCnt
-        if score > 0 then
+        if score > 0.5 then
             scoreStat[1] = scoreStat[1] + 1
             totalLengthEachType[1] = totalLengthEachType[1] + CIUserSimEnvModel.timeStepCnt
         else

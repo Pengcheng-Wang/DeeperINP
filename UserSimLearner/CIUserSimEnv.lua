@@ -681,7 +681,7 @@ function CIUserSimEnv:step(adpAct)
         end
 
         local score = 1
-        if scoreType == 2 then score = -1 end
+        if scoreType == 2 then score = self.opt.ciGroup2rwd end
         self:_updateRLStatePrepTypeInd(true)    -- pass true as param to indicate ending act is reached
         return score, self.rlStatePrepTypeInd:clone(), true, 0
     end
