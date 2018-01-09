@@ -118,7 +118,10 @@ elseif (opt.trType == 'ac' or opt.trType == 'sc') and opt.uSimShLayer > 0.5 then
     end
 elseif opt.trType == 'rl' then
 
-    local hasCudnn, cudnn = pcall(require, 'cudnn') -- Use cuDNN if available
+    local hasCudnn, cudnn = pcall(require, 'cudnn') -- Use cuDNN if available. Needed in CIUserSimEnv
+    require 'optim'
+    local _playerSimEvlLogger = optim.Logger(paths.concat('userModelTrained', 'userSimEvl', 'evl.log'))
+    _playerSimEvlLogger:setNames{'Ite', 'Avg_adap', 'Adp_T1', 'Adp_T2', 'Adp_T3', 'Adp_T4', 'Avg_traj_len', 'Scr_p', 'Scr_n', 'Avg_len_p', 'Avg_len_n', 'Avg_scr'}
     local CIUserSimEnvModel = CIUserSimEnv(opt)
 
     local gens = opt.rlEvnIte
@@ -128,12 +131,10 @@ elseif opt.trType == 'rl' then
     local scoreStat = {0, 0}
     local totalLengthEachType = {0, 0}
     for i=1, gens do
-        print('iter', i)
         local obv, score, term, adpType
         local adpCnt = 0
         term = false
         obv, adpType = CIUserSimEnvModel:start()
-        print('^### Outside in main\n state:', obv, '\n type:', adpType)
         while not term do
             adpLenType[adpType] = adpLenType[adpType] + 1
             adpCnt = adpCnt + 1
@@ -150,6 +151,13 @@ elseif opt.trType == 'rl' then
         else
             scoreStat[2] = scoreStat[2] + 1
             totalLengthEachType[2] = totalLengthEachType[2] + CIUserSimEnvModel.timeStepCnt
+        end
+        if i % 50 == 0 then
+            _playerSimEvlLogger:add{string.format('%d', i), string.format('%.3f', _playerSimEvlLogger/i), string.format('%d', adpLenType[1]),
+                string.format('%d', adpLenType[2]), string.format('%d', adpLenType[3]), string.format('%d', adpLenType[4]),
+                string.format('%.3f', totalTrajLength/i), string.format('%d', scoreStat[1]), string.format('%d', scoreStat[2]),
+                string.format('%.3f', totalLengthEachType[1]/scoreStat[1]), string.format('%.3f', totalLengthEachType[2]/scoreStat[2]),
+                string.format('%.3f', (scoreStat[1] - scoreStat[2]) / i)}
         end
     end
     print('In user behaviro generation in', gens, 'times, avg adp appearances:', adpTotLen/gens, 'Adp types:', adpLenType)
