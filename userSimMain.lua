@@ -118,6 +118,7 @@ elseif (opt.trType == 'ac' or opt.trType == 'sc') and opt.uSimShLayer > 0.5 then
     end
 elseif opt.trType == 'rl' then
 
+    local hasCudnn, cudnn = pcall(require, 'cudnn') -- Use cuDNN if available
     local CIUserSimEnvModel = CIUserSimEnv(opt)
 
     local gens = opt.rlEvnIte
