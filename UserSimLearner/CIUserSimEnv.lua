@@ -665,10 +665,19 @@ function CIUserSimEnv:step(adpAct)
         lpy = torch.exp(lpy)
         lpy = torch.cumsum(lpy)
         local rwdSampleLen = 2  -- two types of rewards assumption in CI
-        --        lpy = torch.div(lpy, lpy[rwdSampleLen])
-        local greedySmpThres = self.opt.rwdSmpEps
+        lpy = torch.div(lpy, lpy[rwdSampleLen])
 
-        local scoreType = lps[1]  -- the action result given by the action predictor
+        -- If need to re-approximate the distribution of scores.
+        if self.opt.ciRwdStMxTemp > 0 then
+            local _lgPrb = lpy[1]
+            if _lgPrb == 0 then _lgPrb = _lgPrb + 1e-7 end  -- should not be executed
+            local _xi = (1 - torch.log(1/_lgPrb - 1)) / 2
+            local _xj = (1 + torch.log(1/_lgPrb - 1)) / 2
+            lpy[1] = (torch.exp(_xi / self.opt.ciRwdStMxTemp)) / (torch.exp(_xi / self.opt.ciRwdStMxTemp) + torch.exp(_xj / self.opt.ciRwdStMxTemp))
+        end
+
+        local greedySmpThres = self.opt.rwdSmpEps
+        local scoreType = lps[1]  -- the score prediction result given by the score predictor
         if torch.uniform() > greedySmpThres then
             -- sample according to classifier output
             local rndRwdPick = torch.uniform()
@@ -679,7 +688,7 @@ function CIUserSimEnv:step(adpAct)
                 end
             end
         end
-
+        -- print('####', torch.exp(nll_rwd), lpy, lps, '@@@@')
         local score = 1
         if scoreType == 2 then score = self.opt.ciGroup2rwd end
         self:_updateRLStatePrepTypeInd(true)    -- pass true as param to indicate ending act is reached
