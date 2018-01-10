@@ -122,7 +122,7 @@ elseif opt.trType == 'rl' then
 
     local hasCudnn, cudnn = pcall(require, 'cudnn') -- Use cuDNN if available. Needed in CIUserSimEnv
     require 'optim'
-    local _playerSimEvlLogger = optim.Logger(paths.concat('userModelTrained', 'userSimEvl', 'evl.log'))
+    local _playerSimEvlLogger = optim.Logger(paths.concat('userModelTrained', 'userSimEvl', self.opt.uapFile..'_'..self.opt.uspFile..'_'..self.opt.ciRwdStMxTemp..'_'..'evl.log'))
     _playerSimEvlLogger:setNames{'Ite', 'Avg_adap', 'Adp_T1', 'Adp_T2', 'Adp_T3', 'Adp_T4', 'Avg_traj_len', 'Scr_p', 'Scr_n', 'Avg_len_p', 'Avg_len_n', 'Avg_scr'}
     local CIUserSimEnvModel = CIUserSimEnv(opt)
 
