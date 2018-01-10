@@ -185,6 +185,7 @@ function AsyncMaster:start()
   local opt = self.opt
   local theta = self.theta
   local targetTheta = self.targetTheta
+  local _stateFile = self.stateFile
 
   local validator = function()
     local posix = require 'posix'
@@ -204,6 +205,10 @@ function AsyncMaster:start()
           log.error('%s', err)
           os.exit(128)
         end
+        log.info('Saving agent after validation')
+        local globalSteps = atomic:get()
+        local state = { globalSteps = globalSteps }
+        torch.save(_stateFile, state)
       end
       posix.sleep(1)  -- in unit of second
     end
