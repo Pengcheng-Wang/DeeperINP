@@ -410,8 +410,8 @@ function ValidationAgent:validationStats()
   end
 
   self.avgV[#self.avgV + 1] = avgV
-  --self:plotValidation()
-  local status, err = pcall(ValidationAgent.plotValidation, self)
+  self:plotValidation()
+  --local status, err = pcall(ValidationAgent.plotValidation, self)
   return avgV
 end
 
