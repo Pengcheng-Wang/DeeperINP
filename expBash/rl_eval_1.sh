@@ -5,7 +5,7 @@
 echo 'PPO RL training test'
 date +%Y,%m,%d-%H:%M:%S
 hist=3
-for thrN in 1;
+for thrN in 6;
 do
     for lrt in 7e-4;
     do
