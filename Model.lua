@@ -219,7 +219,9 @@ function Model:create()
       net:add(lstm)
     else
       net:add(nn.Linear(bodyOutputSize, self.hiddenSize))
-      net:add(nn.ReLU(true))
+      if not self.opt.rlnnLinear then
+        net:add(nn.ReLU(true))
+      end
     end
 
     local valueAndPolicy = nn.ConcatTable() -- π and V share all layers except the last
