@@ -87,7 +87,7 @@ for thrN in 4;
 do
     for lrt in 7e-4;
     do
-        for sfxTem in 0.67 0.33;
+        for sfxTem in 0.33;
         do
             if [ $sfxTem -eq -1 ];
             then
