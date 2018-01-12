@@ -72,28 +72,58 @@
 
 
 
-## Continue to train A3C RL models using usp with sampling temperature of -1, 0.67, 0.33
-echo 'A3C RL training'
+### Continue to train A3C RL models using usp with sampling temperature of -1, 0.67, 0.33
+#echo 'A3C RL training'
+#date +%Y,%m,%d-%H:%M:%S
+#hist=3
+#for thrN in 4;
+#do
+#    for lrt in 7e-4;
+#    do
+#        for sfxTem in -1 0.67 0.33;
+#        do
+#            if [ $sfxTem -eq -1 ];
+#            then
+#                th rlMain.lua -async A3C -ppo_clip_thr 0.15 -eta ${lrt} -momentum 0.99 -bootstraps 0 -batchSize 32 -hiddenSize 32 -doubleQ false -duel false -recurrent false -optimiser adam -threads ${thrN} -steps $((thrN*250000)) -tau 4 -memSize 18000 -epsilonSteps 200000 -valFreq 1500 -valSteps 2500 -bootstraps 0 -PALpha 0 -entropyBeta 0.001 -lstmHist 10 -rnnHdSizeL1 21 -rnnHdLyCnt 3 -lstmHistUsp 2 -rnnHdSizeL1Usp 21 -rnnHdLyCntUsp 2 -learnStart 2000 -progFreq 1000 -histLen ${hist} -asyncOptimFreq 1 -ciunet rlLoad -uSimScSoft 1 -uppModel rnn_rhn -uppModelUsp cnn_moe -uapFile uap_rhnL3RD3.t7 -uspFile usp_cnnmoe_L2H2K1E30e23.t7 -_id ci_a3c_lrt_${lrt}_thr_${thrN}_hist${hist}_rwd0_sfxTem${sfxTem} -async_valErr_coef 1 -ppo_optim_epo 2 -ciGroup2rwd 0 -ciRwdStMxTemp ${sfxTem} -network experiments/Jan9_2018_citestWith1500Usp/ci_a3c_tune_lrt_7e-4_thr_4_hist3_rwd0/last996692.weights.t7 > /dev/null &
+#                wait
+#            else
+#                th rlMain.lua -async A3C -ppo_clip_thr 0.15 -eta ${lrt} -momentum 0.99 -bootstraps 0 -batchSize 32 -hiddenSize 32 -doubleQ false -duel false -recurrent false -optimiser adam -threads ${thrN} -steps $((thrN*250000)) -tau 4 -memSize 18000 -epsilonSteps 200000 -valFreq 1500 -valSteps 2500 -bootstraps 0 -PALpha 0 -entropyBeta 0.001 -lstmHist 10 -rnnHdSizeL1 21 -rnnHdLyCnt 3 -lstmHistUsp 2 -rnnHdSizeL1Usp 21 -rnnHdLyCntUsp 2 -learnStart 2000 -progFreq 1000 -histLen ${hist} -asyncOptimFreq 1 -ciunet rlLoad -uSimScSoft 1 -uppModel rnn_rhn -uppModelUsp cnn_moe -uapFile uap_rhnL3RD3.t7 -uspFile usp_cnnmoe_L2H2K1E30e23.t7 -_id ci_a3c_lrt_${lrt}_thr_${thrN}_hist${hist}_rwd0_sfxTem${sfxTem} -async_valErr_coef 1 -ppo_optim_epo 2 -ciGroup2rwd 0 -ciRwdStMxTemp ${sfxTem} -network experiments/Jan11_2018_Thr6/ci_a3c_lrt_${lrt}_thr_6_hist${hist}_rwd0_sfxTem${sfxTem}/best.weights.t7 > /dev/null &
+#                wait
+#            fi
+#            echo 'done with thrN: ' ${thrN} ', lrt: ' ${lrt} ', sfxTem: ' ${sfxTem}
+#       done
+#    done
+#done
+#wait
+#echo 'Done training'
+#date +%Y,%m,%d-%H:%M:%S
+
+
+## Continue to train PPO RL models using usp with sampling temperature of -1, 0.67, 0.33
+echo 'DQN RL training'
 date +%Y,%m,%d-%H:%M:%S
 hist=3
-for thrN in 4;
+for sfxTem in -1 0.67 0.33;
 do
-    for lrt in 7e-4;
+    for seedSet in 2 3;
     do
-        for sfxTem in -1 0.67 0.33;
+        for thrN in 4;
         do
-            if [ $sfxTem -eq -1 ];
-            then
-                th rlMain.lua -async A3C -ppo_clip_thr 0.15 -eta ${lrt} -momentum 0.99 -bootstraps 0 -batchSize 32 -hiddenSize 32 -doubleQ false -duel false -recurrent false -optimiser adam -threads ${thrN} -steps $((thrN*250000)) -tau 4 -memSize 18000 -epsilonSteps 200000 -valFreq 1500 -valSteps 2500 -bootstraps 0 -PALpha 0 -entropyBeta 0.001 -lstmHist 10 -rnnHdSizeL1 21 -rnnHdLyCnt 3 -lstmHistUsp 2 -rnnHdSizeL1Usp 21 -rnnHdLyCntUsp 2 -learnStart 2000 -progFreq 1000 -histLen ${hist} -asyncOptimFreq 1 -ciunet rlLoad -uSimScSoft 1 -uppModel rnn_rhn -uppModelUsp cnn_moe -uapFile uap_rhnL3RD3.t7 -uspFile usp_cnnmoe_L2H2K1E30e23.t7 -_id ci_a3c_lrt_${lrt}_thr_${thrN}_hist${hist}_rwd0_sfxTem${sfxTem} -async_valErr_coef 1 -ppo_optim_epo 2 -ciGroup2rwd 0 -ciRwdStMxTemp ${sfxTem} -network experiments/Jan9_2018_citestWith1500Usp/ci_a3c_tune_lrt_7e-4_thr_4_hist3_rwd0/last996692.weights.t7 > /dev/null &
+            for lrt in 7e-4;
+            do
+                if [ $sfxTem -eq -1 ];
+                then
+                    th rlMain.lua -async A3C -seed ${seedSet} -ppo_clip_thr 0.15 -eta ${lrt} -momentum 0.99 -bootstraps 0 -batchSize 32 -hiddenSize 32 -doubleQ false -duel false -recurrent false -optimiser adam -threads ${thrN} -steps $((thrN*250000)) -tau 4 -memSize 18000 -epsilonSteps 200000 -valFreq 1500 -valSteps 2500 -bootstraps 0 -PALpha 0 -entropyBeta 0.001 -lstmHist 10 -rnnHdSizeL1 21 -rnnHdLyCnt 3 -lstmHistUsp 2 -rnnHdSizeL1Usp 21 -rnnHdLyCntUsp 2 -learnStart 2000 -progFreq 1000 -histLen ${hist} -asyncOptimFreq 1 -ciunet rlLoad -uSimScSoft 1 -uppModel rnn_rhn -uppModelUsp cnn_moe -uapFile uap_rhnL3RD3.t7 -uspFile usp_cnnmoe_L2H2K1E30e23.t7 -_id ci_a3c_lrt_${lrt}_thr_${thrN}_hist${hist}_rwd0_sfxTem${sfxTem}_seed${seedSet} -async_valErr_coef 1 -ppo_optim_epo 2 -ciGroup2rwd 0 -ciRwdStMxTemp ${sfxTem} > /dev/null &
+                    wait
+                else
+                    th rlMain.lua -async A3C -seed ${seedSet} -ppo_clip_thr 0.15 -eta ${lrt} -momentum 0.99 -bootstraps 0 -batchSize 32 -hiddenSize 32 -doubleQ false -duel false -recurrent false -optimiser adam -threads ${thrN} -steps $((thrN*250000)) -tau 4 -memSize 18000 -epsilonSteps 200000 -valFreq 1500 -valSteps 2500 -bootstraps 0 -PALpha 0 -entropyBeta 0.001 -lstmHist 10 -rnnHdSizeL1 21 -rnnHdLyCnt 3 -lstmHistUsp 2 -rnnHdSizeL1Usp 21 -rnnHdLyCntUsp 2 -learnStart 2000 -progFreq 1000 -histLen ${hist} -asyncOptimFreq 1 -ciunet rlLoad -uSimScSoft 1 -uppModel rnn_rhn -uppModelUsp cnn_moe -uapFile uap_rhnL3RD3.t7 -uspFile usp_cnnmoe_L2H2K1E30e23.t7 -_id ci_a3c_lrt_${lrt}_thr_${thrN}_hist${hist}_rwd0_sfxTem${sfxTem}_seed${seedSet} -async_valErr_coef 1 -ppo_optim_epo 2 -ciGroup2rwd 0 -ciRwdStMxTemp ${sfxTem} > /dev/null &
+                    wait
+                fi
+                echo 'done with thrN: ' ${thrN} ', lrt: ' ${lrt} ', sfxTem: ' ${sfxTem}
                 wait
-            else
-                th rlMain.lua -async A3C -ppo_clip_thr 0.15 -eta ${lrt} -momentum 0.99 -bootstraps 0 -batchSize 32 -hiddenSize 32 -doubleQ false -duel false -recurrent false -optimiser adam -threads ${thrN} -steps $((thrN*250000)) -tau 4 -memSize 18000 -epsilonSteps 200000 -valFreq 1500 -valSteps 2500 -bootstraps 0 -PALpha 0 -entropyBeta 0.001 -lstmHist 10 -rnnHdSizeL1 21 -rnnHdLyCnt 3 -lstmHistUsp 2 -rnnHdSizeL1Usp 21 -rnnHdLyCntUsp 2 -learnStart 2000 -progFreq 1000 -histLen ${hist} -asyncOptimFreq 1 -ciunet rlLoad -uSimScSoft 1 -uppModel rnn_rhn -uppModelUsp cnn_moe -uapFile uap_rhnL3RD3.t7 -uspFile usp_cnnmoe_L2H2K1E30e23.t7 -_id ci_a3c_lrt_${lrt}_thr_${thrN}_hist${hist}_rwd0_sfxTem${sfxTem} -async_valErr_coef 1 -ppo_optim_epo 2 -ciGroup2rwd 0 -ciRwdStMxTemp ${sfxTem} -network experiments/Jan11_2018_Thr6/ci_a3c_lrt_${lrt}_thr_6_hist${hist}_rwd0_sfxTem${sfxTem}/best.weights.t7 > /dev/null &
-                wait
-            fi
-            echo 'done with thrN: ' ${thrN} ', lrt: ' ${lrt} ', sfxTem: ' ${sfxTem}
-       done
+            done
+        done
     done
 done
-wait
 echo 'Done training'
 date +%Y,%m,%d-%H:%M:%S
