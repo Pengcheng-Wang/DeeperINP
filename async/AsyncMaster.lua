@@ -172,8 +172,8 @@ function AsyncMaster:start()
   if self.opt.network ~= '' and paths.filep(self.stateFile) then
       local state = torch.load(self.stateFile)
       stepsToGo = math.floor((self.opt.steps - state.globalSteps) / self.opt.threads)
-      if stepsToGo <= 0 then exit() end
       startStep = math.floor(state.globalSteps / self.opt.threads)
+      if stepsToGo <= 0 or startStep < 0 then exit() end
       self.atomic:set(state.globalSteps)
       log.info('Resuming training from step %d', state.globalSteps)
       log.info('Loading pretrained network weights')
