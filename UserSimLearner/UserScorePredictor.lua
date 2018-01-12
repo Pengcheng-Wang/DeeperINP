@@ -843,13 +843,15 @@ function CIUserScorePredictor:trainOneEpoch()
 end
 
 -- evaluation function on test/train_validation set
-function CIUserScorePredictor:testScorePredOnTestDetOneEpoch()
+function CIUserScorePredictor:testScorePredOnTestDetOneEpoch(_evalStat)
     -- just in case:
     collectgarbage()
+
+    _evalStat = _evalStat or false
     -- Confusion matrix for score prediction (2-class)
-    --    local scrPredTP = torch.Tensor(2):fill(1e-3)
-    --    local scrPredFP = torch.Tensor(2):fill(1e-3)
-    --    local scrPredFN = torch.Tensor(2):fill(1e-3)
+    local scrPredTP = torch.Tensor(2):fill(1e-3)
+    local scrPredFP = torch.Tensor(2):fill(1e-3)
+    local scrPredFN = torch.Tensor(2):fill(1e-3)
     local _logLoss = 0
     if string.sub(self.opt.uppModel, 1, 4) == 'rnn_' then
         -- uSimShLayer == 0 and rnn model
@@ -891,10 +893,30 @@ function CIUserScorePredictor:testScorePredOnTestDetOneEpoch()
         for i=1, #self.rnnRealUserDataEndsTest do
             self.uspConfusion:add(nll_rewards[self.opt.lstmHist][i], self.rnnRealUserDataRewardsTest[self.rnnRealUserDataEndsTest[i]][self.opt.lstmHist])
             _logLoss = _logLoss + -1 * nll_rewards[self.opt.lstmHist][i][self.rnnRealUserDataRewardsTest[self.rnnRealUserDataEndsTest[i]][self.opt.lstmHist]]
+
+            if _evalStat then
+                local lp, rin = torch.max(nll_rewards[self.opt.lstmHist][i]:squeeze(), 1)
+                if rin[1] == self.rnnRealUserDataRewardsTest[self.rnnRealUserDataEndsTest[i]][self.opt.lstmHist] then
+                    -- update score prediction confusion matrix
+                    scrPredTP[rin[1]] = scrPredTP[rin[1]] + 1
+                else
+                    scrPredFP[rin[1]] = scrPredFP[rin[1]] + 1
+                    scrPredFN[self.rnnRealUserDataRewardsTest[self.rnnRealUserDataEndsTest[i]][self.opt.lstmHist]] = scrPredFN[self.rnnRealUserDataRewardsTest[self.rnnRealUserDataEndsTest[i]][self.opt.lstmHist]] + 1
+                end
+            end
         end
         self.uspConfusion:updateValids()
         local tvalid = self.uspConfusion.totalValid
         self.uspConfusion:zero()
+        if _evalStat then
+            local scorePreMicro = scrPredTP:sum() / (scrPredTP:sum() + scrPredFP:sum())
+            local scoreRecMicro = scrPredTP:sum() / (scrPredTP:sum() + scrPredFN:sum())
+            print('Score Prediction Micro Precision: ', scorePreMicro, ', Recall: ', scoreRecMicro, ', F1: ', 2*scorePreMicro*scoreRecMicro/(scorePreMicro+scoreRecMicro))
+
+            local scorePreMacro = torch.cdiv(scrPredTP, scrPredTP + scrPredFP):sum() / 2
+            local scoreRecMacro = torch.cdiv(scrPredTP, scrPredTP + scrPredFN):sum() / 2
+            print('Score Prediction Macro Precision: ', scorePreMacro, ', Recall: ', scoreRecMacro, ', F1: ', 2*scorePreMacro*scoreRecMacro/(scorePreMacro+scoreRecMacro))
+        end
         return {tvalid, _logLoss/#self.rnnRealUserDataEndsTest}
 
     elseif string.sub(self.opt.uppModel, 1, 4) == 'cnn_' then
@@ -916,10 +938,30 @@ function CIUserScorePredictor:testScorePredOnTestDetOneEpoch()
         for i=1, #self.cnnRealUserDataEndsTest do
             self.uspConfusion:add(nll_rewards[i], self.cnnRealUserDataRewardsTest[self.cnnRealUserDataEndsTest[i]])
             _logLoss = _logLoss + -1 * nll_rewards[i][self.cnnRealUserDataRewardsTest[self.cnnRealUserDataEndsTest[i]]]
+
+            if _evalStat then
+                local lp, rin = torch.max(nll_rewards[i]:squeeze(), 1)
+                if rin[1] == self.cnnRealUserDataRewardsTest[self.cnnRealUserDataEndsTest[i]] then
+                    -- update score prediction confusion matrix
+                    scrPredTP[rin[1]] = scrPredTP[rin[1]] + 1
+                else
+                    scrPredFP[rin[1]] = scrPredFP[rin[1]] + 1
+                    scrPredFN[self.cnnRealUserDataRewardsTest[self.cnnRealUserDataEndsTest[i]]] = scrPredFN[self.cnnRealUserDataRewardsTest[self.cnnRealUserDataEndsTest[i]]] + 1
+                end
+            end
         end
         self.uspConfusion:updateValids()
         local tvalid = self.uspConfusion.totalValid
         self.uspConfusion:zero()
+        if _evalStat then
+            local scorePreMicro = scrPredTP:sum() / (scrPredTP:sum() + scrPredFP:sum())
+            local scoreRecMicro = scrPredTP:sum() / (scrPredTP:sum() + scrPredFN:sum())
+            print('Score Prediction Micro Precision: ', scorePreMicro, ', Recall: ', scoreRecMicro, ', F1: ', 2*scorePreMicro*scoreRecMicro/(scorePreMicro+scoreRecMicro))
+
+            local scorePreMacro = torch.cdiv(scrPredTP, scrPredTP + scrPredFP):sum() / 2
+            local scoreRecMacro = torch.cdiv(scrPredTP, scrPredTP + scrPredFN):sum() / 2
+            print('Score Prediction Macro Precision: ', scorePreMacro, ', Recall: ', scoreRecMacro, ', F1: ', 2*scorePreMacro*scoreRecMacro/(scorePreMacro+scoreRecMacro))
+        end
         return {tvalid, _logLoss/#self.cnnRealUserDataEndsTest}
 
     else
@@ -941,10 +983,30 @@ function CIUserScorePredictor:testScorePredOnTestDetOneEpoch()
         for i=1, #self.ciUserSimulator.realUserDataEndLinesTest do
             self.uspConfusion:add(nll_rewards[i], self.ciUserSimulator.realUserDataRewardsTest[self.ciUserSimulator.realUserDataEndLinesTest[i]])
             _logLoss = _logLoss + -1 * nll_rewards[i][self.ciUserSimulator.realUserDataRewardsTest[self.ciUserSimulator.realUserDataEndLinesTest[i]]]
+
+            if _evalStat then
+                local lp, rin = torch.max(nll_rewards[i]:squeeze(), 1)
+                if rin[1] == self.ciUserSimulator.realUserDataRewardsTest[self.ciUserSimulator.realUserDataEndLinesTest[i]] then
+                    -- update score prediction confusion matrix
+                    scrPredTP[rin[1]] = scrPredTP[rin[1]] + 1
+                else
+                    scrPredFP[rin[1]] = scrPredFP[rin[1]] + 1
+                    scrPredFN[self.ciUserSimulator.realUserDataRewardsTest[self.ciUserSimulator.realUserDataEndLinesTest[i]]] = scrPredFN[self.ciUserSimulator.realUserDataRewardsTest[self.ciUserSimulator.realUserDataEndLinesTest[i]]] + 1
+                end
+            end
         end
         self.uspConfusion:updateValids()
         local tvalid = self.uspConfusion.totalValid
         self.uspConfusion:zero()
+        if _evalStat then
+            local scorePreMicro = scrPredTP:sum() / (scrPredTP:sum() + scrPredFP:sum())
+            local scoreRecMicro = scrPredTP:sum() / (scrPredTP:sum() + scrPredFN:sum())
+            print('Score Prediction Micro Precision: ', scorePreMicro, ', Recall: ', scoreRecMicro, ', F1: ', 2*scorePreMicro*scoreRecMicro/(scorePreMicro+scoreRecMicro))
+
+            local scorePreMacro = torch.cdiv(scrPredTP, scrPredTP + scrPredFP):sum() / 2
+            local scoreRecMacro = torch.cdiv(scrPredTP, scrPredTP + scrPredFN):sum() / 2
+            print('Score Prediction Macro Precision: ', scorePreMacro, ', Recall: ', scoreRecMacro, ', F1: ', 2*scorePreMacro*scoreRecMacro/(scorePreMacro+scoreRecMacro))
+        end
         return {tvalid, _logLoss/#self.ciUserSimulator.realUserDataEndLinesTest}
     end
 end

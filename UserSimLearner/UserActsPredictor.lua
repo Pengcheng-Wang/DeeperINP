@@ -765,13 +765,16 @@ function CIUserActsPredictor:trainOneEpoch()
 end
 
 -- evaluation function on test/train_validation set
-function CIUserActsPredictor:testActPredOnTestDetOneEpoch()
+function CIUserActsPredictor:testActPredOnTestDetOneEpoch(_evalStat)
     -- just in case:
     collectgarbage()
+
+    _evalStat = _evalStat or false
     -- Confusion matrix for action prediction (15-class)
-    --    local actPredTP = torch.Tensor(self.ciUserSimulator.CIFr.usrActInd_end):fill(1e-3)
-    --    local actPredFP = torch.Tensor(self.ciUserSimulator.CIFr.usrActInd_end):fill(1e-3)
-    --    local actPredFN = torch.Tensor(self.ciUserSimulator.CIFr.usrActInd_end):fill(1e-3)
+    local actPredTP = torch.Tensor(self.ciUserSimulator.CIFr.usrActInd_end):fill(1e-3)
+    local actPredFP = torch.Tensor(self.ciUserSimulator.CIFr.usrActInd_end):fill(1e-3)
+    local actPredFN = torch.Tensor(self.ciUserSimulator.CIFr.usrActInd_end):fill(1e-3)
+
     local _logLoss = 0
     if string.sub(self.opt.uppModel, 1, 4) == 'rnn_' then
         -- uSimShLayer == 0 and rnn model
@@ -809,10 +812,30 @@ function CIUserActsPredictor:testActPredOnTestDetOneEpoch()
         for i=1, #self.rnnRealUserDataStatesTest do
             self.uapConfusion:add(nll_acts[self.opt.lstmHist][i], self.rnnRealUserDataActsTest[i][self.opt.lstmHist])
             _logLoss = _logLoss + -1 * nll_acts[self.opt.lstmHist][i][self.rnnRealUserDataActsTest[i][self.opt.lstmHist]]
+
+            if _evalStat then
+                local lp, ain = torch.max(nll_acts[self.opt.lstmHist][i]:squeeze(), 1)
+                if ain[1] == self.rnnRealUserDataActsTest[i][self.opt.lstmHist] then
+                    actPredTP[ain[1]] = actPredTP[ain[1]] + 1
+                else
+                    actPredFP[ain[1]] = actPredFP[ain[1]] + 1
+                    actPredFN[self.rnnRealUserDataActsTest[i][self.opt.lstmHist]] = actPredFN[self.rnnRealUserDataActsTest[i][self.opt.lstmHist]] + 1
+                end
+            end
         end
         self.uapConfusion:updateValids()
         local tvalid = self.uapConfusion.totalValid
         self.uapConfusion:zero()
+        if _evalStat then
+            -- Calculate Micro and Macro precision, recall and F1 scores
+            local actPreMicro = actPredTP:sum() / (actPredTP:sum() + actPredFP:sum())
+            local actRecMicro = actPredTP:sum() / (actPredTP:sum() + actPredFN:sum())
+            print('Act Prediction Micro Precision: ', actPreMicro, ', Recall: ', actRecMicro, ', F1: ', 2*actPreMicro*actRecMicro/(actPreMicro+actRecMicro))
+
+            local actPreMacro = torch.cdiv(actPredTP, actPredTP + actPredFP):sum() / self.ciUserSimulator.CIFr.usrActInd_end
+            local actRecMacro = torch.cdiv(actPredTP, actPredTP + actPredFN):sum() / self.ciUserSimulator.CIFr.usrActInd_end
+            print('Act Prediction Macro Precision: ', actPreMacro, ', Recall: ', actRecMacro, ', F1: ', 2*actPreMacro*actRecMacro/(actPreMacro+actRecMacro))
+        end
         return {tvalid, _logLoss/#self.rnnRealUserDataStatesTest}
 
     elseif string.sub(self.opt.uppModel, 1, 4) == 'cnn_' then
@@ -834,10 +857,30 @@ function CIUserActsPredictor:testActPredOnTestDetOneEpoch()
         for i=1, #self.cnnRealUserDataStatesTest do
             self.uapConfusion:add(nll_acts[i], self.cnnRealUserDataActsTest[i])
             _logLoss = _logLoss + -1 * nll_acts[i][self.cnnRealUserDataActsTest[i]]
+
+            if _evalStat then
+                local lp, ain = torch.max(nll_acts[i]:squeeze(), 1)
+                if ain[1] == self.cnnRealUserDataActsTest[i] then
+                    actPredTP[ain[1]] = actPredTP[ain[1]] + 1
+                else
+                    actPredFP[ain[1]] = actPredFP[ain[1]] + 1
+                    actPredFN[self.cnnRealUserDataActsTest[i]] = actPredFN[self.cnnRealUserDataActsTest[i]] + 1
+                end
+            end
         end
         self.uapConfusion:updateValids()
         local tvalid = self.uapConfusion.totalValid
         self.uapConfusion:zero()
+        if _evalStat then
+            -- Calculate Micro and Macro precision, recall and F1 scores
+            local actPreMicro = actPredTP:sum() / (actPredTP:sum() + actPredFP:sum())
+            local actRecMicro = actPredTP:sum() / (actPredTP:sum() + actPredFN:sum())
+            print('Act Prediction Micro Precision: ', actPreMicro, ', Recall: ', actRecMicro, ', F1: ', 2*actPreMicro*actRecMicro/(actPreMicro+actRecMicro))
+
+            local actPreMacro = torch.cdiv(actPredTP, actPredTP + actPredFP):sum() / self.ciUserSimulator.CIFr.usrActInd_end
+            local actRecMacro = torch.cdiv(actPredTP, actPredTP + actPredFN):sum() / self.ciUserSimulator.CIFr.usrActInd_end
+            print('Act Prediction Macro Precision: ', actPreMacro, ', Recall: ', actRecMacro, ', F1: ', 2*actPreMacro*actRecMacro/(actPreMacro+actRecMacro))
+        end
         return {tvalid, _logLoss/#self.cnnRealUserDataStatesTest}
 
     else
@@ -859,10 +902,30 @@ function CIUserActsPredictor:testActPredOnTestDetOneEpoch()
         for i=1, #self.ciUserSimulator.realUserDataStatesTest do
             self.uapConfusion:add(nll_acts[i], self.ciUserSimulator.realUserDataActsTest[i])
             _logLoss = _logLoss + -1 * nll_acts[i][self.ciUserSimulator.realUserDataActsTest[i]]
+
+            if _evalStat then
+                local lp, ain = torch.max(nll_acts[i]:squeeze(), 1)
+                if ain[1] == self.ciUserSimulator.realUserDataActsTest[i] then
+                    actPredTP[ain[1]] = actPredTP[ain[1]] + 1
+                else
+                    actPredFP[ain[1]] = actPredFP[ain[1]] + 1
+                    actPredFN[self.ciUserSimulator.realUserDataActsTest[i]] = actPredFN[self.ciUserSimulator.realUserDataActsTest[i]] + 1
+                end
+            end
         end
         self.uapConfusion:updateValids()
         local tvalid = self.uapConfusion.totalValid
         self.uapConfusion:zero()
+        if _evalStat then
+            -- Calculate Micro and Macro precision, recall and F1 scores
+            local actPreMicro = actPredTP:sum() / (actPredTP:sum() + actPredFP:sum())
+            local actRecMicro = actPredTP:sum() / (actPredTP:sum() + actPredFN:sum())
+            print('Act Prediction Micro Precision: ', actPreMicro, ', Recall: ', actRecMicro, ', F1: ', 2*actPreMicro*actRecMicro/(actPreMicro+actRecMicro))
+
+            local actPreMacro = torch.cdiv(actPredTP, actPredTP + actPredFP):sum() / self.ciUserSimulator.CIFr.usrActInd_end
+            local actRecMacro = torch.cdiv(actPredTP, actPredTP + actPredFN):sum() / self.ciUserSimulator.CIFr.usrActInd_end
+            print('Act Prediction Macro Precision: ', actPreMacro, ', Recall: ', actRecMacro, ', F1: ', 2*actPreMacro*actRecMacro/(actPreMacro+actRecMacro))
+        end
         return {tvalid, _logLoss/#self.ciUserSimulator.realUserDataStatesTest}
     end
 
