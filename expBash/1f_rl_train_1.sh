@@ -4,7 +4,7 @@
 echo 'PPO RL training with action temperature'
 date +%Y,%m,%d-%H:%M:%S
 hist=3
-for actSfxTem in 0.5 0.75 0.25;
+for actSfxTem in 0.8 0.6 0.5;
 do
     for sfxTem in -1 0.5;
     do
