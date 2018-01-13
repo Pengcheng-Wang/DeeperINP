@@ -4,7 +4,7 @@
 echo 'DQN RL training with action temperature'
 date +%Y,%m,%d-%H:%M:%S
 hist=3
-for actSfxTem in 0.5 0.33 0.1;
+for actSfxTem in 0.5 0.75 0.25;
 do
     for sfxTem in -1 0.5;
     do
