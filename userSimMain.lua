@@ -57,6 +57,7 @@ opt = lapp[[
        --rlEvnIte         (default 10000)       No of iterations in rl type of evaluation
        --ciGroup2rwd      (default -1)          Reward signal design at terminal for 2nd group (below nlg median). It can be either 0 or -1
        --ciRwdStMxTemp    (default -1)          The temperature hyper-param used in Softmax distribution re-approximation. This is used in Reward sampling. If this re-approximation is not used, and random sampling is used, this param should be set to -1
+       --ciActStMxTemp    (default 1)           The temperature hyper-param used in Softmax distribution re-approximation. This is used in Action sampling. If this re-approximation is not used, and random sampling is used, this param should be set to -1
        --usimTrIte        (default 400)         No of iterations used in user simulation model training. Recom for act training is 300, score training is 3000
        --termActSmgLen    (default 50)          The length above which user termination action would be highly probably sampled. The observed avg length is about 40
        --termActSmgEps    (default 0.9)         The probability which user termination action would be sampled after certain length
@@ -97,6 +98,7 @@ fr:evaluateSurveyData()
 local CIUserModel = CIUserSimulator(fr, opt)
 
 assert(opt.uSimScSoft >=0 and opt.uSimScSoft <= 1, 'opt.uSimScSoft should range in [0,1]')
+assert(opt.ciActStMxTemp ~= 0)
 if opt.trType == 'sc' and opt.uSimShLayer < 0.5 and opt.uSimScSoft == 0 then
     local CIUserScorePred = CIUserScorePredictor(CIUserModel, opt)
     for i=1, opt.usimTrIte do
@@ -122,7 +124,7 @@ elseif opt.trType == 'rl' then
 
     local hasCudnn, cudnn = pcall(require, 'cudnn') -- Use cuDNN if available. Needed in CIUserSimEnv
     require 'optim'
-    local _playerSimEvlLogger = optim.Logger(paths.concat('userModelTrained', 'userSimEvl', opt.uapFile..'_'..opt.uspFile..'_'..opt.ciRwdStMxTemp..'_'..'evl.log'))
+    local _playerSimEvlLogger = optim.Logger(paths.concat('userModelTrained', 'userSimEvl', opt.uapFile..'_'..opt.uspFile..'_RwTp'..opt.ciRwdStMxTemp..'_AcTp'..opt.ciActStMxTemp..'_'..'evl.log'))
     _playerSimEvlLogger:setNames{'Ite', 'Avg_adap', 'Adp_T1', 'Adp_T2', 'Adp_T3', 'Adp_T4', 'Avg_traj_len', 'Scr_p', 'Scr_n', 'Avg_len_p', 'Avg_len_n', 'Avg_scr'}
     local CIUserSimEnvModel = CIUserSimEnv(opt)
 

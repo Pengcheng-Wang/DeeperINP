@@ -231,6 +231,8 @@ function CIUserSimEnv:_calcUserAct()
     local lpy   -- log likelihood value
     local lps   -- sorted index in desendent-order
     lpy, lps = torch.sort(nll_acts, 1, true)
+    -- Apply temperature hyper-param for action sampling
+    lpy:div(self.opt.ciActStMxTemp)
     lpy = torch.exp(lpy)
     lpy = torch.cumsum(lpy)
     local actSampleLen = self.opt.actSmpLen

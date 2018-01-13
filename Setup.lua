@@ -181,6 +181,7 @@ function Setup:parseOptions(arg)
   cmd:option('-rwdSmpEps', 0, 'User rwd sampling threshold. If rand se than this value, reture 1st pred')
   cmd:option('-ciGroup2rwd', -1, 'Reward signal design at terminal for 2nd group (below nlg median). It can be either 0 or -1')
   cmd:option('-ciRwdStMxTemp', -1, 'The temperature hyper-param used in Softmax distribution re-approximation. This is used in Reward sampling. If this re-approximation is not used, and random sampling is used, this param should be set to -1')
+  cmd:option('-ciActStMxTemp', 1, 'The temperature hyper-param used in Softmax distribution re-approximation. This is used in Action sampling. If this re-approximation is not used, and random sampling is used, this param should be set to 1')
   cmd:option('-uppModel', 'rnn_rhn', 'type of player simulation model for action prediction. Only uap model type')
   cmd:option('-uppModelUsp', 'cnn_uSimCnn_moe', 'type of player simulation model for score(outcome) prediction. Only usp model type')
   cmd:option('-uppModelRNNDom', 0, 'Only for uap model, it is an indicator of whether the model is an RNN model and uses dropout masks from outside of the model. 0 for not using outside mask. Otherwise, this number represents the number of gates used in RNN model')
@@ -357,6 +358,7 @@ function Setup:validateOptions()
 
   -- Check CI player simulation modeling setting
   abortIf(self.opt.lstmHist < self.opt.lstmHistUsp, 'In CI user simulation modeling, It should be uap history length >= usp history length')
+  abortIf(self.opt.ciActStMxTemp == 0, 'ciActStMxTemp should not be 0')
 end
 
 -- Augments environments with extra methods if missing
