@@ -51,6 +51,8 @@ opt = lapp[[
        --actEvaScp        (default 1)           The action selection range in prediction evaluation calculation, corresponds to the top-i prediction accuracy
        --actSmpEps        (default 0)           User action sampling threshold. If rand se than this value, reture 1st pred. Otherwise, sample sim user's next action according to the predicted distribution
        --rwdSmpEps        (default 0)           User reward sampling threshold. If rand se than this value, reture 1st pred. Otherwise, sample sim user's predicted outcome according to the predicted distribution
+       --ciActRndSmp      (default 0)           The probability under which player action is uniformly randomly sampled
+       --ciRwdRndSmp      (default 0)           The probability under which player score(outcome) is uniformly randomly sampled
        --uSimShLayer      (default 0)           Whether the lower layers in Action and Score prediction NNs are shared. If this value is 1, use shared layers
        --uSimScSoft       (default 0)           The criterion weight of the score regression module in UserScoreSoftPrediction model. The value of this param should be in [0,1]. When it is 0, Soft prediction is off, and UserScorePrediction script is utilized
        --uSimBayesEvl     (default 0)           The Bayesian sampling method to do user simulation model evaluation. When the value is 0, no Bayesian sampling is conducted. Otherwise, it will be conducted to that number of times

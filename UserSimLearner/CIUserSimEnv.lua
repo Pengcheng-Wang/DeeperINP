@@ -253,6 +253,12 @@ function CIUserSimEnv:_calcUserAct()
         end
     end
 
+    -- If required, return a uniformly randomly sampled action
+    if self.opt.ciActRndSmp > 0 and torch.uniform() < self.opt.ciActRndSmp then
+        self.curRnnUserAct = torch.random(1, self.CIUSim.CIFr.usrActInd_end-1)
+        self.curOneStepAct = self.curRnnUserAct
+    end
+
     ---- The following code controls generation of ending user action
     --     if user action sequence is too long, we can manually add this end
     --     action to terminate the sequence, at the same time influence the
@@ -689,6 +695,11 @@ function CIUserSimEnv:step(adpAct)
                     break
                 end
             end
+        end
+
+        -- If required, return a uniformly randomly sampled score
+        if self.opt.ciRwdRndSmp > 0 and torch.uniform() < self.opt.ciRwdRndSmp then
+            scoreType = torch.random(1, rwdSampleLen)
         end
         -- print('####', torch.exp(nll_rwd), lpy, lps, '@@@@')
         local score = 1
