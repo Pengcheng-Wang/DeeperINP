@@ -684,6 +684,11 @@ function CIUserSimEnv:step(adpAct)
             lpy[1] = (torch.exp(_xi / self.opt.ciRwdStMxTemp)) / (torch.exp(_xi / self.opt.ciRwdStMxTemp) + torch.exp(_xj / self.opt.ciRwdStMxTemp))
         end
 
+        -- If required, switch score distribution
+        if self.opt.ciRwdRndSmp > 0 and torch.uniform() < self.opt.ciRwdRndSmp then
+            lpy[1] = 1 - lpy[1]
+        end
+
         local greedySmpThres = self.opt.rwdSmpEps
         local scoreType = lps[1]  -- the score prediction result given by the score predictor
         if torch.uniform() > greedySmpThres then
@@ -697,10 +702,6 @@ function CIUserSimEnv:step(adpAct)
             end
         end
 
-        -- If required, return a uniformly randomly sampled score
-        if self.opt.ciRwdRndSmp > 0 and torch.uniform() < self.opt.ciRwdRndSmp then
-            scoreType = torch.random(1, rwdSampleLen)
-        end
         -- print('####', torch.exp(nll_rwd), lpy, lps, '@@@@')
         local score = 1
         if scoreType == 2 then score = self.opt.ciGroup2rwd end
