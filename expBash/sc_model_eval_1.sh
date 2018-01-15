@@ -4,7 +4,7 @@
 # Dec 11, 2017.
 # Try to do score/outcome prediction using rhn models, without using multi-task structure.
 s=1
-for rnnHdLc in 1 2
+for rnnHdLc in 1
 do
     for recD in 5
     do
