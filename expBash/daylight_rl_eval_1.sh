@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 
 ######################################################################
-###### This set of experiments evaluate PPO performance of models trained
-###### on more deterministic models and interact with more stochastic
-###### models
+###### This set of experiments evaluate PPO model performance trained
+###### on more deterministic simulator and interact with more stochastic
+###### simulator
 ######################################################################
 
 ## Stochastic policy for PPO
