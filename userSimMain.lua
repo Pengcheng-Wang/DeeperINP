@@ -184,7 +184,7 @@ elseif opt.trType == 'ev' and opt.uSimShLayer > 0.5 then
     local CIUserBehaviorGen = CIUserBehaviorGenEvaluator(CIUserModel, nil, nil, CIUserActScorePred, opt)
 elseif opt.trType == 'klAct' then
     opt.ciunet = 'rlLoad'
-    local CIUserActsPred = CIUserActsPredictor(CIUserModel, opt.uapFileKLC)
+    local CIUserActsPred = CIUserActsPredictor(CIUserModel, opt)
     CIUserActsPred:evalKLDiv(opt.uapFileKLC)
 end
 
