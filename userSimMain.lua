@@ -186,6 +186,10 @@ elseif opt.trType == 'klAct' then
     opt.ciunet = 'rlLoad'
     local CIUserActsPred = CIUserActsPredictor(CIUserModel, opt)
     CIUserActsPred:evalKLDiv(opt.uapFileKLC)
+elseif opt.trType == 'klRwd' then
+    local CIUserScoreSoftPredictor = require 'UserSimLearner/UserScoreSoftPredictor'
+    local CIUserScoreSoftPred = CIUserScoreSoftPredictor(CIUserModel, opt)
+    CIUserScoreSoftPred:evalKLDiv(opt.uspFileKLC)
 end
 
 
