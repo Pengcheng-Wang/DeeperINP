@@ -45,7 +45,9 @@ opt = lapp[[
        --uSimLstmBackLen  (default 3)           The maximum step applied in bptt in lstm
        --ubgDir           (default "ubgModel")  directory storing uap and usp models
        --uapFile          (default "uap.t7")    file storing userActsPredictor model
+       --uapFileKLC       (default "uap.t7")    trained uap file for comparison purpose
        --uspFile          (default "usp.t7")    file storing userScorePredictor model
+       --uspFileKLC       (default "usp.t7")    trained uap file for comparison purpose
        --actSmpLen        (default 8)           The sampling candidate list length for user action generation
        --ciuTType         (default "train")     Training or testing or validation for use sim model train | test | train_tr
        --actEvaScp        (default 1)           The action selection range in prediction evaluation calculation, corresponds to the top-i prediction accuracy
@@ -180,6 +182,10 @@ elseif opt.trType == 'ev' and opt.uSimShLayer > 0.5 then
     local CIUserActScorePred = CIUserActScorePredictor(CIUserModel, opt)
     CIUserActScorePred.model:evaluate()
     local CIUserBehaviorGen = CIUserBehaviorGenEvaluator(CIUserModel, nil, nil, CIUserActScorePred, opt)
+elseif opt.trType == 'klAct' then
+    opt.ciunet = 'rlLoad'
+    local CIUserActsPred = CIUserActsPredictor(CIUserModel, opt.uapFileKLC)
+    CIUserActsPred:evalKLDiv(opt.)
 end
 
 

@@ -931,4 +931,67 @@ function CIUserActsPredictor:testActPredOnTestDetOneEpoch(_evalStat)
 
 end
 
+
+-- The following function is only for temporal usage
+-- evaluation function on test/train_validation set
+-- sorry to add ugly code. It's just time it tight. Jan 15, 2018.
+function CIUserActsPredictor:evalKLDiv(_comModFile)
+    -- just in case:
+    collectgarbage()
+
+    local _comModel = self.model:clone()
+    _comModel = torch.load(paths.concat(opt.ubgDir , _comModFile))
+
+    local _klTot = 0
+    -- only support rnn_ form right now
+    if string.sub(self.opt.uppModel, 1, 4) == 'rnn_' then
+        -- uSimShLayer == 0 and rnn model
+        self.model:evaluate()
+        self.model:forget()
+        _comModel:evaluate()
+        _comModel:forget()
+
+        local tabState = {}
+        for j=1, self.opt.lstmHist do
+            local prepUserState = torch.Tensor(#self.rnnRealUserDataStates, self.ciUserSimulator.userStateFeatureCnt)
+            for k=1, #self.rnnRealUserDataStates do
+                prepUserState[k] = self.ciUserSimulator:preprocessUserStateData(self.rnnRealUserDataStates[k][j], self.opt.prepro)
+            end
+            tabState[j] = prepUserState
+        end
+
+        local test_rnn_noise_i = {}
+        local test_rnn_noise_h = {}
+        local test_rnn_noise_o = {}
+        if self.opt.uppModelRNNDom > 0 then
+            TableSet.buildRNNDropoutMask(test_rnn_noise_i, test_rnn_noise_h, test_rnn_noise_o, self.inputFeatureNum, self.opt.rnnHdSizeL1, self.opt.rnnHdLyCnt, #self.rnnRealUserDataStates, self.opt.lstmHist, self.opt.uppModelRNNDom)
+            TableSet.sampleRNNDropoutMask(0, test_rnn_noise_i, test_rnn_noise_h, test_rnn_noise_o, self.opt.rnnHdLyCnt, self.opt.lstmHist)
+            for j = 1, self.opt.lstmHist do
+                tabState[j] = {tabState[j], test_rnn_noise_i[j], test_rnn_noise_h[j], test_rnn_noise_o[j]}
+            end
+        end
+
+        if self.opt.gpu > 0 then
+            nn.utils.recursiveType(tabState, 'torch.CudaTensor')
+        end
+        local nll_acts = self.model:forward(tabState)
+        local _comM_nll_acts = _comModel:forward(tabState)
+        nn.utils.recursiveType(nll_acts, 'torch.FloatTensor')
+        nn.utils.recursiveType(_comM_nll_acts, 'torch.FloatTensor')
+        if nll_acts[self.opt.lstmHist]:ne(nll_acts[self.opt.lstmHist]):sum() > 0 then print('nan appears in output!') os.exit() end
+        if _comM_nll_acts[self.opt.lstmHist]:ne(_comM_nll_acts[self.opt.lstmHist]):sum() > 0 then print('nan appears in output!') os.exit() end
+
+
+        for i=1, #self.rnnRealUserDataStates do
+            for ikl=1, nll_acts[self.opt.lstmHist][i]:squeeze():size() do
+                _klTot = _klTot + -1*(torch.exp(nll_acts[self.opt.lstmHist][i][ikl]) * (_comM_nll_acts[self.opt.lstmHist][i][ikl] - nll_acts[self.opt.lstmHist][i][ikl]))
+            end
+        end
+        _klTot = _klTot / #self.rnnRealUserDataStates
+
+        print('KL divergence is :', _klTot)
+    end
+
+end
+
 return CIUserActsPredictor
