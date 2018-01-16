@@ -983,7 +983,7 @@ function CIUserActsPredictor:evalKLDiv(_comModFile)
 
 
         for i=1, #self.rnnRealUserDataStates do
-            for ikl=1, nll_acts[self.opt.lstmHist][i]:squeeze():size() do
+            for ikl=1, nll_acts[self.opt.lstmHist][1]:squeeze():size()[1] do
                 _klTot = _klTot + -1*(torch.exp(nll_acts[self.opt.lstmHist][i][ikl]) * (_comM_nll_acts[self.opt.lstmHist][i][ikl] - nll_acts[self.opt.lstmHist][i][ikl]))
             end
         end
