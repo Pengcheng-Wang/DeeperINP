@@ -297,6 +297,8 @@ function CIUserActsPredictor:_init(CIUserSimulator, opt)
     self.uapTrainLogger = optim.Logger(paths.concat('userModelTrained', opt.save, 'act_train.log'))
     self.uapTestLogger = optim.Logger(paths.concat('userModelTrained', opt.save, 'act_test.log'))
     self.uapTestLogger:setNames{'Epoch', 'Act Test acc.', 'Act Test LogLoss'}
+    self.uapTestConfMatLogger = optim.Logger(paths.concat('userModelTrained', opt.save, 'act_testConfMat.log'))
+    self.uapTestConfMatLogger:setNames{'Epoch', 'Mic Prec', 'Mic Recal', 'Mic F1', 'Mac Prec', 'Mac Recal', 'Mac F1'}
 
     ----------------------------------------------------------------------
     --- initialize cunn/cutorch for training on the GPU and fall back to CPU gracefully
@@ -769,7 +771,7 @@ function CIUserActsPredictor:testActPredOnTestDetOneEpoch(_evalStat)
     -- just in case:
     collectgarbage()
 
-    _evalStat = _evalStat or false
+    _evalStat = _evalStat or true --false
     -- Confusion matrix for action prediction (15-class)
     local actPredTP = torch.Tensor(self.ciUserSimulator.CIFr.usrActInd_end):fill(1e-3)
     local actPredFP = torch.Tensor(self.ciUserSimulator.CIFr.usrActInd_end):fill(1e-3)
@@ -830,11 +832,14 @@ function CIUserActsPredictor:testActPredOnTestDetOneEpoch(_evalStat)
             -- Calculate Micro and Macro precision, recall and F1 scores
             local actPreMicro = actPredTP:sum() / (actPredTP:sum() + actPredFP:sum())
             local actRecMicro = actPredTP:sum() / (actPredTP:sum() + actPredFN:sum())
-            print('Act Prediction Micro Precision: ', actPreMicro, ', Recall: ', actRecMicro, ', F1: ', 2*actPreMicro*actRecMicro/(actPreMicro+actRecMicro))
+            --print('Act Prediction Micro Precision: ', actPreMicro, ', Recall: ', actRecMicro, ', F1: ', 2*actPreMicro*actRecMicro/(actPreMicro+actRecMicro))
 
             local actPreMacro = torch.cdiv(actPredTP, actPredTP + actPredFP):sum() / self.ciUserSimulator.CIFr.usrActInd_end
             local actRecMacro = torch.cdiv(actPredTP, actPredTP + actPredFN):sum() / self.ciUserSimulator.CIFr.usrActInd_end
-            print('Act Prediction Macro Precision: ', actPreMacro, ', Recall: ', actRecMacro, ', F1: ', 2*actPreMacro*actRecMacro/(actPreMacro+actRecMacro))
+            --print('Act Prediction Macro Precision: ', actPreMacro, ', Recall: ', actRecMacro, ', F1: ', 2*actPreMacro*actRecMacro/(actPreMacro+actRecMacro))
+            self.uapTestConfMatLogger:add{string.format('%d', self.trainEpoch), string.format('%.5f', actPreMicro), string.format('%.5f', actRecMicro),
+                string.format('%.5f', 2*actPreMicro*actRecMicro/(actPreMicro+actRecMicro)), string.format('%.5f', actPreMacro), string.format('%.5f', actRecMacro),
+                string.format('%.5f', 2*actPreMacro*actRecMacro/(actPreMacro+actRecMacro))}
         end
         return {tvalid, _logLoss/#self.rnnRealUserDataStatesTest}
 
@@ -875,11 +880,14 @@ function CIUserActsPredictor:testActPredOnTestDetOneEpoch(_evalStat)
             -- Calculate Micro and Macro precision, recall and F1 scores
             local actPreMicro = actPredTP:sum() / (actPredTP:sum() + actPredFP:sum())
             local actRecMicro = actPredTP:sum() / (actPredTP:sum() + actPredFN:sum())
-            print('Act Prediction Micro Precision: ', actPreMicro, ', Recall: ', actRecMicro, ', F1: ', 2*actPreMicro*actRecMicro/(actPreMicro+actRecMicro))
+            --print('Act Prediction Micro Precision: ', actPreMicro, ', Recall: ', actRecMicro, ', F1: ', 2*actPreMicro*actRecMicro/(actPreMicro+actRecMicro))
 
             local actPreMacro = torch.cdiv(actPredTP, actPredTP + actPredFP):sum() / self.ciUserSimulator.CIFr.usrActInd_end
             local actRecMacro = torch.cdiv(actPredTP, actPredTP + actPredFN):sum() / self.ciUserSimulator.CIFr.usrActInd_end
-            print('Act Prediction Macro Precision: ', actPreMacro, ', Recall: ', actRecMacro, ', F1: ', 2*actPreMacro*actRecMacro/(actPreMacro+actRecMacro))
+            --print('Act Prediction Macro Precision: ', actPreMacro, ', Recall: ', actRecMacro, ', F1: ', 2*actPreMacro*actRecMacro/(actPreMacro+actRecMacro))
+            self.uapTestConfMatLogger:add{string.format('%d', self.trainEpoch), string.format('%.5f', actPreMicro), string.format('%.5f', actRecMicro),
+                string.format('%.5f', 2*actPreMicro*actRecMicro/(actPreMicro+actRecMicro)), string.format('%.5f', actPreMacro), string.format('%.5f', actRecMacro),
+                string.format('%.5f', 2*actPreMacro*actRecMacro/(actPreMacro+actRecMacro))}
         end
         return {tvalid, _logLoss/#self.cnnRealUserDataStatesTest}
 
@@ -920,11 +928,14 @@ function CIUserActsPredictor:testActPredOnTestDetOneEpoch(_evalStat)
             -- Calculate Micro and Macro precision, recall and F1 scores
             local actPreMicro = actPredTP:sum() / (actPredTP:sum() + actPredFP:sum())
             local actRecMicro = actPredTP:sum() / (actPredTP:sum() + actPredFN:sum())
-            print('Act Prediction Micro Precision: ', actPreMicro, ', Recall: ', actRecMicro, ', F1: ', 2*actPreMicro*actRecMicro/(actPreMicro+actRecMicro))
+            --print('Act Prediction Micro Precision: ', actPreMicro, ', Recall: ', actRecMicro, ', F1: ', 2*actPreMicro*actRecMicro/(actPreMicro+actRecMicro))
 
             local actPreMacro = torch.cdiv(actPredTP, actPredTP + actPredFP):sum() / self.ciUserSimulator.CIFr.usrActInd_end
             local actRecMacro = torch.cdiv(actPredTP, actPredTP + actPredFN):sum() / self.ciUserSimulator.CIFr.usrActInd_end
-            print('Act Prediction Macro Precision: ', actPreMacro, ', Recall: ', actRecMacro, ', F1: ', 2*actPreMacro*actRecMacro/(actPreMacro+actRecMacro))
+            --print('Act Prediction Macro Precision: ', actPreMacro, ', Recall: ', actRecMacro, ', F1: ', 2*actPreMacro*actRecMacro/(actPreMacro+actRecMacro))
+            self.uapTestConfMatLogger:add{string.format('%d', self.trainEpoch), string.format('%.5f', actPreMicro), string.format('%.5f', actRecMicro),
+                string.format('%.5f', 2*actPreMicro*actRecMicro/(actPreMicro+actRecMicro)), string.format('%.5f', actPreMacro), string.format('%.5f', actRecMacro),
+                string.format('%.5f', 2*actPreMacro*actRecMacro/(actPreMacro+actRecMacro))}
         end
         return {tvalid, _logLoss/#self.ciUserSimulator.realUserDataStatesTest}
     end
