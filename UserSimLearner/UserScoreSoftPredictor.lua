@@ -1263,6 +1263,7 @@ function CIUserScoreSoftPredictor:evalKLDiv(_comModFile)
     _comModel = torch.load(paths.concat(opt.ubgDir , _comModFile))
 
     local _klTot = 0
+    local _klDTot = 0
 
     if string.sub(self.opt.uppModelUsp, 1, 4) == 'cnn_' then
         -- uSimShLayer == 0 and cnn models
@@ -1271,7 +1272,7 @@ function CIUserScoreSoftPredictor:evalKLDiv(_comModFile)
 
         local prepUserState = torch.Tensor(#self.cnnRealUserDataEnds, self.opt.lstmHistUsp, self.ciUserSimulator.userStateFeatureCnt)
         for i=1, #self.cnnRealUserDataEnds do
-            prepUserState[i] = self.ciUserSimulator:preprocessUserStateData(self.cnnRealUserDataStates[self.cnnRealUserDataEnds[i]], self.opt.prepro)
+            prepUserState[i] = self.ciUserSimulator:preprocessUserStateData(self.cnnRealUserDataStates[self.cnnRealUserDataEnds[i]][{{opt.lstmHist-opt.lstmHistUsp+1, opt.lstmHist}, {}}], self.opt.prepro)
         end
         if self.opt.gpu > 0 then
             prepUserState = prepUserState:cuda()
@@ -1279,9 +1280,9 @@ function CIUserScoreSoftPredictor:evalKLDiv(_comModFile)
 
         local nll_rewards = self.model:forward(prepUserState)
         local _comM_nll_rewards = _comModel:forward(prepUserState)
-        if string.sub(self.opt.uppModel, -3, -1) == 'moe' then
+        if string.sub(self.opt.uppModelUsp, -3, -1) == 'moe' then
             nll_rewards = nll_rewards:split(#self.classes, 2)  -- We assume 1st dim is batch index. Score classification is the 1st set of output, having 2 outputs. Score regression is the 2nd set of output.
-            _comM_nll_rewards = _comM_nll_rewards(#self.classes, 2)
+            _comM_nll_rewards = _comM_nll_rewards:split(#self.classes, 2)
         end
         nn.utils.recursiveType(nll_rewards, 'torch.FloatTensor')
         nn.utils.recursiveType(_comM_nll_rewards, 'torch.FloatTensor')
@@ -1292,12 +1293,14 @@ function CIUserScoreSoftPredictor:evalKLDiv(_comModFile)
 
         for i=1, #self.cnnRealUserDataEnds do
             for ikl=1, #self.classes do
-                _klTot = _klTot + -1*(torch.exp(nll_rewards[1][i][ikl]) * (_comM_nll_rewards[1][i][ikl] - nll_rewards[1][i][ikl]))
+                _klTot = _klTot + -1*(torch.exp(nll_rewards[1][i][ikl]) * (_comM_nll_rewards[1][i][ikl] - nll_rewards[1][i][ikl]))  --torch.abs(_comM_nll_rewards[1][i][ikl] - nll_rewards[1][i][ikl]))
+                _klDTot = _klDTot + -1*(torch.exp(_comM_nll_rewards[1][i][ikl]) * (nll_rewards[1][i][ikl] - _comM_nll_rewards[1][i][ikl]))
             end
         end
         _klTot = _klTot / #self.cnnRealUserDataEnds
+        _klDTot = _klDTot / #self.cnnRealUserDataEnds
 
-        print('KL divergence is :', _klTot)
+        print('KL divergence is :', _klTot, ', D: ', _klDTot)
     end
 end
 
