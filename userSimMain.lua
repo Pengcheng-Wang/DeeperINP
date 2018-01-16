@@ -185,7 +185,7 @@ elseif opt.trType == 'ev' and opt.uSimShLayer > 0.5 then
 elseif opt.trType == 'klAct' then
     opt.ciunet = 'rlLoad'
     local CIUserActsPred = CIUserActsPredictor(CIUserModel, opt.uapFileKLC)
-    CIUserActsPred:evalKLDiv(opt.)
+    CIUserActsPred:evalKLDiv(opt.uapFileKLC)
 end
 
 
