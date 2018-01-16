@@ -570,7 +570,7 @@ function CIUserSimulator:_init(CIFileReader, opt)
     self.cnnRealUserDataStarts = {}
     self.cnnRealUserDataEnds = {}
     self.cnnRealUserDataPad = torch.Tensor(#self.realUserDataStartLines):fill(0)    -- indicating whether data has padding at head (should be padded)
-    if string.sub(opt.uppModel, 1, 4) == 'cnn_' then
+    if string.sub(opt.uppModel, 1, 4) == 'cnn_' or string.sub(opt.uppModelUsp, 1, 4) == 'cnn_' then
         local indSeqHead = 1
         local indSeqTail = opt.lstmHist     -- for CNN-based player simulation models, we also use this lstmHist opt value as indicator of the history length in state representation (in CNN, it is number of frames at each time step)
         local indUserSeq = 1    -- user id ptr. Use this to get the tail of each trajectory
