@@ -460,6 +460,7 @@ function CIUserScoreSoftPredictor:_init(CIUserSimulator, opt)
     self.cnnRealUserDataActs = self.ciUserSimulator.cnnRealUserDataActs
     self.cnnRealUserDataRewards = self.ciUserSimulator.cnnRealUserDataRewards
     self.cnnRealUserDataStandardNLG = self.ciUserSimulator.cnnRealUserDataStandardNLG
+    self.cnnRealUserDataEnds = self.ciUserSimulator.cnnRealUserDataEnds
 
     ----------------------------------------------------------------------
     --- Prepare data for CNN models in test/train_validation set
