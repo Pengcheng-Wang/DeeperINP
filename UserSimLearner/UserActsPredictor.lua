@@ -739,7 +739,7 @@ function CIUserActsPredictor:trainOneEpoch()
     --    print('<trainer> saving ciunet to '..filename)
     --    torch.save(filename, self.model)
 
-    if self.trainEpoch > 1000 and self.trainEpoch % 200 == 0 and self.opt.ciuTType == 'train' then
+    if self.trainEpoch > 800 and self.trainEpoch % 200 == 0 and self.opt.ciuTType == 'train' then
         filename = paths.concat('userModelTrained', self.opt.save, string.format('%d', self.trainEpoch)..'_'..string.format('%.2f', self.uapConfusion.totalValid*100)..'_uap.t7')
         os.execute('mkdir -p ' .. sys.dirname(filename))
         print('<trainer> saving periodly trained ciunet to '..filename)
