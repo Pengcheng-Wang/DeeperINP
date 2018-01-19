@@ -171,6 +171,22 @@ function CIUserActsPredictor:_init(CIUserSimulator, opt)
             self.model = nn.Sequencer(self.model)
             ------------------------------------------------------------
 
+        elseif opt.uppModel == 'rnn_rhn_normalDrop' then
+            ------------------------------------------------------------
+            -- Recurrent Highway Network without Yarin Gal's Dropout, but only dropout for output. Right now only for testing purpose
+            ------------------------------------------------------------
+            require 'modules.RecurrenHighwayNetworkRNN'
+            local rhn
+            rhn = nn.RHN(self.inputFeatureNum, opt.rnnHdSizeL1, opt.rhnReccDept, opt.rnnHdLyCnt, opt.uSimLstmBackLen, opt.rnnResidual) --inputSize, outputSize, recurrence_depth, rhn_layers, rho, rnnResidualConn
+            rhn:remember('both')
+            self.model:add(rhn)
+            self.model:add(nn.NormStabilizer())
+            self.model:add(nn.Dropout(0.1))     -- This is for testing purpose. We don't use Gal's dropout anymore, but apply a normal dropout after rhn module
+            self.model:add(nn.Linear(opt.rnnHdSizeL1, #classes))
+            self.model:add(nn.LogSoftMax())
+            self.model = nn.Sequencer(self.model)
+            ------------------------------------------------------------
+
         elseif opt.uppModel == 'rnn_rhn_moe' then
             ------------------------------------------------------------
             -- Recurrent Highway Network (dropout mask defined outside rnn model) with MOE head
