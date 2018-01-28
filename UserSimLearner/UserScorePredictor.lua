@@ -328,6 +328,8 @@ function CIUserScorePredictor:_init(CIUserSimulator, opt)
     self.uspTrainLogger = optim.Logger(paths.concat('userModelTrained', opt.save, 'scr_train.log'))
     self.uspTestLogger = optim.Logger(paths.concat('userModelTrained', opt.save, 'scr_test.log'))
     self.uspTestLogger:setNames{'Epoch', 'Score Test acc.', 'Score Test LogLoss'}
+    self.uspTestConfMatLogger = optim.Logger(paths.concat('userModelTrained', opt.save, 'scrSoft_testConfMat.log'))
+    self.uspTestConfMatLogger:setNames{'Epoch', 'Mic Prec', 'Mic Recal', 'Mic F1', 'Mac Prec', 'Mac Recal', 'Mac F1'}
 
     ----------------------------------------------------------------------
     --- initialize cunn/cutorch for training on the GPU and fall back to CPU gracefully
@@ -847,7 +849,7 @@ function CIUserScorePredictor:testScorePredOnTestDetOneEpoch(_evalStat)
     -- just in case:
     collectgarbage()
 
-    _evalStat = _evalStat or false
+    _evalStat = _evalStat or true --false
     -- Confusion matrix for score prediction (2-class)
     local scrPredTP = torch.Tensor(2):fill(1e-3)
     local scrPredFP = torch.Tensor(2):fill(1e-3)
@@ -911,11 +913,14 @@ function CIUserScorePredictor:testScorePredOnTestDetOneEpoch(_evalStat)
         if _evalStat then
             local scorePreMicro = scrPredTP:sum() / (scrPredTP:sum() + scrPredFP:sum())
             local scoreRecMicro = scrPredTP:sum() / (scrPredTP:sum() + scrPredFN:sum())
-            print('Score Prediction Micro Precision: ', scorePreMicro, ', Recall: ', scoreRecMicro, ', F1: ', 2*scorePreMicro*scoreRecMicro/(scorePreMicro+scoreRecMicro))
+            --print('Score Prediction Micro Precision: ', scorePreMicro, ', Recall: ', scoreRecMicro, ', F1: ', 2*scorePreMicro*scoreRecMicro/(scorePreMicro+scoreRecMicro))
 
             local scorePreMacro = torch.cdiv(scrPredTP, scrPredTP + scrPredFP):sum() / 2
             local scoreRecMacro = torch.cdiv(scrPredTP, scrPredTP + scrPredFN):sum() / 2
-            print('Score Prediction Macro Precision: ', scorePreMacro, ', Recall: ', scoreRecMacro, ', F1: ', 2*scorePreMacro*scoreRecMacro/(scorePreMacro+scoreRecMacro))
+            --print('Score Prediction Macro Precision: ', scorePreMacro, ', Recall: ', scoreRecMacro, ', F1: ', 2*scorePreMacro*scoreRecMacro/(scorePreMacro+scoreRecMacro))
+            self.uspTestConfMatLogger:add{string.format('%d', self.trainEpoch), string.format('%.5f%%', scorePreMicro), string.format('%.5f', scoreRecMicro),
+                string.format('%.5f', 2*scorePreMicro*scoreRecMicro/(scorePreMicro+scoreRecMicro)), string.format('%.5f%%', scorePreMacro), string.format('%.5f', scoreRecMacro),
+                string.format('%.5f', 2*scorePreMacro*scoreRecMacro/(scorePreMacro+scoreRecMacro))}
         end
         return {tvalid, _logLoss/#self.rnnRealUserDataEndsTest}
 
@@ -956,11 +961,15 @@ function CIUserScorePredictor:testScorePredOnTestDetOneEpoch(_evalStat)
         if _evalStat then
             local scorePreMicro = scrPredTP:sum() / (scrPredTP:sum() + scrPredFP:sum())
             local scoreRecMicro = scrPredTP:sum() / (scrPredTP:sum() + scrPredFN:sum())
-            print('Score Prediction Micro Precision: ', scorePreMicro, ', Recall: ', scoreRecMicro, ', F1: ', 2*scorePreMicro*scoreRecMicro/(scorePreMicro+scoreRecMicro))
+            --print('Score Prediction Micro Precision: ', scorePreMicro, ', Recall: ', scoreRecMicro, ', F1: ', 2*scorePreMicro*scoreRecMicro/(scorePreMicro+scoreRecMicro))
 
             local scorePreMacro = torch.cdiv(scrPredTP, scrPredTP + scrPredFP):sum() / 2
             local scoreRecMacro = torch.cdiv(scrPredTP, scrPredTP + scrPredFN):sum() / 2
-            print('Score Prediction Macro Precision: ', scorePreMacro, ', Recall: ', scoreRecMacro, ', F1: ', 2*scorePreMacro*scoreRecMacro/(scorePreMacro+scoreRecMacro))
+            --print('Score Prediction Macro Precision: ', scorePreMacro, ', Recall: ', scoreRecMacro, ', F1: ', 2*scorePreMacro*scoreRecMacro/(scorePreMacro+scoreRecMacro))
+
+            self.uspTestConfMatLogger:add{string.format('%d', self.trainEpoch), string.format('%.5f%%', scorePreMicro), string.format('%.5f', scoreRecMicro),
+                string.format('%.5f', 2*scorePreMicro*scoreRecMicro/(scorePreMicro+scoreRecMicro)), string.format('%.5f%%', scorePreMacro), string.format('%.5f', scoreRecMacro),
+                string.format('%.5f', 2*scorePreMacro*scoreRecMacro/(scorePreMacro+scoreRecMacro))}
         end
         return {tvalid, _logLoss/#self.cnnRealUserDataEndsTest}
 
@@ -1001,11 +1010,15 @@ function CIUserScorePredictor:testScorePredOnTestDetOneEpoch(_evalStat)
         if _evalStat then
             local scorePreMicro = scrPredTP:sum() / (scrPredTP:sum() + scrPredFP:sum())
             local scoreRecMicro = scrPredTP:sum() / (scrPredTP:sum() + scrPredFN:sum())
-            print('Score Prediction Micro Precision: ', scorePreMicro, ', Recall: ', scoreRecMicro, ', F1: ', 2*scorePreMicro*scoreRecMicro/(scorePreMicro+scoreRecMicro))
+            --print('Score Prediction Micro Precision: ', scorePreMicro, ', Recall: ', scoreRecMicro, ', F1: ', 2*scorePreMicro*scoreRecMicro/(scorePreMicro+scoreRecMicro))
 
             local scorePreMacro = torch.cdiv(scrPredTP, scrPredTP + scrPredFP):sum() / 2
             local scoreRecMacro = torch.cdiv(scrPredTP, scrPredTP + scrPredFN):sum() / 2
-            print('Score Prediction Macro Precision: ', scorePreMacro, ', Recall: ', scoreRecMacro, ', F1: ', 2*scorePreMacro*scoreRecMacro/(scorePreMacro+scoreRecMacro))
+            --print('Score Prediction Macro Precision: ', scorePreMacro, ', Recall: ', scoreRecMacro, ', F1: ', 2*scorePreMacro*scoreRecMacro/(scorePreMacro+scoreRecMacro))
+
+            self.uspTestConfMatLogger:add{string.format('%d', self.trainEpoch), string.format('%.5f%%', scorePreMicro), string.format('%.5f', scoreRecMicro),
+                string.format('%.5f', 2*scorePreMicro*scoreRecMicro/(scorePreMicro+scoreRecMicro)), string.format('%.5f%%', scorePreMacro), string.format('%.5f', scoreRecMacro),
+                string.format('%.5f', 2*scorePreMacro*scoreRecMacro/(scorePreMacro+scoreRecMacro))}
         end
         return {tvalid, _logLoss/#self.ciUserSimulator.realUserDataEndLinesTest}
     end
