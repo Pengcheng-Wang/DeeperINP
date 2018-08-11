@@ -295,7 +295,7 @@ function CIUserScoreSoftPredictor:_init(CIUserSimulator, opt)
             -- CNN model following the implementation of OpenNMT CNNEncoder and fb.resnet
             ------------------------------------------------------------
             require 'modules.TempConvInUserSimCNN'
-            local tempCnn = nn.TempConvUserSimCNN()         -- inputSize, outputSize, cnn_layers, kernel_width, dropout_rate, version
+            local tempCnn = nn.TempConvUserSimCNN()         -- inputSize, outputSize, cnn_layers, kernel_width, dropout_rate, frame_count, version
             local _tempCnnLayer = tempCnn:CreateCNNModule(self.inputFeatureNum, self.inputFeatureNum, opt.rnnHdLyCnt, opt.cnnKernelWidth, opt.dropoutUSim, opt.lstmHist, opt.cnnConnType)
             self.model:add(_tempCnnLayer)
             self.model:add(nn.View(-1):setNumInputDims(2))  -- The input/output data should have dimensions of batch_index/frame_index/feature_index, so it's 3d, and 2d without batch index
