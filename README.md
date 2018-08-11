@@ -8,3 +8,5 @@ When this repository starts, newer Torch, RNN and other corresponding libs have 
 Dec 9, I am trying to modify player outcome prediction as a regression problem. I think this is a good way to implement soft labeling.
 
 Dec 20, 2017. I've tried to catch the performance of score prediction classification and regression modules. It seems like in most of the cases, these two modules make pretty similar conclusions. And incorrect predictions in validation set are very probable the case that when the prediction model are confident the data point should belong to one category, while the true lable is that it belongs to the other (with very high/low nlg). So, I suppose it will not be very helpful to utilize regression output to assist the prediction/classification decision.
+
+Start to enhance the work from Jul 30, 2018. For dissertation purpose.
