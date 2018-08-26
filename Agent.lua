@@ -95,7 +95,7 @@ function Agent:_init(opt, envObj)
 
   -- Saliency display
   self:setSaliency(opt.saliency) -- Set saliency option on agent and model, in opt it can be <none>|normal|guided|deconvnet, then transferred to true/false
-  if #opt.stateSpec[2] == 3 then -- Make salie0ncy map only for visual states
+  if #opt.stateSpec[2] == 3 then -- Make saliency map only for visual states
     self.saliencyMap = opt.Tensor(1, opt.stateSpec[2][2], opt.stateSpec[2][3]):zero()
     self.inputGrads = opt.Tensor(opt.histLen*opt.stateSpec[2][1], opt.stateSpec[2][2], opt.stateSpec[2][3]):zero() -- Gradients with respect to the input (for saliency maps) Todo:pwang8. Is this inputGrads of the correct size if recurrent is used?
   end
