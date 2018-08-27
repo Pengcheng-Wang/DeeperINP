@@ -207,9 +207,9 @@ function Model:create()
   elseif self.opt.actor_critic then
     -- Actor-critic does not use the normal head but instead a concatenated value function V and policy π
     -- Actor-critic method is so differently implemented from other value function-based methods. The head module,
-    -- right now including potentially bootstrapped heads, recurrent module, or dule module are not included in
+    -- right now including potentially bootstrapped heads, recurrent module, or duel module are not included in
     -- Actor-critic(e.g., A3C, PPO) methods.
-    -- Because the theoretically meaning of dule module, dobule-Q and PAL is not compatible with actor_critic,
+    -- Because the theoretically meaning of duel module, double-Q and PAL is not compatible with actor_critic,
     -- we will not include them in actor_critic model construction. Recurrent module should be able to added though.
     -- Bootstrap is not considered right now for actor-critic models.
     if self.recurrent then
