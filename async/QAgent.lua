@@ -43,16 +43,17 @@ function QAgent:_init(opt, policyNet, targetNet, theta, targetTheta, atomic, sha
   self.CIActAdpBound = {{1, 3}, {4, 5}, {6, 8}, {9, 10}}
 end
 
-
+-- Not sure why this weird function was set before.
 function QAgent:setEpsilon(opt)
-  local r = torch.rand(1):squeeze()
-  local e = 3
-  if r < EPSILON_PROBS[1] then
-    e = 1
-  elseif r < EPSILON_PROBS[2] then
-    e = 2
-  end
-  self.epsilonEnd = EPSILON_ENDS[e]
+  --local r = torch.rand(1):squeeze()
+  --local e = 3
+  --if r < EPSILON_PROBS[1] then
+  --  e = 1
+  --elseif r < EPSILON_PROBS[2] then
+  --  e = 2
+  --end
+  --self.epsilonEnd = EPSILON_ENDS[e]
+  self.epsilonEnd = opt.epsilonEnd
   self.epsilonGrad = (self.epsilonEnd - opt.epsilonStart) / opt.epsilonSteps
 end
 
