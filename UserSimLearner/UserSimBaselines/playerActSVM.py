@@ -6,6 +6,6 @@ import numpy as np
 from pandas import read_csv
 from sklearn.svm import SVC
 
-act_data = read_csv('../userModelTrained/userStateActOnly.csv')
+act_data = read_csv('../../userModelTrained/userStateActOnly.csv')
 print(act_data.shape)
 print(act_data.loc[[0]])
