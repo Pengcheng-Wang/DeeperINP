@@ -422,6 +422,42 @@ function CIUserSimulator:_init(CIFileReader, opt)
 
 
     ----------------------------------------------------------------------
+    -- modified by @pwang8, on Sept 6, 2018.
+    -- The following code snippet is used to save
+    --  self.realUserDataStates
+    --  self.realUserDataActs
+    --  self.realUserDataRewards
+    -- &
+    --  self.realUserDataStatesTest
+    --  self.realUserDataActsTest
+    --  self.realUserDataRewardsTest
+    -- into a csv file. These information will be used to construct act/score
+    -- predictors using other libs like sklearn
+    local usrFile = io.open('./userModelTrained/userStateActReward.csv', 'w')
+    usrFile:write('A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,T,U,Act,Reward\n') -- Column name, A-U are 21 features in state representation
+    for i=1, #self.realUserDataStates do
+        local i_klen = self.realUserDataStates[i]:size(1)
+        for i_k=1, i_klen do
+            usrFile:write(self.realUserDataStates[i][i_k], ',')
+        end
+        usrFile:write(self.realUserDataActs[i]-1, ',')
+        usrFile:write(self.realUserDataRewards[i]-1, '\n')
+    end
+    for i=1, #self.realUserDataStatesTest do
+        local i_klen = self.realUserDataStatesTest[i]:size(1)
+        for i_k=1, i_klen do
+            usrFile:write(self.realUserDataStatesTest[i][i_k], ',')
+        end
+        usrFile:write(self.realUserDataActsTest[i]-1, ',')
+        usrFile:write(self.realUserDataRewardsTest[i]-1, '\n')
+    end
+    usrFile:close()
+    exit()
+    -- This is just temporal
+
+
+
+    ----------------------------------------------------------------------
     --- Prepare data for RNN models in training set
     ---
     self.rnnRealUserDataStates = {}
