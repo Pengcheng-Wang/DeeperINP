@@ -433,26 +433,43 @@ function CIUserSimulator:_init(CIFileReader, opt)
     --  self.realUserDataRewardsTest
     -- into a csv file. These information will be used to construct act/score
     -- predictors using other libs like sklearn
-    local usrFile = io.open('./userModelTrained/userStateActReward.csv', 'w')
-    usrFile:write('A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,T,U,Act,Reward\n') -- Column name, A-U are 21 features in state representation
+    local usrFile = io.open('./userModelTrained/userStateActOnly.csv', 'w')
+    usrFile:write('A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,T,U,Act\n') -- Column name, A-U are 21 features in state representation
     for i=1, #self.realUserDataStates do
         local i_klen = self.realUserDataStates[i]:size(1)
         for i_k=1, i_klen do
             usrFile:write(self.realUserDataStates[i][i_k], ',')
         end
-        usrFile:write(self.realUserDataActs[i]-1, ',')
-        usrFile:write(self.realUserDataRewards[i]-1, '\n')
+        usrFile:write(self.realUserDataActs[i]-1, '\n')
     end
     for i=1, #self.realUserDataStatesTest do
         local i_klen = self.realUserDataStatesTest[i]:size(1)
         for i_k=1, i_klen do
             usrFile:write(self.realUserDataStatesTest[i][i_k], ',')
         end
-        usrFile:write(self.realUserDataActsTest[i]-1, ',')
-        usrFile:write(self.realUserDataRewardsTest[i]-1, '\n')
+        usrFile:write(self.realUserDataActsTest[i]-1, '\n')
     end
     usrFile:close()
-    exit()
+
+    -- Following code writes reward (final time reward) into an csv file
+    usrFile = io.open('./userModelTrained/userStateRewardOnly.csv', 'w')
+    usrFile:write('A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,T,U,Reward\n') -- Column name, A-U are 21 features in state representation
+    for i=1, #self.realUserDataEndLines do
+        local i_klen = self.realUserDataStates[1]:size(1)
+        for i_k=1, i_klen do
+            usrFile:write(self.realUserDataStates[self.realUserDataEndLines[i]][i_k], ',')
+        end
+        usrFile:write(self.realUserDataRewards[self.realUserDataEndLines[i]]-1, '\n')
+    end
+    for i=1, #self.realUserDataEndLinesTest do
+        local i_klen = self.realUserDataStatesTest[1]:size(1)
+        for i_k=1, i_klen do
+            usrFile:write(self.realUserDataStatesTest[self.realUserDataEndLinesTest[i]][i_k], ',')
+        end
+        usrFile:write(self.realUserDataRewardsTest[self.realUserDataEndLinesTest[i]]-1, '\n')
+    end
+    usrFile:close()
+    os.exit()
     -- This is just temporal
 
 
