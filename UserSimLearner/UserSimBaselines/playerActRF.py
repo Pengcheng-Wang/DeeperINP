@@ -15,7 +15,7 @@ act_data_X_norm = (act_data_X - act_data_X.mean()) / (act_data_X.max() - act_dat
 act_data_Y = act_data.iloc[:, 21:]
 # shape: (16313, 1)
 
-scoring = ['accuracy', 'f1_macro', 'f1_micro']
+scoring = ['accuracy', 'f1_macro', 'f1_micro', 'f1_weighted']
 act_clf = RandomForestClassifier(max_depth=3, n_estimators=10)
 scores = cross_validate(act_clf, act_data_X_norm, act_data_Y, scoring=scoring, cv=5, return_train_score=False, verbose=True)
 
