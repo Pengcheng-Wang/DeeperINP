@@ -8,4 +8,4 @@ from sklearn.svm import SVC
 
 act_data = read_csv('../userModelTrained/userStateActOnly.csv')
 print(act_data.shape)
-print(act_data,loc[[0]])
+print(act_data.loc[[0]])
