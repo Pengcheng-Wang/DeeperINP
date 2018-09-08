@@ -16,7 +16,7 @@ act_data_Y = act_data.iloc[:, 21:]
 # shape: (16313, 1)
 
 scoring = ['accuracy', 'f1_macro', 'f1_micro', 'f1_weighted']
-act_clf = GradientBoostingClassifier(max_depth=5, n_estimators=10)
+act_clf = GradientBoostingClassifier(max_depth=5, n_estimators=5)
 scores = cross_validate(act_clf, act_data_X_norm, act_data_Y, scoring=scoring, cv=5, return_train_score=False, verbose=True)
 
-print(scores, file=open('../../userModelTrained/actPredGB_dep5_ne10.txt', 'a'))
+print(scores, file=open('../../userModelTrained/actPredGB_dep5_ne5.txt', 'a'))
