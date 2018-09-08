@@ -11,7 +11,7 @@ score_data = read_csv('../../userModelTrained/userStateRewardOnly.csv')
 # shape: (402, 22)
 score_data_X = score_data.iloc[:, 0:21]
 # shape: (402, 21)
-score_data_X_norm = (score_data - score_data.mean()) / (score_data.max() - score_data.min())
+score_data_X_norm = (score_data_X - score_data_X.mean()) / (score_data_X.max() - score_data_X.min())
 score_data_Y = score_data.iloc[:, 21:]
 # shape: (402, 1)
 
