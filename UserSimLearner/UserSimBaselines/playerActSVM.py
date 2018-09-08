@@ -16,7 +16,7 @@ act_data_Y = act_data.iloc[:, 21:]
 # shape: (16313, 1)
 
 scoring = ['accuracy', 'f1_macro', 'f1_micro']
-act_clf = SVC(kernel='rbf', C=0.5)
+act_clf = SVC(kernel='rbf', C=0.1)
 scores = cross_validate(act_clf, act_data_X_norm, act_data_Y, scoring=scoring, cv=5, return_train_score=False, verbose=True)
 
 print(scores, file=open('../../userModelTrained/actPredSVM_rbf_c.5.txt', 'a'))
