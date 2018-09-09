@@ -6,7 +6,7 @@
 echo 'DDQN RL training with action temperature, 1fold'
 date +%Y,%m,%d-%H:%M:%S
 hist=3
-for actSfxTem in 0.8;
+for actSfxTem in 1;
 do
     for sfxTem in -1;
     do
@@ -32,7 +32,7 @@ wait
 echo 'DDQN RL training with action temperature, 2fold'
 date +%Y,%m,%d-%H:%M:%S
 hist=3
-for actSfxTem in 0.8;
+for actSfxTem in 1;
 do
     for sfxTem in -1;
     do
