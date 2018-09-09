@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 
-# Sept 9, 2018, by pwang8
-# This is the evaluation of linear RL agents in 1 fold setting
- # Evaluation
+## Sept 9, 2018, by pwang8
+## This is the evaluation of linear RL agents in 1 fold setting
+ ## Evaluation
  echo '1fold Linear RL training test evaluation'
  date +%Y,%m,%d-%H:%M:%S
  hist=3
