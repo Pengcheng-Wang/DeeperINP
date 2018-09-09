@@ -7,7 +7,7 @@
  date +%Y,%m,%d-%H:%M:%S
  hist=3
  seedSet=2
- actSfxTem=0.8
+ actSfxTem=1
  ppoEpc=2
  for thrN in 4;
  do
@@ -32,7 +32,7 @@
  date +%Y,%m,%d-%H:%M:%S
  hist=3
  seedSet=2
- actSfxTem=0.8
+ actSfxTem=1
  ppoEpc=2
  for thrN in 4;
  do
@@ -57,7 +57,7 @@
  date +%Y,%m,%d-%H:%M:%S
  hist=3
  seedSet=2
- actSfxTem=0.8
+ actSfxTem=1
  ppoEpc=2
  for thrN in 4;
  do
