@@ -1,4 +1,8 @@
 -- Creates aggregator module for a dueling architecture based on a number of discrete actions
+-- Comments by pwang8. Input into the DuelAggregator module is {value_stream, advantage_stream}
+-- value_stream is the state value estimation, which is only one value for one state input (for each s-a-s data point)
+-- advantage_stream is the advantage values estimation, which contains m values with m being the # of actions
+-- param m of this function is # of actions
 local DuelAggregator = function(m)
   local aggregator = nn.Sequential()
   local aggParallel = nn.ParallelTable()
@@ -14,11 +18,11 @@ local DuelAggregator = function(m)
   advConcat:add(advMeanDuplicator)
   advDuplicator:add(advConcat)
   -- Subtract mean from advantage values
-  advDuplicator:add(nn.CSubTable())
+  advDuplicator:add(nn.CSubTable())   -- subtract adv.mean() from adv. This type of advantage values processing is adopted for stablization purpose
   
   -- Add value and advantage duplicators
-  aggParallel:add(nn.Replicate(m, 2, 2))
-  aggParallel:add(advDuplicator)
+  aggParallel:add(nn.Replicate(m, 2, 2))  -- duplicate the state values for m times
+  aggParallel:add(advDuplicator)    -- this is the (adv - adv.mean())
 
   -- Calculate Q^ = V^ + A^
   aggregator:add(aggParallel)
